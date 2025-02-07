@@ -219,16 +219,10 @@ This project uses code adapted from the [Flower XGBoost Comprehensive Example](h
 <div align="center">
 
 ## 🔥 **R&D Led By** 🔥
-### [ **`Your Name`** ]
-*(replace with your actual name/alias)*
+### [ **`Mohamed Abdel-Hamid`** ]
 
 ![Static Badge](https://img.shields.io/badge/Phase-%F0%9F%94%A5_Innovation_Station-%23FF6B6B?style=for-the-badge)
 <br>
-
-🛸 **Experimental Tech**  
-🧪 **Prototyping**  
-🌀 **Algorithm Alchemy**  
-🌌 **Future-Forward Thinking**
 
 ```diff
 +==================================================+
