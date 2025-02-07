@@ -99,7 +99,7 @@ config_fit:
   momentum: 0.9                  # SGD momentum
   local_epochs: 1                # Epochs per client update
 ```
-Modify these settings in conf/base.yaml or override them at runtime when executing experiments.
+## **Modify these settings in conf/base.yaml or override them at runtime when executing experiments.**
 ---
 
 ### **🧪 Running Experiments**  
@@ -116,7 +116,21 @@ Override default parameters at runtime:
 python main.py num_rounds=5 num_clients=500 config_fit.lr=0.1 config_fit.local_epochs=2
 ```
 
+---
 
+## 📂 Output Structure  
+
+Experiment outputs are automatically saved in the `outputs/` directory, organized by date and time. Each experiment run generates a unique folder with the following structure:  
+
+```plaintext
+outputs/
+└── YYYY-MM-DD/                  # Run date
+    └── HH-MM-SS/                # Run time
+        ├── .hydra/              # Config snapshots
+        │   ├── config.yaml
+        │   └── hydra.yaml
+        └── results.pkl          # Training history
+```
 
 
 
