@@ -1,14 +1,14 @@
 
-# 🌸 Federated Learning with Flower  
+# Federated Learning with Flower  
 
 
 A privacy-preserving machine learning implementation using federated learning with the Flower framework. This project demonstrates collaborative model training across multiple clients without sharing raw data.  
 
 ### **Key Technologies**  
-- 🌼 **Flower** - Federated Learning Framework  
-- 🔥 **PyTorch** - Deep Learning Library  
-- 🔧 **Hydra** - Configuration Management  
-- 📊 **CML** - Continuous Machine Learning  
+-  **Flower** - Federated Learning Framework  
+-  **PyTorch** - Deep Learning Library  
+-  **Hydra** - Configuration Management  
+-  **CML** - Continuous Machine Learning  
 
 ## **📚 Table of Contents**
 - [✨ Features](#-features)  
@@ -31,19 +31,26 @@ A privacy-preserving machine learning implementation using federated learning wi
 
 ## **📂 Project Structure**
 ```bash
-├── conf/                 # Hydra configurations
-│   └── base.yaml         # Main experiment settings
-├── GitHub/
-│   └── workflows/        # CI/CD pipelines
-│       └── cml.yaml      # ML workflow definition
-├── outputs/              # Experiment outputs
+├── github/
+│   └── workflows/
+│       └── cml.yaml      # CI/CD workflow definition
+├── pyecache/              # Python cache directory
+├── data/                 # Dataset files
+├── plot/                 # Visualization outputs
 ├── client.py             # Flower client logic
+├── client_utils.py       # Client helper functions
 ├── dataset.py            # Data loading/preprocessing
-├── main.py               # Entry point with Hydra
-├── model.py              # Neural network architecture
-├── server.py             # Flower server utilities
-├── requirements.txt      # Dependencies
-└── README.md             # You are here 📍
+├── poetry.lock           # Poetry dependency lockfile
+├── pyproject.toml        # Poetry project configuration
+├── requirements.txt      # Python dependencies
+├── run.py                # Main execution script
+├── run_bagging.sh        # Bagging experiment script
+├── run_cyclic.sh         # Cyclic experiment script
+├── server.py             # Flower server logic
+├── server_utils.py       # Server helper functions
+├── sim.py                # Start simulation
+├── utils.py              # Shared utilities
+└── README.md             # Project documentation
 ```
 
 ---
@@ -132,6 +139,76 @@ outputs/
         │   └── hydra.yaml
         └── results.pkl          # Training history
 ```
+---
+
+# Comparison of Federated XGBoost Strategies: Cyclic vs. Bagging
+
+A comparison of two federated learning strategies for XGBoost implementations using the Flower framework.
+
+## 🔄 **FedXgbCyclic**
+**Documentation**: [flwr.server.strategy.FedXgbCyclic](https://flower.ai/docs/framework/ref-api/flwr.server.strategy.FedXgbCyclic.html)
+
+### Key Characteristics:
+- **Client Selection**: Sequential cycling through clients in fixed order
+- **Training Pattern**: One client per round, sequential execution
+- **Data Requirements**: Effective for non-IID data distributions
+- **Tree Growth**: Builds trees sequentially across clients
+- **Aggregation**: Maintains global model that cycles through clients
+- **Use Case**: Client-ordered scenarios where data sequence matters
+
+## 🎒 **FedXgbBagging**
+**Documentation**: [flwr.server.strategy.FedXgbBagging](https://flower.ai/docs/framework/ref-api/flwr.server.strategy.FedXgbBagging.html)
+
+### Key Characteristics:
+- **Client Selection**: Random subset selection each round
+- **Training Pattern**: Parallel client training (multiple clients per round)
+- **Data Requirements**: Works best with IID data distributions
+- **Tree Growth**: Builds multiple candidate trees in parallel
+- **Aggregation**: Uses bootstrap aggregating (bagging) for ensemble effects
+- **Use Case**: Traditional federated scenarios with independent data
+
+## 📊 Key Differences
+
+| Feature                | Cyclic                                  | Bagging                                |
+|------------------------|-----------------------------------------|----------------------------------------|
+| **Client Selection**   | Fixed order, sequential                 | Random subset, parallel                |
+| **Round Execution**    | 1 client/round                          | Multiple clients/round                 |
+| **Data Assumption**    | Tolerates non-IID                       | Prefers IID                            |
+| **Tree Building**      | Sequential tree growth                  | Parallel tree candidates               |
+| **Aggregation**        | Direct model cycling                    | Bootstrap aggregating                  |
+| **Communication**      | Low bandwidth (1 client/round)          | Higher bandwidth                       |
+| **Use Case**           | Ordered client sequences                | Traditional FL scenarios               |
+| **Performance**        | Better for client-specific patterns     | Better for generalizable models        |
+
+
+## ⚖️ When to Use Which
+
+### Choose **Cyclic** When:
+- Clients have ordered/sequential data relationships
+- Data distribution is non-IID across clients
+- You want explicit client participation order
+- Bandwidth is constrained
+
+### Choose **Bagging** When:
+- Data is IID or approximately independent
+- You want traditional federated averaging behavior
+- Parallel client participation is preferred
+- Ensemble effects are desirable
+
+---
+
+## Implementation Tips
+1. **Cyclic** requires careful client ordering configuration
+2. **Bagging** benefits from larger client subsets per round
+3. Both support XGBoost's histogram-based training
+4. Monitor client compute resources differently:
+   - Cyclic: Manage sequential load
+   - Bagging: Handle parallel compute demands
+---
+
+## Credits
+This project uses code adapted from the [Flower XGBoost Comprehensive Example](https://github.com/adap/flower/tree/main/examples/xgboost-comprehensive) as the initial code skeleton.
+
 
 
 
