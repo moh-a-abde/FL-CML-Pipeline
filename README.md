@@ -9,7 +9,7 @@ A privacy-preserving machine learning implementation using federated learning wi
 -  **CML** - Continuous Machine Learning  
 
 ---
-## 🛠️ Workflow Overview
+## 🛠️ Workflow Overview for Phase I
 
 ```diff
 +============================================[ DATA PIPELINE ]============================================+
