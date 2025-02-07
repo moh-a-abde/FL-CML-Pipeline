@@ -14,7 +14,7 @@ A privacy-preserving machine learning implementation using federated learning wi
 - [✨ Features](#-features)  
 - [📂 Project Structure](#-project-structure)  
 - [🚀 Getting Started](#-getting-started)  
-- [⚙️ Configuration](#-configuration)  
+- [⚙️ Configuration](#-Configuration)  
 - [🧪 Running Experiments](#-running-experiments)  
 - [🔧 Customization Guide](#-customization-guide)  
 
