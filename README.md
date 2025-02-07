@@ -13,9 +13,11 @@ A privacy-preserving machine learning implementation using federated learning wi
 - [✨ Features](#-features)  
 - [📂 Project Structure](#-project-structure)  
 - [🚀 Getting Started](#-getting-started)  
-- [⚙️ Configuration](#configuration)  
-- [🧪 Running Experiments](#-running-experiments)  
+- [⚙️ Configuration](#configuration)
 - [📂 Output Structure](#-output-structure)
+- [🧪 Running Experiments](#-running-experiments)  
+- [⚖️ Comparison of Federated XGBoost Strategies: Cyclic vs. Bagging](#-comparison-of-federated-xgboost-strategies:-cyclic-vs.-bagging)
+
 
 ---
 
@@ -107,21 +109,6 @@ config_fit:
   local_epochs: 1                # Epochs per client update
 ```
 
----
-
-### **🧪 Running Experiments**  
-
-### Basic Execution  
-To start a federated learning simulation with default settings:  
-```python
-python main.py
-```
-### Run with Custom Configuration
-
-Override default parameters at runtime:
-```python
-python main.py num_rounds=5 num_clients=500 config_fit.lr=0.1 config_fit.local_epochs=2
-```
 
 ---
 
@@ -138,9 +125,27 @@ outputs/
         │   └── hydra.yaml
         └── results.pkl          # Training history
 ```
+
+
 ---
 
-# Comparison of Federated XGBoost Strategies: Cyclic vs. Bagging
+### **🧪 Running Experiments**  
+
+### Basic Execution  
+To start federated learning with default settings:  
+```bash
+./run_bagging.sh
+```
+or
+
+```bash
+./run_bagging.sh
+```
+
+
+---
+
+# ⚖️ Comparison of Federated XGBoost Strategies: Cyclic vs. Bagging
 
 A comparison of two federated learning strategies for XGBoost implementations using the Flower framework.
 
@@ -180,7 +185,7 @@ A comparison of two federated learning strategies for XGBoost implementations us
 | **Performance**        | Better for client-specific patterns     | Better for generalizable models        |
 
 
-## ⚖️ When to Use Which
+## When to Use Which
 
 ### Choose **Cyclic** When:
 - Clients have ordered/sequential data relationships
@@ -208,8 +213,33 @@ A comparison of two federated learning strategies for XGBoost implementations us
 ## Credits
 This project uses code adapted from the [Flower XGBoost Comprehensive Example](https://github.com/adap/flower/tree/main/examples/xgboost-comprehensive) as the initial code skeleton.
 
+---
 
+<!-- ༼ つ ◕_◕ ༽つ R&D ZONE ༼ つ ◕_◕ ༽つ -->
+<div align="center">
 
+## 🔥 **R&D Led By** 🔥
+### [ **`Your Name`** ]
+*(replace with your actual name/alias)*
+
+![Static Badge](https://img.shields.io/badge/Phase-%F0%9F%94%A5_Innovation_Station-%23FF6B6B?style=for-the-badge)
+<br>
+
+🛸 **Experimental Tech**  
+🧪 **Prototyping**  
+🌀 **Algorithm Alchemy**  
+🌌 **Future-Forward Thinking**
+
+```diff
++==================================================+
+!  🧑💻 Coded with 100% chaos-driven curiosity    !
+!  ☕ Powered by midnight espresso & big dreams   !
++==================================================+
+<sub>🚨 Warning: Contains traces of genius and unstable creativity.</sub>
+<sub>⚡ Lab Status: Buzzing | Energy Level: //TODO: Add coffee IV drip</sub>
+```
+</div>
+ <!-- ༼ つ ◕_◕ ༽つ R&D ZONE ༼ つ ◕_◕ ༽つ -->
 
 
 
