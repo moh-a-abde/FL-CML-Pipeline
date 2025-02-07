@@ -83,7 +83,7 @@ Before running the project, ensure you have the following installed:
    cd FL-CML-Pipeline
    ```
 2. **Create and activate a virtual environment (Docker is being used to run CML locally to automate the workflow)**
-   After setting up docker environment run the following:
+   **After setting up the docker environment run the following:**
    ```bash
    sudo systemctl start docker
    sudo systemctl enable docker
