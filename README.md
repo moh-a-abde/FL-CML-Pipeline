@@ -36,7 +36,7 @@ A privacy-preserving machine learning implementation using federated learning wi
 ## ✨ Features  
 ✅ **Privacy-Preserving Training** - Federated learning implementation with data isolation  
 ✅ **Flexible Configuration** - Hydra-powered experiment management  
-✅ **Reproducible Experiments** - Automatic output organization
+✅ **Reproducible Experiments** - Automatic output organization   
 ✅ **CI/CD Integration** - GitHub Actions workflow with CML reporting  
 ✅ **Custom Dataset Support** - CSV data loader with preprocessing pipeline  
 
