@@ -230,7 +230,6 @@ This project uses code adapted from the [Flower XGBoost Comprehensive Example](h
 +==================================================+
 ```
 <sub>🚨Warning: Contains traces of genius and unstable creativity 🧠</sub>
-<sub>⚡Energy Level: ☕</sub>
 
 </div>
  <!-- ༼ つ ◕_◕ ༽つ R&D ZONE ༼ つ ◕_◕ ༽つ -->
