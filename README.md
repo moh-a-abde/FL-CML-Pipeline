@@ -229,9 +229,10 @@ This project uses code adapted from the [Flower XGBoost Comprehensive Example](h
 !  🧑💻 Coded with 100% chaos-driven curiosity    !
 !  ☕ Powered by midnight espresso & big dreams   !
 +==================================================+
+```
 <sub>🚨 Warning: Contains traces of genius and unstable creativity.</sub>
 <sub>⚡ Lab Status: Buzzing | Energy Level: //TODO: Add coffee IV drip</sub>
-```
+
 </div>
  <!-- ༼ つ ◕_◕ ༽つ R&D ZONE ༼ つ ◕_◕ ༽つ -->
 
