@@ -1,6 +1,6 @@
 # 🌸 Federated Learning with Flower
 
-[![CI/CD](https://github.com/yourusername/Federated-Learning-Flower/actions/workflows/cml.yaml/badge.svg)](https://github.com/yourusername/Federated-Learning-Flower/actions)
+[![CI/CD](https://github.com/moh-a-abde/FL-CML-Pipeline/actions/workflows/cml.yaml/badge.svg)](https://github.com/moh-a-abde/FL-CML-Pipeline/actions)
 
 A privacy-preserving machine learning implementation using federated learning with the Flower framework. This project demonstrates collaborative model training across multiple clients without sharing raw data.
 
