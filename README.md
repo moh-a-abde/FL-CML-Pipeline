@@ -31,7 +31,6 @@ A privacy-preserving machine learning implementation using federated learning wi
 
 ## 📂 Project Structure  
 ```bash
-.
 ├── conf/                 # Hydra configurations
 │   └── base.yaml         # Main experiment settings
 ├── GitHub/
