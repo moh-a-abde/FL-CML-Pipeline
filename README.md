@@ -1,3 +1,4 @@
+
 # 🌸 Federated Learning with Flower  
 
 
@@ -44,3 +45,39 @@ A privacy-preserving machine learning implementation using federated learning wi
 ├── server.py             # Flower server utilities
 ├── requirements.txt      # Dependencies
 └── README.md             # You are here 📍
+```
+
+---
+
+## 🚀 Getting Started  
+
+### **Prerequisites**  
+Before running the project, ensure you have the following installed:  
+- Python 3.8+  
+- pip (Python package manager)  
+
+### **Installation**  
+
+1. **Clone the repository**  
+   ```bash
+   git clone https://github.com/yourusername/Federated-Learning-Flower.git
+   cd Federated-Learning-Flower
+   ```
+2. **Create and activate a virtual environment**
+   ```bash
+   python -m venv fl-env
+   source fl-env/bin/activate  # Linux/MacOS
+   # On Windows:
+   # fl-env\Scripts\activate
+   ```
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+   
+---
+
+
+
+
+
