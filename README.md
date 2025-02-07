@@ -12,11 +12,11 @@ A privacy-preserving machine learning implementation using federated learning wi
 ## 🛠️ Workflow Overview
 
 ```diff
-+=======================[ DATA PIPELINE ]=======================+
-!                                                               !
-!  1. Live Capture → 2. Clean → 3. Train/Test → 4. Deploy       !
-!                                                               !
-+===============================================================+
++============================================[ DATA PIPELINE ]============================================+
+!                                                                                                         !
+!  1. Live Network Capture → 2. Clean Capture and Convert to Dataset → 3. Train/Test → 4. Output Results  !
+!                                                                                                         !
++=========================================================================================================+
 ```
 
 ---
