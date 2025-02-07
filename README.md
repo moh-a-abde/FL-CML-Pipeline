@@ -59,11 +59,11 @@ Before running the project, ensure you have the following installed:
 
 1. **Clone the repository**  
    ```bash
-   git clone https://github.com/yourusername/Federated-Learning-Flower.git
-   cd Federated-Learning-Flower
+   git clone https://github.com/moh-a-abde/FL-CML-Pipeline.git
+   cd FL-CML-Pipeline
    ```
 2. **Create and activate a virtual environment**
-   ```python
+   ```bash
    python -m venv fl-env
    source fl-env/bin/activate  # Linux/MacOS
    # On Windows:
