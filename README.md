@@ -10,7 +10,7 @@ A privacy-preserving machine learning implementation using federated learning wi
 - 🔧 **Hydra** - Configuration Management  
 - 📊 **CML** - Continuous Machine Learning  
 
-## 📚 Table of Contents  
+## **📚 Table of Contents**
 - [✨ Features](#-features)  
 - [📂 Project Structure](#-project-structure)  
 - [🚀 Getting Started](#-getting-started)  
@@ -30,7 +30,7 @@ A privacy-preserving machine learning implementation using federated learning wi
 
 ---
 
-## 📂 Project Structure  
+## **📂 Project Structure**
 ```bash
 ├── conf/                 # Hydra configurations
 │   └── base.yaml         # Main experiment settings
@@ -49,7 +49,7 @@ A privacy-preserving machine learning implementation using federated learning wi
 
 ---
 
-## 🚀 Getting Started  
+## **🚀 Getting Started**
 
 ### **Prerequisites**  
 Before running the project, ensure you have the following installed:  
@@ -77,9 +77,11 @@ Before running the project, ensure you have the following installed:
    
 ---
 
-## ⚙️ Configuration  
+## **⚙️ Configuration**
 
 The experiment settings are managed using **Hydra** and are defined in `conf/base.yaml`.  
+Modify these settings in conf/base.yaml or override them at runtime when executing experiments.
+
 Here are the key parameters:  
 
 ```yaml
@@ -99,7 +101,7 @@ config_fit:
   momentum: 0.9                  # SGD momentum
   local_epochs: 1                # Epochs per client update
 ```
-## **Modify these settings in conf/base.yaml or override them at runtime when executing experiments.**
+
 ---
 
 ### **🧪 Running Experiments**  
@@ -118,7 +120,7 @@ python main.py num_rounds=5 num_clients=500 config_fit.lr=0.1 config_fit.local_e
 
 ---
 
-## 📂 Output Structure  
+## **📂 Output Structure**
 
 Experiment outputs are automatically saved in the `outputs/` directory, organized by date and time. Each experiment run generates a unique folder with the following structure:  
 
