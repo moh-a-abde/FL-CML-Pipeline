@@ -82,12 +82,12 @@ Before running the project, ensure you have the following installed:
    git clone https://github.com/moh-a-abde/FL-CML-Pipeline.git
    cd FL-CML-Pipeline
    ```
-2. **Create and activate a virtual environment**
+2. **Create and activate a virtual environment (Docker is being used to run CML locally to automate the workflow)**
+   After setting up docker environment run the following:
    ```bash
-   python -m venv fl-env
-   source fl-env/bin/activate  # Linux/MacOS
-   # On Windows:
-   # fl-env\Scripts\activate
+   sudo systemctl start docker
+   sudo systemctl enable docker
+   act -j run --container-architecture linux/amd64 -v
    ```
 3. **Install dependencies**
    ```bash
