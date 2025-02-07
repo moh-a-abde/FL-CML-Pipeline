@@ -77,6 +77,31 @@ Before running the project, ensure you have the following installed:
    
 ---
 
+## ⚙️ Configuration  
+
+The experiment settings are managed using **Hydra** and are defined in `conf/base.yaml`.  
+Here are the key parameters:  
+
+```yaml
+# Core Experiment Parameters
+num_rounds: 10                   # Total training rounds
+num_clients: 100                 # Total available clients
+batch_size: 20                   # Local batch size
+num_classes: 2                   # Output classes
+
+# Client Sampling
+num_clients_per_round_fit: 10    # Clients per training round
+num_clients_per_round_eval: 25   # Clients per evaluation round
+
+# Training Configuration
+config_fit:
+  lr: 0.01                       # Learning rate
+  momentum: 0.9                  # SGD momentum
+  local_epochs: 1                # Epochs per client update
+```
+
+
+
 
 
 
