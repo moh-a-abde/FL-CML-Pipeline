@@ -36,7 +36,7 @@ A privacy-preserving machine learning implementation using federated learning wi
 ## ✨ Features  
 ✅ **Privacy-Preserving Training** - Federated learning implementation with data isolation  
 ✅ **Flexible Configuration** - Hydra-powered experiment management  
-✅ **Reproducible Experiments** - Automatic output organization   
+✅ **Reproducible Experiments** - ⚠️Automatic output organization   
 ✅ **CI/CD Integration** - GitHub Actions workflow with CML reporting  
 ✅ **Custom Dataset Support** - CSV data loader with preprocessing pipeline  
 
@@ -124,7 +124,7 @@ config_fit:
 
 ---
 
-## **📂 Output Structure**
+## **⚠️📂 Output Structure**
 
 Experiment outputs are automatically saved in the `outputs/` directory, organized by date and time. Each experiment run generates a unique folder with the following structure:  
 
