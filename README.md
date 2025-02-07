@@ -232,9 +232,7 @@ This project uses code adapted from the [Flower XGBoost Comprehensive Example](h
 <sub>
 🔐 Cyber Alchemy Brewing For
 :
-🏛️ Indiana University of Pennsylvania's
-
-🛡️ ARMZTA Project
+🏛️ Indiana University of Pennsylvania's ARMZTA Project
 
 🔗 https://www.iup.edu/cybersecurity/grants/ncae-c-armzta/index.html</sub>
 
