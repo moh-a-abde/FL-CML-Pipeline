@@ -1,7 +1,6 @@
 
 # Federated Learning with Flower  
 
-
 A privacy-preserving machine learning implementation using federated learning with the Flower framework. This project demonstrates collaborative model training across multiple clients without sharing raw data.  
 
 ### **Key Technologies**  
@@ -34,21 +33,21 @@ A privacy-preserving machine learning implementation using federated learning wi
 ├── github/
 │   └── workflows/
 │       └── cml.yaml      # CI/CD workflow definition
-├── pyecache/              # Python cache directory
+├── pyecache/             # Python cache directory
 ├── data/                 # Dataset files
-├── plot/                 # Visualization outputs
+├── plot/                 # Visualization outputs - 🚧 under construction (implementation phase) 🚧
 ├── client.py             # Flower client logic
 ├── client_utils.py       # Client helper functions
 ├── dataset.py            # Data loading/preprocessing
-├── poetry.lock           # Poetry dependency lockfile
-├── pyproject.toml        # Poetry project configuration
+├── poetry.lock           # Poetry dependency lockfile - 🔍 exploring (research phase) 🔍
+├── pyproject.toml        # Poetry project configuration - 🔍 exploring (research phase) 🔍
 ├── requirements.txt      # Python dependencies
-├── run.py                # Main execution script
-├── run_bagging.sh        # Bagging experiment script
-├── run_cyclic.sh         # Cyclic experiment script
+├── run.py                # runs FULL FULL & CML experiment; includes capturing data traffic and preprocessing - 🚧 under construction (implementation phase) 🚧
+├── run_bagging.sh        # Bagging experiment script - runs script.py + client.py
+├── run_cyclic.sh         # Cyclic experiment script - runs script.py + client.py
 ├── server.py             # Flower server logic
 ├── server_utils.py       # Server helper functions
-├── sim.py                # Start simulation
+├── sim.py                # Start simulation - ⚠️ deprecated soon ⚠️
 ├── utils.py              # Shared utilities
 └── README.md             # Project documentation
 ```
