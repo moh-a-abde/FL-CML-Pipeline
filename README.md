@@ -25,7 +25,7 @@ A privacy-preserving machine learning implementation using federated learning wi
 - [✨ Features](#-features)  
 - [📂 Project Structure](#-project-structure)  
 - [🚀 Getting Started](#-getting-started)  
-- [⚙️ Configuration](#configuration)
+- [⚙️ Configuration](#-configuration)
 - [📂 Output Structure](#-output-structure)
 - [🧪 Running Experiments](#-running-experiments)  
 - [⚖️ Comparison of Federated XGBoost Strategies: Cyclic vs. Bagging](#-comparison-of-federated-xgboost-strategies:-cyclic-vs.-bagging)
@@ -48,7 +48,7 @@ A privacy-preserving machine learning implementation using federated learning wi
 │   └── workflows/
 │       └── cml.yaml      # CI/CD workflow definition
 ├── pyecache/             # Python cache directory
-├── data/                 # Dataset files
+├── data/                 # Dataset files, data capture script, and data cleaning script
 ├── plot/                 # Visualization outputs - 🚧 under construction (implementation phase) 🚧
 ├── client.py             # Flower client logic
 ├── client_utils.py       # Client helper functions
@@ -243,9 +243,7 @@ This project uses code adapted from the [Flower XGBoost Comprehensive Example](h
 +==================================================+
 ```
 <sub>
-🔐 Cyber Alchemy Brewing For
-:
-🏛️ Indiana University of Pennsylvania's ARMZTA Project
+🔐 Cyber Alchemy Brewing For 🏛️ Indiana University of Pennsylvania's ARMZTA Project
 
 🔗 https://www.iup.edu/cybersecurity/grants/ncae-c-armzta/index.html</sub>
 
