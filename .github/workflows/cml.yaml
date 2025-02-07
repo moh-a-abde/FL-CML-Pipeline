@@ -37,7 +37,7 @@ jobs:
           pip install torchaudio
           pip install hydra-core
           pip install -r requirements.txt
-          python main.py
+          python run.py
           
 
     
