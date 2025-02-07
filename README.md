@@ -1,4 +1,3 @@
-
 # Federated Learning with Flower  
 
 A privacy-preserving machine learning implementation using federated learning with the Flower framework. This project demonstrates collaborative model training across multiple clients without sharing raw data.  
@@ -230,8 +229,8 @@ This project uses code adapted from the [Flower XGBoost Comprehensive Example](h
 !  ☕ Powered by midnight espresso & big dreams   !
 +==================================================+
 ```
-<sub>🚨 Warning: Contains traces of genius and unstable creativity.</sub>
-<sub>⚡ Energy Level: ☕</sub>
+<sub>🚨Warning: Contains traces of genius and unstable creativity 🧠</sub>
+<sub>⚡Energy Level: ☕</sub>
 
 </div>
  <!-- ༼ つ ◕_◕ ༽つ R&D ZONE ༼ つ ◕_◕ ༽つ -->
