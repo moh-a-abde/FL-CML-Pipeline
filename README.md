@@ -1,7 +1,6 @@
 # 🌸 Federated Learning with Flower
 
-[![CI/CD](https://github.com/moh-a-abde/FL-CML-Pipeline/actions/workflows/cml.yaml/badge.svg)](https://github.com/moh-a-abde/FL-CML-Pipeline/actions)
-
+**Description**: 
 A privacy-preserving machine learning implementation using federated learning with the Flower framework. This project demonstrates collaborative model training across multiple clients without sharing raw data.
 
 **Key Technologies**: 
@@ -26,21 +25,4 @@ A privacy-preserving machine learning implementation using federated learning wi
 - **Reproducible Experiments**: Automatic output organization
 - **CI/CD Integration**: GitHub Actions workflow with CML reporting
 - **Custom Dataset Support**: CSV data loader with preprocessing pipeline
-
-## 📂 Project Structure
-
-├── conf/ # Hydra configurations
-│ └── base.yaml # Main experiment settings
-├── GitHub/
-│ └── workflows/ # CI/CD pipelines
-│ └── cml.yaml # ML workflow definition
-├── outputs/ # Experiment outputs
-├── client.py # Flower client logic
-├── dataset.py # Data loading/preprocessing
-├── main.py # Entry point with Hydra
-├── model.py # Neural network architecture
-├── server.py # Flower server utilities
-├── requirements.txt # Dependencies
-└── README.md # You are here 📍
-
 
