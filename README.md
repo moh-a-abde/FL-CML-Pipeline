@@ -8,6 +8,19 @@ A privacy-preserving machine learning implementation using federated learning wi
 -  **Hydra** - Configuration Management  
 -  **CML** - Continuous Machine Learning  
 
+---
+## 🛠️ Workflow Overview
+
+```diff
++=======================[ DATA PIPELINE ]=======================+
+!                                                               !
+!  1. Live Capture → 2. Clean → 3. Train/Test → 4. Deploy       !
+!                                                               !
++===============================================================+
+```
+
+---
+
 ## **📚 Table of Contents**
 - [✨ Features](#-features)  
 - [📂 Project Structure](#-project-structure)  
