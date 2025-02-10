@@ -37,7 +37,8 @@ jobs:
           pip install torchaudio
           pip install hydra-core
           pip install -r requirements.txt
-          python sim.py
+          #python sim.py
+          ./run_cyclic.sh
           
 
     
