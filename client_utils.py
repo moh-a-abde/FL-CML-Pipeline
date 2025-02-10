@@ -1,3 +1,16 @@
+"""
+client_utils.py
+
+This module implements the XGBoost client functionality for Federated Learning using Flower framework.
+It provides the core client-side operations including model training, evaluation, and parameter handling.
+
+Key Components:
+- XGBoost client implementation
+- Model training and evaluation methods
+- Parameter serialization and deserialization
+- Metrics computation (precision, recall, F1)
+"""
+
 from logging import INFO
 import xgboost as xgb
 from sklearn.metrics import precision_score, recall_score, f1_score
@@ -17,6 +30,22 @@ from flwr.common import (
 
 
 class XgbClient(fl.client.Client):
+    """
+    A Flower client implementing federated learning for XGBoost models.
+    
+    This class handles local model training, evaluation, and parameter exchange
+    with the federated learning server.
+
+    Attributes:
+        train_dmatrix: Training data in XGBoost's DMatrix format
+        valid_dmatrix: Validation data in XGBoost's DMatrix format
+        num_train (int): Number of training samples
+        num_val (int): Number of validation samples
+        num_local_round (int): Number of local training rounds
+        params (dict): XGBoost training parameters
+        train_method (str): Training method ('bagging' or 'cyclic')
+    """
+
     def __init__(
         self,
         train_dmatrix,
@@ -27,6 +56,18 @@ class XgbClient(fl.client.Client):
         params,
         train_method,
     ):
+        """
+        Initialize the XGBoost Flower client.
+
+        Args:
+            train_dmatrix: Training data in DMatrix format
+            valid_dmatrix: Validation data in DMatrix format
+            num_train (int): Number of training samples
+            num_val (int): Number of validation samples
+            num_local_round (int): Number of local training rounds
+            params (dict): XGBoost parameters
+            train_method (str): Training method ('bagging' or 'cyclic')
+        """
         self.train_dmatrix = train_dmatrix
         self.valid_dmatrix = valid_dmatrix
         self.num_train = num_train
@@ -36,6 +77,15 @@ class XgbClient(fl.client.Client):
         self.train_method = train_method
 
     def get_parameters(self, ins: GetParametersIns) -> GetParametersRes:
+        """
+        Return the current local model parameters.
+
+        Args:
+            ins (GetParametersIns): Input parameters from server
+
+        Returns:
+            GetParametersRes: Empty parameters (XGBoost doesn't use this method)
+        """
         _ = (self, ins)
         return GetParametersRes(
             status=Status(
@@ -46,12 +96,24 @@ class XgbClient(fl.client.Client):
         )
 
     def _local_boost(self, bst_input):
-        # Update trees based on local training data.
+        """
+        Perform local boosting rounds on the input model.
+
+        Args:
+            bst_input: Input XGBoost model
+
+        Returns:
+            xgb.Booster: Updated model after local training
+            
+        Note:
+            For bagging: returns only the last N trees
+            For cyclic: returns the entire model
+        """
+        # Update trees based on local training data
         for i in range(self.num_local_round):
             bst_input.update(self.train_dmatrix, bst_input.num_boosted_rounds())
 
-        # Bagging: extract the last N=num_local_round trees for sever aggregation
-        # Cyclic: return the entire model
+        # Handle model extraction based on training method
         bst = (
             bst_input[
                 bst_input.num_boosted_rounds()
@@ -64,9 +126,20 @@ class XgbClient(fl.client.Client):
         return bst
 
     def fit(self, ins: FitIns) -> FitRes:
+        """
+        Perform local model training.
+
+        Args:
+            ins (FitIns): Input parameters including global model and configuration
+
+        Returns:
+            FitRes: Training results including updated model parameters
+        """
+        # Get current global round
         global_round = int(ins.config["global_round"])
+        
         if global_round == 1:
-            # First round local training
+            # First round: train from scratch
             bst = xgb.train(
                 self.params,
                 self.train_dmatrix,
@@ -74,17 +147,16 @@ class XgbClient(fl.client.Client):
                 evals=[(self.valid_dmatrix, "validate"), (self.train_dmatrix, "train")],
             )
         else:
+            # Subsequent rounds: update existing model
             bst = xgb.Booster(params=self.params)
             for item in ins.parameters.tensors:
                 global_model = bytearray(item)
 
-            # Load global model into booster
+            # Load and update global model
             bst.load_model(global_model)
-
-            # Local training
             bst = self._local_boost(bst)
 
-        # Save model
+        # Serialize model for transmission
         local_model = bst.save_raw("json")
         local_model_bytes = bytes(local_model)
 
@@ -99,29 +171,40 @@ class XgbClient(fl.client.Client):
         )
     
     def evaluate(self, ins: EvaluateIns) -> EvaluateRes:
-        # Load global model
+        """
+        Evaluate the model on local validation data.
+
+        Args:
+            ins (EvaluateIns): Input parameters including model to evaluate
+
+        Returns:
+            EvaluateRes: Evaluation metrics including precision, recall, and F1 score
+        """
+        # Load global model for evaluation
         bst = xgb.Booster(params=self.params)
         for para in ins.parameters.tensors:
             para_b = bytearray(para)
         bst.load_model(para_b)
 
-        # Predict on validation data
+        # Generate predictions
         y_pred = bst.predict(self.valid_dmatrix)
         y_pred_labels = y_pred.astype(int)
         
-        # Get true labels
+        # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
         
-        # Compute precision, recall, and f1 score
+        # Compute evaluation metrics
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
         
-        # Compute logloss or another relevant loss
+        # Compute loss
         loss = bst.eval(self.valid_dmatrix).split(":")[1]
 
+        # Log evaluation results
         global_round = ins.config["global_round"]
         log(INFO, f"Precision = {precision}, Recall = {recall}, F1 Score = {f1} at round {global_round}, Loss = {loss} at round {global_round}")
+        
         return EvaluateRes(
             status=Status(
                 code=Code.OK,
