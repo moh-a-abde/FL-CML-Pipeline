@@ -6,10 +6,10 @@ A privacy-preserving machine learning implementation using federated learning wi
 -  **Flower** - Federated Learning Framework  
 -  **PyTorch** - Deep Learning Library  
 -  **Hydra** - Configuration Management  
--  **CML** - Continuous Machine Learning  
+-  **CML** - Continuous Machine Learning
 
 ---
-## 🛠️ Workflow Overview for Phase I
+## 🛠️ Workflow Overview
 
 ```diff
 +============================================[ DATA PIPELINE ]============================================+
@@ -19,6 +19,71 @@ A privacy-preserving machine learning implementation using federated learning wi
 +=========================================================================================================+
 ```
 
+---
+## 🗺️ Architecture Overview
+
+This library implements a federated learning system that:
+1. Processes network traffic data
+2. Trains an XGBoost model in a distributed manner
+3. Detects network intrusions across multiple clients while preserving data privacy
+
+The system consists of several key components:
+
+1. Data Processing Pipeline
+
+- `data/livepreprocessing_socket.py`: Processes live network traffic data from Kafka
+- `data/receiving_data.py`: Receives and saves processed data
+- `dataset.py`: Handles data loading, preprocessing, and partitioning
+
+2. Federated Learning Core
+
+- `server.py`: Central FL server implementation
+- `client.py`: FL client implementation
+- `client_utils.py`: Client-side helper functions and XGBoost client class
+- `server_utils.py`: Server-side helper functions and client management
+
+3. Training Methods
+
+Two main training approaches:
+- Bagging: Aggregates models from multiple clients
+- Cyclic: Passes model sequentially through clients
+
+4. Execution Scripts
+
+- `run_bagging.sh`: Launches bagging-based training
+- `run_cyclic.sh`: Launches cyclic training
+- `run.py`: Orchestrates the entire training pipeline
+- `sim.py`: Simulation environment for testing
+
+---
+
+## 🎯 What is to be achieved?
+
+1. Data Processing
+- Real-time data ingestion from Kafka
+- Automated preprocessing of network traffic data
+- Support for multiple feature types (categorical and numerical)
+- Dynamic data partitioning across clients
+
+2. Model Training
+- Distributed XGBoost training
+- Support for both bagging and cyclic training methods
+- Configurable local training rounds
+- Centralized and decentralized evaluation options
+
+3. Scalability & Configuration
+- Configurable number of clients and rounds
+- Adjustable learning rates and model parameters
+- Support for CPU/GPU training
+- Flexible client selection strategies
+
+4. Evaluation & Metrics
+- Support for multiple evaluation metrics:
+  - Precision
+  - Recall
+  - F1 Score
+- Centralized and distributed evaluation options
+  
 ---
 
 ## **📚 Table of Contents**
@@ -123,7 +188,7 @@ config_fit:
 
 
 ---
-
+# WORK IN PROGRESS
 ## **⚠️📂 Output Structure**
 
 Experiment outputs are automatically saved in the `outputs/` directory, organized by date and time. Each experiment run generates a unique folder with the following structure:  
