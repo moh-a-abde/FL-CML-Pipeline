@@ -9,6 +9,7 @@ A privacy-preserving machine learning implementation using federated learning wi
 -  **CML** - Continuous Machine Learning
 
 ---
+
 ## 🛠️ Workflow Overview
 
 ```diff
@@ -20,6 +21,7 @@ A privacy-preserving machine learning implementation using federated learning wi
 ```
 
 ---
+
 ## 🗺️ Architecture Overview
 
 This library implements a federated learning system that:
@@ -94,7 +96,6 @@ Two main training approaches:
 - [📂 Output Structure](#-output-structure)
 - [🧪 Running Experiments](#-running-experiments)  
 - [⚖️ Comparison of Federated XGBoost Strategies: Cyclic vs. Bagging](#-comparison-of-federated-xgboost-strategies:-cyclic-vs.-bagging)
-
 
 ---
 
@@ -186,9 +187,8 @@ config_fit:
   local_epochs: 1                # Epochs per client update
 ```
 
-
 ---
-# WORK IN PROGRESS
+
 ## **⚠️📂 Output Structure**
 
 Experiment outputs are automatically saved in the `outputs/` directory, organized by date and time. Each experiment run generates a unique folder with the following structure:  
@@ -202,7 +202,6 @@ outputs/
         │   └── hydra.yaml
         └── results.pkl          # Training history
 ```
-
 
 ---
 
@@ -218,7 +217,6 @@ or
 ```bash
 ./run_bagging.sh
 ```
-
 
 ---
 
@@ -260,7 +258,6 @@ A comparison of two federated learning strategies for XGBoost implementations us
 | **Communication**      | Low bandwidth (1 client/round)          | Higher bandwidth                       |
 | **Use Case**           | Ordered client sequences                | Traditional FL scenarios               |
 | **Performance**        | Better for client-specific patterns     | Better for generalizable models        |
-
 
 ## When to Use Which
 
