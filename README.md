@@ -162,7 +162,7 @@ Before running the project, ensure you have the following installed:
    
 ---
 
-## **⚙️ Configuration**
+## **⚠️⚙️ Configuration**
 
 The experiment settings are managed using **Hydra** and are defined in `conf/base.yaml`.  
 Modify these settings in conf/base.yaml or override them at runtime when executing experiments.
