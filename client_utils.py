@@ -179,6 +179,7 @@ class XgbClient(fl.client.Client):
 
         Returns:
             EvaluateRes: Evaluation metrics including precision, recall, and F1 score
+            + Detailed dataset tracking and classification results.
         """
         # Load global model for evaluation
         bst = xgb.Booster(params=self.params)
@@ -186,36 +187,59 @@ class XgbClient(fl.client.Client):
             para_b = bytearray(para)
         bst.load_model(para_b)
 
-        # Generate predictions
-        y_pred = bst.predict(self.valid_dmatrix)
-        y_pred_labels = y_pred.astype(int)
+        # Log dataset information
+        log(INFO, f"Evaluating on dataset with {self.num_val} samples")
+        
+        # Generate predictions with probabilities
+        y_pred_proba = bst.predict(self.valid_dmatrix)
+        y_pred_labels = y_pred_proba.astype(int)
         
         # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
         
-        # Compute evaluation metrics
+        # Compute detailed metrics
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
         
-        # Compute loss
-        loss = bst.eval(self.valid_dmatrix).split(":")[1]
+        # Generate confusion matrix
+        conf_matrix = confusion_matrix(y_true, y_pred_labels)
+        # Generate detailed classification report
+        class_report = classification_report(y_true, y_pred_labels, output_dict=True)
+        # Get prediction confidence scores
+        pred_probs = bst.predict(self.valid_dmatrix, output_margin=True)
 
-        # Log evaluation results
-        global_round = ins.config["global_round"]
-        log(INFO, f"Precision = {precision}, Recall = {recall}, F1 Score = {f1} at round {global_round}, Loss = {loss} at round {global_round}")
-        
-        return EvaluateRes(
-            status=Status(
-                code=Code.OK,
-                message="OK",
-            ),
-            loss=float(loss),
-            num_examples=self.num_val,
-            metrics={
+        # Compute loss
+        loss = float(bst.eval(self.valid_dmatrix).split(":")[1])
+
+        # Create detailed results dictionary
+        evaluation_details = {
+            "dataset_size": self.num_val,
+            "metrics": {
                 "precision": precision,
                 "recall": recall,
                 "f1": f1,
+                "loss": loss
             },
+            "confusion_matrix": conf_matrix.tolist(),
+            "classification_report": class_report,
+            "prediction_confidence": pred_probs.tolist()
+        }
+
+        # Log detailed evaluation results
+        global_round = ins.config["global_round"]
+        log(INFO, f"\nEvaluation Results for Round {global_round}:")
+        log(INFO, f"Dataset Size: {self.num_val} samples")
+        log(INFO, f"Precision: {precision:.4f}")
+        log(INFO, f"Recall: {recall:.4f}")
+        log(INFO, f"F1 Score: {f1:.4f}")
+        log(INFO, f"Loss: {loss:.4f}")
+        log(INFO, f"\nConfusion Matrix:\n{conf_matrix}")
+        
+        return EvaluateRes(
+            status=Status(code=Code.OK, message="OK"),
+            loss=loss,
+            num_examples=self.num_val,
+            metrics=evaluation_details
         )
 
