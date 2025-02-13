@@ -1,4 +1,4 @@
-ame: federated-learning-flower
+name: federated-learning-flower
 on: [push]
 jobs:
   run:
