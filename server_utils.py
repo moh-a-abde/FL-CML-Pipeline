@@ -78,7 +78,7 @@ def evaluate_metrics_aggregation(eval_metrics):
     
     return metrics_aggregated
 
-def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = "predictions"):
+def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = "results"):
     """
     Save dataset with predictions to CSV.
     
@@ -132,7 +132,8 @@ def get_evaluate_fn(test_data):
             y_true = test_data.get_label()
             
             # Save dataset with predictions
-            output_path = save_predictions_to_csv(test_data, y_pred_labels, server_round)
+            #output_path = save_predictions_to_csv(test_data, y_pred_labels, server_round, "results")
+            save_predictions_to_csv(test_data, y_pred_labels, server_round, "results")
             
             # Compute metrics
             precision = precision_score(y_true, y_pred_labels, average='weighted')
