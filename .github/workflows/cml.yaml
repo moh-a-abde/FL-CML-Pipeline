@@ -39,3 +39,18 @@ jobs:
           pip install -r requirements.txt
           #python sim.py
           ./run_bagging.sh
+
+      - name: Commit results file
+        run: |
+          git config --local user.email "abde8473@stthomas.edu"
+          git config --local user.name "moh-a-abde"
+          git add results/eval_results_round_aggregated.json
+          git commit -m "Update aggregated eval results"
+
+      - name: Push changes
+        uses: ad-m/github-push-action@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          force: true
+
+      
