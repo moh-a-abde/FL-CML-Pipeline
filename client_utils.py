@@ -13,7 +13,7 @@ Key Components:
 
 from logging import INFO
 import xgboost as xgb
-from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix, classification_report
 import flwr as fl
 from flwr.common.logger import log
 from flwr.common import (
