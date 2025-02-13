@@ -143,13 +143,12 @@ def train_test_split(
 
     return partition_train, partition_test, num_train, num_test
 
-def transform_dataset_to_dmatrix(data: Union[Dataset, DatasetDict], dataset_name: str = "unnamed") -> xgb.DMatrix:
+def transform_dataset_to_dmatrix(data: Union[Dataset, DatasetDict]) -> xgb.DMatrix:
     """
     Transform dataset into XGBoost's DMatrix format.
 
     Args:
         data (Union[Dataset, DatasetDict]): Input dataset
-        dataset_name (str): Name/identifier for the dataset
 
     Returns:
         xgb.DMatrix: Data in XGBoost's optimized format
@@ -160,7 +159,6 @@ def transform_dataset_to_dmatrix(data: Union[Dataset, DatasetDict], dataset_name
     x, y = separate_xy(data)
     
     #print transformation details
-    print(f"Transforming dataset '{dataset_name}':")
     print(f"Features shape: {x.shape}")
     print(f"Labels shape: {y.shape}")
     
