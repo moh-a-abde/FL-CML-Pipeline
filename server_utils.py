@@ -8,7 +8,9 @@ from flwr.server.client_manager import SimpleClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.criterion import Criterion
 from utils import BST_PARAMS
-
+import os
+import json
+from datetime import datetime
 
 def eval_config(rnd: int) -> Dict[str, str]:
     """Return a configuration with global epochs."""
@@ -17,6 +19,25 @@ def eval_config(rnd: int) -> Dict[str, str]:
     }
     return config
 
+def save_evaluation_results(eval_metrics: Dict, round_num: int, output_dir: str = "results"):
+    """
+    Save evaluation results for each round.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Format results
+    results = {
+        'round': round_num,
+        'timestamp': datetime.now().isoformat(),
+        'metrics': eval_metrics
+    }
+    
+    # Save to file
+    output_path = os.path.join(output_dir, f"eval_results_round_{round_num}.json")
+    with open(output_path, 'w') as f:
+        json.dump(results, f, indent=4)
+    
+    log(INFO, f"Evaluation results saved to: {output_path}")
 
 def fit_config(rnd: int) -> Dict[str, str]:
     """Return a configuration with global epochs."""
