@@ -47,13 +47,13 @@ def load_csv_data(file_path: str) -> DatasetDict:
     Example:
         dataset = load_csv_data("path/to/network_data.csv")
     """
-    log(INFO, f"Loading dataset from: {file_path}")
+    print(f"Loading dataset from: {file_path}")
     df = pd.read_csv(file_path)
     
-    # Log dataset statistics
-    log(INFO, f"Dataset Statistics:")
-    log(INFO, f"Total samples: {len(df)}")
-    log(INFO, f"Features: {df.columns.tolist()}")
+    # print dataset statistics
+    print(f"Dataset Statistics:")
+    print(f"Total samples: {len(df)}")
+    print(f"Features: {df.columns.tolist()}")
     
     # Convert to Dataset format
     dataset = Dataset.from_pandas(df)
@@ -159,15 +159,15 @@ def transform_dataset_to_dmatrix(data: Union[Dataset, DatasetDict], dataset_name
     """
     x, y = separate_xy(data)
     
-    #Log transformation details
-    log(INFO, f"Transforming dataset '{dataset_name}':")
-    log(INFO, f"Features shape: {x.shape}")
-    log(INFO, f"Labels shape: {y.shape}")
+    #print transformation details
+    print(f"Transforming dataset '{dataset_name}':")
+    print(f"Features shape: {x.shape}")
+    print(f"Labels shape: {y.shape}")
     
     # Reshape x to 2D if needed
     if len(x.shape) > 2:
         x = x.reshape(x.shape[0], -1)
-        log(INFO, f"Reshaped features to: {x.shape}")
+        print(f"Reshaped features to: {x.shape}")
         
     new_data = xgb.DMatrix(x, label=y)
     return new_data
