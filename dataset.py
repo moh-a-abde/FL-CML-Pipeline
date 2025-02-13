@@ -47,7 +47,15 @@ def load_csv_data(file_path: str) -> DatasetDict:
     Example:
         dataset = load_csv_data("path/to/network_data.csv")
     """
+    log(INFO, f"Loading dataset from: {file_path}")
     df = pd.read_csv(file_path)
+    
+    # Log dataset statistics
+    log(INFO, f"Dataset Statistics:")
+    log(INFO, f"Total samples: {len(df)}")
+    log(INFO, f"Features: {df.columns.tolist()}")
+    
+    # Convert to Dataset format
     dataset = Dataset.from_pandas(df)
     return DatasetDict({"train": dataset, "test": dataset})
 
@@ -135,12 +143,13 @@ def train_test_split(
 
     return partition_train, partition_test, num_train, num_test
 
-def transform_dataset_to_dmatrix(data: Union[Dataset, DatasetDict]) -> xgb.DMatrix:
+def transform_dataset_to_dmatrix(data: Union[Dataset, DatasetDict], dataset_name: str = "unnamed") -> xgb.DMatrix:
     """
     Transform dataset into XGBoost's DMatrix format.
 
     Args:
         data (Union[Dataset, DatasetDict]): Input dataset
+        dataset_name (str): Name/identifier for the dataset
 
     Returns:
         xgb.DMatrix: Data in XGBoost's optimized format
@@ -149,9 +158,17 @@ def transform_dataset_to_dmatrix(data: Union[Dataset, DatasetDict]) -> xgb.DMatr
         Automatically reshapes features to 2D if needed
     """
     x, y = separate_xy(data)
-    # Reshape x to 2D if it's not already
+    
+    #Log transformation details
+    log(INFO, f"Transforming dataset '{dataset_name}':")
+    log(INFO, f"Features shape: {x.shape}")
+    log(INFO, f"Labels shape: {y.shape}")
+    
+    # Reshape x to 2D if needed
     if len(x.shape) > 2:
         x = x.reshape(x.shape[0], -1)
+        log(INFO, f"Reshaped features to: {x.shape}")
+        
     new_data = xgb.DMatrix(x, label=y)
     return new_data
 
@@ -205,4 +222,35 @@ def resplit(dataset: DatasetDict) -> DatasetDict:
             ),
         }
     )
+
+class ModelPredictor:
+    """
+    Handles model prediction and dataset labeling
+    """
+    def __init__(self, model_path: str):
+        self.model = xgb.Booster()
+        self.model.load_model(model_path)
+    
+    def predict_and_save(
+        self,
+        input_data: Union[str, pd.DataFrame],
+        output_path: str,
+        include_confidence: bool = True
+    ):
+        """
+        Predict on new data and save labeled dataset
+        """
+        # Load/preprocess input data
+        data = self._prepare_data(input_data)
+        
+        # Generate predictions
+        predictions = self.model.predict(data)
+        confidence = None
+        if include_confidence:
+            confidence = self.model.predict(data, output_margin=True)
+        
+        # Save labeled dataset
+        self._save_output(data, predictions, confidence, output_path)
+
+
 
