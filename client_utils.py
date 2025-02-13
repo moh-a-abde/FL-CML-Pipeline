@@ -179,7 +179,6 @@ class XgbClient(fl.client.Client):
 
         Returns:
             EvaluateRes: Evaluation metrics including precision, recall, and F1 score
-            + Detailed dataset tracking and classification results.
         """
         # Load global model for evaluation
         bst = xgb.Booster(params=self.params)
@@ -204,27 +203,15 @@ class XgbClient(fl.client.Client):
         
         # Generate confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
+        
         # Generate detailed classification report
         class_report = classification_report(y_true, y_pred_labels, output_dict=True)
+        
         # Get prediction confidence scores
         pred_probs = bst.predict(self.valid_dmatrix, output_margin=True)
 
         # Compute loss
         loss = float(bst.eval(self.valid_dmatrix).split(":")[1])
-
-        # Create detailed results dictionary
-        evaluation_details = {
-            "dataset_size": self.num_val,
-            "metrics": {
-                "precision": precision,
-                "recall": recall,
-                "f1": f1,
-                "loss": loss
-            },
-            "confusion_matrix": conf_matrix.tolist(),
-            "classification_report": class_report,
-            "prediction_confidence": pred_probs.tolist()
-        }
 
         # Log detailed evaluation results
         global_round = ins.config["global_round"]
@@ -236,9 +223,31 @@ class XgbClient(fl.client.Client):
         log(INFO, f"Loss: {loss:.4f}")
         log(INFO, f"\nConfusion Matrix:\n{conf_matrix}")
         
+        # Convert confusion matrix to list for logging
+        conf_matrix_list = conf_matrix.tolist()
+        log(INFO, f"\nPrediction Distribution:")
+        log(INFO, f"True Negatives: {conf_matrix_list[0][0]}")
+        log(INFO, f"False Positives: {conf_matrix_list[0][1]}")
+        log(INFO, f"False Negatives: {conf_matrix_list[1][0]}")
+        log(INFO, f"True Positives: {conf_matrix_list[1][1]}")
+
+        # Create flattened metrics dictionary with simple types
+        metrics = {
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1": float(f1),
+            "dataset_size": self.num_val,
+            "true_negatives": int(conf_matrix_list[0][0]),
+            "false_positives": int(conf_matrix_list[0][1]),
+            "false_negatives": int(conf_matrix_list[1][0]),
+            "true_positives": int(conf_matrix_list[1][1]),
+            "avg_confidence": float(pred_probs.mean()),
+        }
+
         return EvaluateRes(
             status=Status(code=Code.OK, message="OK"),
             loss=loss,
             num_examples=self.num_val,
-            metrics=evaluation_details
+            metrics=metrics
         )
+
