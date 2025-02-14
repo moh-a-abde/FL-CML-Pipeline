@@ -29,6 +29,7 @@ from flwr.common import (
 )
 from flwr.common.typing import Code
 from flwr.common import Status
+import numpy as np
 
 
 class XgbClient(fl.client.Client):
@@ -184,12 +185,20 @@ class XgbClient(fl.client.Client):
             predictions = bst.predict(self.valid_dmatrix)
             pred_labels = predictions.astype(int)
             
+            # Convert predictions to a format that can be serialized
+            pred_dict = {
+                "num_predictions": len(pred_labels),
+                "positive_predictions": int(np.sum(pred_labels == 1)),
+                "negative_predictions": int(np.sum(pred_labels == 0)),
+                "mean_confidence": float(np.mean(predictions))
+            }
+            
             # Save predictions
             return EvaluateRes(
                 status=Status(code=Code.OK, message="Predictions generated"),
                 loss=0.0,  # No loss calculation for unlabeled data
                 num_examples=self.num_val,
-                metrics={"predictions": pred_labels.tolist()}
+                metrics=pred_dict  # Send summary statistics instead of raw predictions
             )
         
         # Load global model for evaluation
