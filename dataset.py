@@ -76,43 +76,56 @@ def instantiate_partitioner(partitioner_type: str, num_partitions: int):
     )
     return partitioner
     
-def preprocess_data(data: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+def preprocess_data(data):
     """
-    Preprocess network traffic data by encoding categorical features and scaling numerical features.
-
+    Preprocess the data by separating features and labels.
+    
     Args:
-        data (pd.DataFrame): Raw network traffic data
-
+        data (pd.DataFrame): Input DataFrame
+        
     Returns:
-        Tuple[np.ndarray, np.ndarray]: Preprocessed features and encoded labels
-
-    Note:
-        Categorical features are one-hot encoded
-        Numerical features are standardized
+        tuple: (features DataFrame, labels Series or None if unlabeled)
     """
-    # Define feature groups
-    categorical_features = ['id.orig_h', 'id.resp_h', 'proto', 'history', 'conn_state']
-    numerical_features = ['id.orig_p', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'missed_bytes',
-                         'local_resp', 'local_orig', 'resp_bytes', 'orig_bytes', 'duration', 'id.resp_p']
+    # Check if this is labeled or unlabeled data
+    if 'label' in data.columns:
+        # For labeled data
+        features = data.drop(columns=['label'])
+        labels = data['label']
+        return features, labels
+    else:
+        # For unlabeled data
+        return data, None
+
+def separate_xy(data):
+    """
+    Separate features and labels from the dataset.
     
-    # Initialize preprocessor
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ('num', StandardScaler(), numerical_features),
-            ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
-        ]
-    )
+    Args:
+        data: Input dataset
+        
+    Returns:
+        tuple: (features, labels or None if unlabeled)
+    """
+    return preprocess_data(data.to_pandas())
+
+def transform_dataset_to_dmatrix(data):
+    """
+    Transform dataset to DMatrix format.
     
-    # Separate features and labels
-    features = data.drop(columns=['label'])
-    labels = data['label']
-    label_encoder = LabelEncoder()
-    labels_encoded = label_encoder.fit_transform(labels)
+    Args:
+        data: Input dataset
+        
+    Returns:
+        xgb.DMatrix: Transformed dataset
+    """
+    x, y = separate_xy(data)
     
-    # Transform features
-    features_transformed = preprocessor.fit_transform(features)
+    # For unlabeled data, create DMatrix without labels
+    if y is None:
+        return xgb.DMatrix(x)
     
-    return features_transformed, labels_encoded
+    # For labeled data, create DMatrix with labels
+    return xgb.DMatrix(x, label=y)
 
 def train_test_split(
     partition: Dataset, 
@@ -142,46 +155,6 @@ def train_test_split(
     num_test = len(partition_test)
 
     return partition_train, partition_test, num_train, num_test
-
-def transform_dataset_to_dmatrix(data: Union[Dataset, DatasetDict]) -> xgb.DMatrix:
-    """
-    Transform dataset into XGBoost's DMatrix format.
-
-    Args:
-        data (Union[Dataset, DatasetDict]): Input dataset
-
-    Returns:
-        xgb.DMatrix: Data in XGBoost's optimized format
-
-    Note:
-        Automatically reshapes features to 2D if needed
-    """
-    x, y = separate_xy(data)
-    
-    #print transformation details
-    print(f"Features shape: {x.shape}")
-    print(f"Labels shape: {y.shape}")
-    
-    # Reshape x to 2D if needed
-    if len(x.shape) > 2:
-        x = x.reshape(x.shape[0], -1)
-        print(f"Reshaped features to: {x.shape}")
-        
-    new_data = xgb.DMatrix(x, label=y)
-    return new_data
-
-def separate_xy(data: Union[Dataset, DatasetDict]) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Separate features and labels from dataset.
-
-    Args:
-        data (Union[Dataset, DatasetDict]): Input dataset
-
-    Returns:
-        Tuple[np.ndarray, np.ndarray]: Features and labels arrays
-    """
-    x, y = preprocess_data(data.to_pandas())
-    return x, y
 
 def resplit(dataset: DatasetDict) -> DatasetDict:
     """
