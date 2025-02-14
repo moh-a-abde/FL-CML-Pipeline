@@ -27,6 +27,8 @@ from flwr.common import (
     Parameters,
     Status,
 )
+from flwr.common.typing import Code
+from flwr.common import Status
 
 
 class XgbClient(fl.client.Client):
@@ -154,7 +156,9 @@ class XgbClient(fl.client.Client):
         local_model = bst.save_raw("json")
         local_model_bytes = bytes(local_model)
 
+        # Return with status
         return FitRes(
+            status=Status(code=Code.OK, message="Success"),
             parameters=Parameters(tensor_type="", tensors=[local_model_bytes]),
             num_examples=self.num_train,
             metrics={}
@@ -223,6 +227,7 @@ class XgbClient(fl.client.Client):
         }
 
         return EvaluateRes(
+            status=Status(code=Code.OK, message="Success"),
             loss=float(error_rate),
             num_examples=self.num_val,
             metrics=metrics
