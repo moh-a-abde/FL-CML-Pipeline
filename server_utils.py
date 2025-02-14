@@ -75,19 +75,18 @@ def evaluate_metrics_aggregation(eval_metrics):
     
     # Save aggregated results
     save_evaluation_results(metrics_aggregated, "aggregated")
-    save_predictions_to_csv(test_data, y_pred_labels, server_round, "results")
     
     return metrics_aggregated
 
 def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = "results"):
     """
-    Save dataset with predictions to CSV.
+    Save dataset with predictions to CSV in the results directory.
     
     Args:
         data: Original dataset
         predictions: Model predictions
         round_num: Current round number
-        output_dir: Directory to save results
+        output_dir: Directory to save results (same as evaluation results)
     """
     os.makedirs(output_dir, exist_ok=True)
     
@@ -101,10 +100,10 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     # Add predictions
     df['predicted_label'] = predictions
     
-    # Save to CSV
-    output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
+    # Save to CSV in the results directory
+    output_path = os.path.join(output_dir, f"dataset_with_predictions_round_{round_num}.csv")
     df.to_csv(output_path, index=False)
-    log(INFO, f"Predictions saved to: {output_path}")
+    log(INFO, f"Dataset with predictions saved to: {output_path}")
     
     return output_path
 
@@ -114,7 +113,6 @@ def get_evaluate_fn(test_data):
     def evaluate_fn(
         server_round: int, parameters: Parameters, config: Dict[str, Scalar]
     ):
-        # If at the first round, skip the evaluation
         if server_round == 0:
             return 0, {}
         else:
@@ -122,7 +120,6 @@ def get_evaluate_fn(test_data):
             for para in parameters.tensors:
                 para_b = bytearray(para)
 
-            # Load global model
             bst.load_model(para_b)
             
             # Predict on test data
@@ -132,9 +129,8 @@ def get_evaluate_fn(test_data):
             # Get true labels
             y_true = test_data.get_label()
             
-            # Save dataset with predictions
+            # Save dataset with predictions to results directory
             output_path = save_predictions_to_csv(test_data, y_pred_labels, server_round, "results")
-            
             
             # Compute metrics
             precision = precision_score(y_true, y_pred_labels, average='weighted')
@@ -157,7 +153,7 @@ def get_evaluate_fn(test_data):
             }
 
             log(INFO, f"Precision = {precision}, Recall = {recall}, F1 Score = {f1} at round {server_round}")
-            log(INFO, f"Predictions saved to: {output_path}")
+            log(INFO, f"Dataset with predictions saved to: {output_path}")
 
             return 0, metrics
 
