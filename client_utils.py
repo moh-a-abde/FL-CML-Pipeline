@@ -30,6 +30,8 @@ from flwr.common import (
 from flwr.common.typing import Code
 from flwr.common import Status
 import numpy as np
+import pandas as pd
+import os
 
 
 class XgbClient(fl.client.Client):
@@ -175,36 +177,8 @@ class XgbClient(fl.client.Client):
     
     def evaluate(self, ins: EvaluateIns) -> EvaluateRes:
         """
-        Evaluate the model on local validation data.
+        Evaluate the model on validation data and make predictions on unlabeled data.
         """
-        if self.is_prediction_only:
-            # For unlabeled data, just return predictions
-            bst = xgb.Booster(params=self.params)
-            para_b = bytearray()
-            for para in ins.parameters.tensors:
-                para_b.extend(para)
-            bst.load_model(para_b)
-            
-            # Generate predictions
-            predictions = bst.predict(self.valid_dmatrix)
-            pred_labels = predictions.astype(int)
-            
-            # Convert predictions to a format that can be serialized
-            pred_dict = {
-                "num_predictions": len(pred_labels),
-                "positive_predictions": int(np.sum(pred_labels == 1)),
-                "negative_predictions": int(np.sum(pred_labels == 0)),
-                "mean_confidence": float(np.mean(predictions))
-            }
-            
-            # Save predictions
-            return EvaluateRes(
-                status=Status(code=Code.OK, message="Predictions generated"),
-                loss=0.0,  # No loss calculation for unlabeled data
-                num_examples=self.num_val,
-                metrics=pred_dict  # Send summary statistics instead of raw predictions
-            )
-        
         # Load global model for evaluation
         bst = xgb.Booster(params=self.params)
         para_b = bytearray()
@@ -212,46 +186,56 @@ class XgbClient(fl.client.Client):
             para_b.extend(para)
         bst.load_model(para_b)
 
-        # Log dataset information
-        log(INFO, f"Evaluating on dataset with {self.num_val} samples")
+        # First evaluate on labeled validation data
+        log(INFO, f"Evaluating on labeled dataset with {self.num_val} samples")
         
-        # Generate predictions
+        # Generate predictions for validation data
         y_pred_proba = bst.predict(self.valid_dmatrix)
         y_pred_labels = y_pred_proba.astype(int)
         
         # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
         
-        # Compute metrics
+        # Compute metrics for labeled data
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
-        
-        # Compute error rate as loss
-        error_rate = 1 - precision  # Using 1 - precision as the error rate
-        
-        # Log detailed evaluation results
-        global_round = ins.config["global_round"]
-        log(INFO, f"\nEvaluation Results for Round {global_round}:")
-        log(INFO, f"Dataset Size: {self.num_val} samples")
-        log(INFO, f"Precision: {precision:.4f}")
-        log(INFO, f"Recall: {recall:.4f}")
-        log(INFO, f"F1 Score: {f1:.4f}")
-        log(INFO, f"Loss: {error_rate:.4f}")
+        error_rate = 1 - precision
         
         # Generate confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
-        log(INFO, f"\nConfusion Matrix:")
-        log(INFO, str(conf_matrix))
-        
-        # Calculate prediction distribution
         tn, fp, fn, tp = conf_matrix.ravel()
-        log(INFO, f"\nPrediction Distribution:")
-        log(INFO, f"True Negatives: {tn}")
-        log(INFO, f"False Positives: {fp}")
-        log(INFO, f"False Negatives: {fn}")
-        log(INFO, f"True Positives: {tp}")
         
+        # Now make predictions on unlabeled data if available
+        unlabeled_predictions = None
+        if self.unlabeled_dmatrix is not None:
+            log(INFO, "Making predictions on unlabeled data")
+            unlabeled_pred = bst.predict(self.unlabeled_dmatrix)
+            unlabeled_pred_labels = unlabeled_pred.astype(int)
+            
+            # Save predictions to file
+            predictions_df = pd.DataFrame({
+                'predicted_label': unlabeled_pred_labels,
+                'confidence': unlabeled_pred,
+                'prediction_type': ['malicious' if p == 1 else 'benign' for p in unlabeled_pred_labels]
+            })
+            
+            # Save predictions
+            output_dir = "results"
+            os.makedirs(output_dir, exist_ok=True)
+            round_num = ins.config.get("global_round", "final")
+            output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
+            predictions_df.to_csv(output_path, index=False)
+            log(INFO, f"Predictions saved to: {output_path}")
+            
+            # Count predictions
+            unlabeled_predictions = {
+                "total_predictions": len(unlabeled_pred_labels),
+                "malicious_predictions": int(np.sum(unlabeled_pred_labels == 1)),
+                "benign_predictions": int(np.sum(unlabeled_pred_labels == 0)),
+                "predictions_file": output_path
+            }
+
         # Create metrics dictionary
         metrics = {
             "precision": float(precision),
@@ -262,6 +246,10 @@ class XgbClient(fl.client.Client):
             "false_negatives": int(fn),
             "true_positives": int(tp)
         }
+        
+        # Add unlabeled predictions if available
+        if unlabeled_predictions:
+            metrics.update(unlabeled_predictions)
 
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
