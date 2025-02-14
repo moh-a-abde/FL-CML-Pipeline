@@ -78,7 +78,7 @@ def instantiate_partitioner(partitioner_type: str, num_partitions: int):
     
 def preprocess_data(data):
     """
-    Preprocess the data by separating features and labels.
+    Preprocess the data by encoding categorical features and separating features and labels.
     
     Args:
         data (pd.DataFrame): Input DataFrame
@@ -86,15 +86,34 @@ def preprocess_data(data):
     Returns:
         tuple: (features DataFrame, labels Series or None if unlabeled)
     """
+    # Define categorical and numerical features
+    categorical_features = ['id.orig_h', 'id.resp_h', 'proto', 'conn_state', 'history']
+    numerical_features = ['id.orig_p', 'id.resp_p', 'duration', 'orig_bytes', 'resp_bytes',
+                         'local_orig', 'local_resp', 'missed_bytes', 'orig_pkts', 
+                         'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes']
+    
+    # Create a copy to avoid modifying original data
+    df = data.copy()
+    
+    # Convert categorical features to category type
+    for col in categorical_features:
+        df[col] = df[col].astype('category')
+        # Get numerical codes for categories
+        df[col] = df[col].cat.codes
+    
+    # Ensure numerical features are float type
+    for col in numerical_features:
+        df[col] = df[col].astype(float)
+    
     # Check if this is labeled or unlabeled data
-    if 'label' in data.columns:
+    if 'label' in df.columns:
         # For labeled data
-        features = data.drop(columns=['label'])
-        labels = data['label']
+        features = df.drop(columns=['label'])
+        labels = df['label'].astype(float)
         return features, labels
     else:
         # For unlabeled data
-        return data, None
+        return df, None
 
 def separate_xy(data):
     """
