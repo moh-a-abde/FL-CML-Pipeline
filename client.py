@@ -54,7 +54,7 @@ args = client_args_parser()
 train_method = args.train_method
 
 # Load and prepare dataset
-csv_file_path = "data/unlabeled.csv"
+csv_file_path = "data/modified_shuffled_merged.csv"
 #csv_file_path = get_latest_csv("/home/mohamed/Desktop/test_repo/data")
 dataset = load_csv_data(csv_file_path)
 
@@ -100,16 +100,20 @@ if args.train_method == "bagging" and args.scaled_lr:
     new_lr = params["eta"] / args.num_partitions
     params.update({"eta": new_lr})
 
+# Create client
+client = XgbClient(
+    train_dmatrix=train_dmatrix,
+    valid_dmatrix=valid_dmatrix,
+    num_train=len(train_data),
+    num_val=len(valid_data) if valid_data is not None else 0,
+    num_local_round=NUM_LOCAL_ROUND,
+    params=BST_PARAMS,
+    train_method=args.train_method,
+    is_prediction_only=True  # Add this flag for unlabeled data
+)
+
 # Initialize and start Flower client
 fl.client.start_client(
     server_address="127.0.0.1:8080",  # FL server address
-    client=XgbClient(
-        train_dmatrix,      # Training data
-        valid_dmatrix,      # Validation data
-        num_train,          # Number of training samples
-        num_val,            # Number of validation samples
-        num_local_round,    # Number of local training rounds
-        params,             # XGBoost parameters
-        train_method,       # Training method (bagging/cyclic)
-    ),
+    client=client,
 )
