@@ -48,7 +48,7 @@ def client_args_parser():
     )
     parser.add_argument(
         "--test-fraction",
-        default=0.2,
+        default=0.4,
         type=float,
         help="Test fraction for train/test splitting.",
     )
