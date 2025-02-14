@@ -5,7 +5,7 @@ import argparse
 NUM_LOCAL_ROUND = 1
 BST_PARAMS = {
     "objective": "binary:logistic",
-    "num_class": 2,
+    #"num_class": 2,
     "eta": 0.1,  # Learning rate
     "max_depth": 8,
     #"eval_metric": "mlogloss",
