@@ -46,6 +46,7 @@ class XgbClient(fl.client.Client):
         num_local_round (int): Number of local training rounds
         params (dict): XGBoost training parameters
         train_method (str): Training method ('bagging' or 'cyclic')
+        is_prediction_only (bool): Flag indicating if the client is used for prediction only
     """
 
     def __init__(
@@ -57,6 +58,7 @@ class XgbClient(fl.client.Client):
         num_local_round,
         params,
         train_method,
+        is_prediction_only=False,
     ):
         """
         Initialize the XGBoost Flower client.
@@ -69,6 +71,7 @@ class XgbClient(fl.client.Client):
             num_local_round (int): Number of local training rounds
             params (dict): XGBoost parameters
             train_method (str): Training method ('bagging' or 'cyclic')
+            is_prediction_only (bool): Flag indicating if the client is used for prediction only
         """
         self.train_dmatrix = train_dmatrix
         self.valid_dmatrix = valid_dmatrix
@@ -77,6 +80,7 @@ class XgbClient(fl.client.Client):
         self.num_local_round = num_local_round
         self.params = params
         self.train_method = train_method
+        self.is_prediction_only = is_prediction_only
 
     def get_parameters(self, ins: GetParametersIns) -> GetParametersRes:
         """
@@ -168,6 +172,26 @@ class XgbClient(fl.client.Client):
         """
         Evaluate the model on local validation data.
         """
+        if self.is_prediction_only:
+            # For unlabeled data, just return predictions
+            bst = xgb.Booster(params=self.params)
+            para_b = bytearray()
+            for para in ins.parameters.tensors:
+                para_b.extend(para)
+            bst.load_model(para_b)
+            
+            # Generate predictions
+            predictions = bst.predict(self.valid_dmatrix)
+            pred_labels = predictions.astype(int)
+            
+            # Save predictions
+            return EvaluateRes(
+                status=Status(code=Code.OK, message="Predictions generated"),
+                loss=0.0,  # No loss calculation for unlabeled data
+                num_examples=self.num_val,
+                metrics={"predictions": pred_labels.tolist()}
+            )
+        
         # Load global model for evaluation
         bst = xgb.Booster(params=self.params)
         para_b = bytearray()
