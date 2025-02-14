@@ -48,6 +48,7 @@ class XgbClient(fl.client.Client):
         params (dict): XGBoost training parameters
         train_method (str): Training method ('bagging' or 'cyclic')
         is_prediction_only (bool): Flag indicating if the client is used for prediction only
+        unlabeled_dmatrix: Unlabeled data in XGBoost's DMatrix format
     """
 
     def __init__(
@@ -60,6 +61,7 @@ class XgbClient(fl.client.Client):
         params,
         train_method,
         is_prediction_only=False,
+        unlabeled_dmatrix=None
     ):
         """
         Initialize the XGBoost Flower client.
@@ -73,6 +75,7 @@ class XgbClient(fl.client.Client):
             params (dict): XGBoost parameters
             train_method (str): Training method ('bagging' or 'cyclic')
             is_prediction_only (bool): Flag indicating if the client is used for prediction only
+            unlabeled_dmatrix: Unlabeled data in DMatrix format
         """
         self.train_dmatrix = train_dmatrix
         self.valid_dmatrix = valid_dmatrix
@@ -82,6 +85,7 @@ class XgbClient(fl.client.Client):
         self.params = params
         self.train_method = train_method
         self.is_prediction_only = is_prediction_only
+        self.unlabeled_dmatrix = unlabeled_dmatrix
 
     def get_parameters(self, ins: GetParametersIns) -> GetParametersRes:
         """
