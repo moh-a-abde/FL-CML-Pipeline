@@ -52,26 +52,46 @@ def evaluate_metrics_aggregation(eval_metrics):
     """Return aggregated metrics for evaluation."""
     total_num = sum([num for num, _ in eval_metrics])
     
-    # Weighted average across clients
-    precision_aggregated = sum([metrics["precision"] * num for num, metrics in eval_metrics]) / total_num
-    recall_aggregated = sum([metrics["recall"] * num for num, metrics in eval_metrics]) / total_num
-    f1_aggregated = sum([metrics["f1"] * num for num, metrics in eval_metrics]) / total_num
+    # Check if we're in prediction mode or evaluation mode
+    first_metrics = eval_metrics[0][1]
+    is_prediction_mode = "num_predictions" in first_metrics
     
-    # Aggregate confusion matrix metrics
-    tn_aggregated = sum([metrics["true_negatives"] * num for num, metrics in eval_metrics]) / total_num
-    fp_aggregated = sum([metrics["false_positives"] * num for num, metrics in eval_metrics]) / total_num
-    fn_aggregated = sum([metrics["false_negatives"] * num for num, metrics in eval_metrics]) / total_num
-    tp_aggregated = sum([metrics["true_positives"] * num for num, metrics in eval_metrics]) / total_num
-    
-    metrics_aggregated = {
-        "precision": precision_aggregated,
-        "recall": recall_aggregated,
-        "f1": f1_aggregated,
-        "true_negatives": tn_aggregated,
-        "false_positives": fp_aggregated,
-        "false_negatives": fn_aggregated,
-        "true_positives": tp_aggregated
-    }
+    if is_prediction_mode:
+        # Aggregate prediction statistics
+        total_predictions = sum([metrics["num_predictions"] * num for num, metrics in eval_metrics])
+        total_positives = sum([metrics["positive_predictions"] * num for num, metrics in eval_metrics])
+        total_negatives = sum([metrics["negative_predictions"] * num for num, metrics in eval_metrics])
+        avg_confidence = sum([metrics["mean_confidence"] * num for num, metrics in eval_metrics]) / total_num
+        
+        metrics_aggregated = {
+            "total_predictions": total_predictions,
+            "malicious_predictions": total_positives,
+            "benign_predictions": total_negatives,
+            "average_confidence": avg_confidence,
+            "prediction_mode": True
+        }
+    else:
+        # Aggregate evaluation metrics
+        precision_aggregated = sum([metrics["precision"] * num for num, metrics in eval_metrics]) / total_num
+        recall_aggregated = sum([metrics["recall"] * num for num, metrics in eval_metrics]) / total_num
+        f1_aggregated = sum([metrics["f1"] * num for num, metrics in eval_metrics]) / total_num
+        
+        # Aggregate confusion matrix metrics
+        tn_aggregated = sum([metrics["true_negatives"] * num for num, metrics in eval_metrics]) / total_num
+        fp_aggregated = sum([metrics["false_positives"] * num for num, metrics in eval_metrics]) / total_num
+        fn_aggregated = sum([metrics["false_negatives"] * num for num, metrics in eval_metrics]) / total_num
+        tp_aggregated = sum([metrics["true_positives"] * num for num, metrics in eval_metrics]) / total_num
+        
+        metrics_aggregated = {
+            "precision": precision_aggregated,
+            "recall": recall_aggregated,
+            "f1": f1_aggregated,
+            "true_negatives": tn_aggregated,
+            "false_positives": fp_aggregated,
+            "false_negatives": fn_aggregated,
+            "true_positives": tp_aggregated,
+            "prediction_mode": False
+        }
     
     # Save aggregated results
     save_evaluation_results(metrics_aggregated, "aggregated")
@@ -81,24 +101,25 @@ def evaluate_metrics_aggregation(eval_metrics):
 def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = "results"):
     """
     Save dataset with predictions to CSV in the results directory.
-    
-    Args:
-        data: Original dataset
-        predictions: Model predictions
-        round_num: Current round number
-        output_dir: Directory to save results (same as evaluation results)
     """
     os.makedirs(output_dir, exist_ok=True)
+    
+    # Get feature names from the original dataset
+    feature_names = ['id.orig_h', 'id.orig_p', 'id.resp_h', 'id.resp_p', 'proto', 
+                    'duration', 'orig_bytes', 'resp_bytes', 'conn_state', 'local_orig',
+                    'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes',
+                    'resp_pkts', 'resp_ip_bytes']
     
     # Convert DMatrix to DataFrame
     df = data.get_data()
     if isinstance(df, tuple):
         features, labels = df
-        df = pd.DataFrame(features)
+        df = pd.DataFrame(features, columns=feature_names)  # Use feature names
         df['true_label'] = labels
     
-    # Add predictions
+    # Add predictions and label them as malicious/benign
     df['predicted_label'] = predictions
+    df['traffic_type'] = df['predicted_label'].map({1: 'malicious', 0: 'benign'})
     
     # Save to CSV in the results directory
     output_path = os.path.join(output_dir, f"dataset_with_predictions_round_{round_num}.csv")
