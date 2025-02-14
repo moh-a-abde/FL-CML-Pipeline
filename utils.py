@@ -5,15 +5,21 @@ import argparse
 NUM_LOCAL_ROUND = 1
 BST_PARAMS = {
     "objective": "binary:logistic",
-    #"num_class": 2,
-    "eta": 0.1,  # Learning rate
-    "max_depth": 8,
-    #"eval_metric": "mlogloss",
+    "eta": 0.05,              # Reduced learning rate for better convergence
+    "max_depth": 6,           # Reduced to prevent overfitting
+    "min_child_weight": 1,    # Added to prevent overfitting
+    "gamma": 0.1,             # Added minimum loss reduction
+    "subsample": 0.8,         # Random sampling of training data
+    "colsample_bytree": 0.8,  # Random sampling of features
     "nthread": 16,
-    "num_parallel_tree": 1,
-    "subsample": 1,
+    "scale_pos_weight": 1.5,  # Added to handle class imbalance
     "tree_method": "hist",
+    "eval_metric": ["error", "auc", "logloss"],  # Multiple evaluation metrics
+    "max_delta_step": 1,      # Added to help with class imbalance
+    "reg_alpha": 0.1,         # L1 regularization
+    "reg_lambda": 1.0,        # L2 regularization
 }
+
 
 
 def client_args_parser():
