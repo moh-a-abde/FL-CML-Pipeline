@@ -14,12 +14,11 @@ BST_PARAMS = {
     "nthread": 16,
     "scale_pos_weight": 1.5,  # Added to handle class imbalance
     "tree_method": "hist",
-    "eval_metric": ["error", "auc", "logloss"],  # Multiple evaluation metrics
+    "eval_metric": "error",   # Use error rate as primary metric
     "max_delta_step": 1,      # Added to help with class imbalance
     "reg_alpha": 0.1,         # L1 regularization
     "reg_lambda": 1.0,        # L2 regularization
 }
-
 
 
 def client_args_parser():
@@ -54,7 +53,7 @@ def client_args_parser():
     )
     parser.add_argument(
         "--test-fraction",
-        default=0.4,
+        default=0.2,
         type=float,
         help="Test fraction for train/test splitting.",
     )
