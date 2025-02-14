@@ -54,7 +54,7 @@ args = client_args_parser()
 train_method = args.train_method
 
 # Load and prepare dataset
-csv_file_path = "data/modified_shuffled_merged.csv"
+csv_file_path = "data/unlabeled.csv"
 #csv_file_path = get_latest_csv("/home/mohamed/Desktop/test_repo/data")
 dataset = load_csv_data(csv_file_path)
 
