@@ -128,14 +128,7 @@ class XgbClient(fl.client.Client):
     def fit(self, ins: FitIns) -> FitRes:
         """
         Perform local model training.
-
-        Args:
-            ins (FitIns): Input parameters including global model and configuration
-
-        Returns:
-            FitRes: Training results including updated model parameters
         """
-        # Get current global round
         global_round = int(ins.config["global_round"])
         
         if global_round == 1:
@@ -145,6 +138,7 @@ class XgbClient(fl.client.Client):
                 self.train_dmatrix,
                 num_boost_round=self.num_local_round,
                 evals=[(self.valid_dmatrix, "validate"), (self.train_dmatrix, "train")],
+                verbose_eval=True
             )
         else:
             # Subsequent rounds: update existing model
@@ -161,13 +155,9 @@ class XgbClient(fl.client.Client):
         local_model_bytes = bytes(local_model)
 
         return FitRes(
-            status=Status(
-                code=Code.OK,
-                message="OK",
-            ),
             parameters=Parameters(tensor_type="", tensors=[local_model_bytes]),
             num_examples=self.num_train,
-            metrics={},
+            metrics={}
         )
     
     def evaluate(self, ins: EvaluateIns) -> EvaluateRes:
@@ -184,24 +174,20 @@ class XgbClient(fl.client.Client):
         # Log dataset information
         log(INFO, f"Evaluating on dataset with {self.num_val} samples")
         
-        # Generate predictions with probabilities
+        # Generate predictions
         y_pred_proba = bst.predict(self.valid_dmatrix)
         y_pred_labels = y_pred_proba.astype(int)
         
         # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
         
-        # Compute detailed metrics
+        # Compute metrics
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
         
-        # Get evaluation metrics from model
-        evals_result = {}
-        bst.eval_set([(self.valid_dmatrix, 'eval')], evals_result=evals_result)
-        
-        # Extract error rate as loss
-        loss = evals_result['eval']['error'][0]  # Use error rate as loss
+        # Compute error rate as loss
+        error_rate = 1 - precision  # Using 1 - precision as the error rate
         
         # Log detailed evaluation results
         global_round = ins.config["global_round"]
@@ -210,7 +196,7 @@ class XgbClient(fl.client.Client):
         log(INFO, f"Precision: {precision:.4f}")
         log(INFO, f"Recall: {recall:.4f}")
         log(INFO, f"F1 Score: {f1:.4f}")
-        log(INFO, f"Loss: {loss:.4f}")
+        log(INFO, f"Loss: {error_rate:.4f}")
         
         # Generate confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
@@ -237,7 +223,7 @@ class XgbClient(fl.client.Client):
         }
 
         return EvaluateRes(
-            loss=float(loss),
+            loss=float(error_rate),
             num_examples=self.num_val,
             metrics=metrics
         )
