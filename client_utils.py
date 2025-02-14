@@ -173,17 +173,12 @@ class XgbClient(fl.client.Client):
     def evaluate(self, ins: EvaluateIns) -> EvaluateRes:
         """
         Evaluate the model on local validation data.
-
-        Args:
-            ins (EvaluateIns): Input parameters including model to evaluate
-
-        Returns:
-            EvaluateRes: Evaluation metrics including precision, recall, and F1 score
         """
         # Load global model for evaluation
         bst = xgb.Booster(params=self.params)
+        para_b = bytearray()
         for para in ins.parameters.tensors:
-            para_b = bytearray(para)
+            para_b.extend(para)
         bst.load_model(para_b)
 
         # Log dataset information
@@ -201,18 +196,13 @@ class XgbClient(fl.client.Client):
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
         
-        # Generate confusion matrix
-        conf_matrix = confusion_matrix(y_true, y_pred_labels)
+        # Get evaluation metrics from model
+        evals_result = {}
+        bst.eval_set([(self.valid_dmatrix, 'eval')], evals_result=evals_result)
         
-        # Generate detailed classification report
-        class_report = classification_report(y_true, y_pred_labels, output_dict=True)
+        # Extract error rate as loss
+        loss = evals_result['eval']['error'][0]  # Use error rate as loss
         
-        # Get prediction confidence scores
-        pred_probs = bst.predict(self.valid_dmatrix, output_margin=True)
-
-        # Compute loss
-        loss = float(bst.eval(self.valid_dmatrix).split(":")[1])
-
         # Log detailed evaluation results
         global_round = ins.config["global_round"]
         log(INFO, f"\nEvaluation Results for Round {global_round}:")
@@ -221,32 +211,33 @@ class XgbClient(fl.client.Client):
         log(INFO, f"Recall: {recall:.4f}")
         log(INFO, f"F1 Score: {f1:.4f}")
         log(INFO, f"Loss: {loss:.4f}")
-        log(INFO, f"\nConfusion Matrix:\n{conf_matrix}")
         
-        # Convert confusion matrix to list for logging
-        conf_matrix_list = conf_matrix.tolist()
+        # Generate confusion matrix
+        conf_matrix = confusion_matrix(y_true, y_pred_labels)
+        log(INFO, f"\nConfusion Matrix:")
+        log(INFO, str(conf_matrix))
+        
+        # Calculate prediction distribution
+        tn, fp, fn, tp = conf_matrix.ravel()
         log(INFO, f"\nPrediction Distribution:")
-        log(INFO, f"True Negatives: {conf_matrix_list[0][0]}")
-        log(INFO, f"False Positives: {conf_matrix_list[0][1]}")
-        log(INFO, f"False Negatives: {conf_matrix_list[1][0]}")
-        log(INFO, f"True Positives: {conf_matrix_list[1][1]}")
-
-        # Create flattened metrics dictionary with simple types
+        log(INFO, f"True Negatives: {tn}")
+        log(INFO, f"False Positives: {fp}")
+        log(INFO, f"False Negatives: {fn}")
+        log(INFO, f"True Positives: {tp}")
+        
+        # Create metrics dictionary
         metrics = {
             "precision": float(precision),
             "recall": float(recall),
             "f1": float(f1),
-            "dataset_size": self.num_val,
-            "true_negatives": int(conf_matrix_list[0][0]),
-            "false_positives": int(conf_matrix_list[0][1]),
-            "false_negatives": int(conf_matrix_list[1][0]),
-            "true_positives": int(conf_matrix_list[1][1]),
-            "avg_confidence": float(pred_probs.mean()),
+            "true_negatives": int(tn),
+            "false_positives": int(fp),
+            "false_negatives": int(fn),
+            "true_positives": int(tp)
         }
 
         return EvaluateRes(
-            status=Status(code=Code.OK, message="OK"),
-            loss=loss,
+            loss=float(loss),
             num_examples=self.num_val,
             metrics=metrics
         )
