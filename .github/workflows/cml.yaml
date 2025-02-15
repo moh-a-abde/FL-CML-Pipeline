@@ -38,7 +38,7 @@ jobs:
           pip install hydra-core
           pip install -r requirements.txt
           #python sim.py
-          ./run_cyclic.sh
+          ./run_bagging.sh
 
       - name: Commit results file
         run: |
