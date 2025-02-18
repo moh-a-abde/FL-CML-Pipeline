@@ -139,12 +139,16 @@ def transform_dataset_to_dmatrix(data):
     """
     x, y = separate_xy(data)
     
-    # For unlabeled data, create DMatrix without labels
-    if y is None:
-        return xgb.DMatrix(x)
+    x_encoded = x.copy()
     
-    # For labeled data, create DMatrix with labels
-    return xgb.DMatrix(x, label=y, enable_categorical=True)
+    # Encode object columns
+    object_columns = ['uid', 'client_initial_dcid', 'server_scid']
+    for col in object_columns:
+        if col in x_encoded.columns:
+            le = LabelEncoder()
+            x_encoded[col] = le.fit_transform(x_encoded[col].astype(str))
+    
+    return xgb.DMatrix(x_encoded, label=y)
 
 def train_test_split(
     partition: Dataset, 
