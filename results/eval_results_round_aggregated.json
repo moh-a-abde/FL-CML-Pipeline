@@ -1,14 +1,10 @@
 {
     "round": "aggregated",
-    "timestamp": "2025-02-18T21:49:42.866720",
+    "timestamp": "2025-02-18T23:04:03.807380",
     "metrics": {
-        "precision": 0.5464140572421724,
-        "recall": 0.7391982530026517,
-        "f1": 0.628351662955976,
-        "true_negatives": 4739.0,
-        "false_positives": 0.0,
-        "false_negatives": 1672.0,
-        "true_positives": 0.0,
-        "prediction_mode": false
+        "total_predictions": 1887424580,
+        "malicious_predictions": 0,
+        "benign_predictions": 1887424580,
+        "prediction_mode": true
     }
 }
