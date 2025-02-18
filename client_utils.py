@@ -210,7 +210,8 @@ class XgbClient(fl.client.Client):
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
-        error_rate = 1 - accuracy_score(y_true, y_pred_labels)
+        loss = -np.mean(y_true * np.log(y_pred_proba + 1e-10) + (1 - y_true) * np.log(1 - y_pred_proba + 1e-10))
+        #error_rate = 1 - accuracy_score(y_true, y_pred_labels)
         
         # Generate confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
@@ -257,7 +258,7 @@ class XgbClient(fl.client.Client):
 
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
-            loss=float(error_rate),
+            loss=float(loss),
             num_examples=self.num_val,
             metrics=metrics
         )
