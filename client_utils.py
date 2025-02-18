@@ -13,7 +13,7 @@ Key Components:
 
 from logging import INFO
 import xgboost as xgb
-from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix, classification_report
+from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix, classification_report, accuracy_score
 import flwr as fl
 from flwr.common.logger import log
 from flwr.common import (
@@ -200,7 +200,7 @@ class XgbClient(fl.client.Client):
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
-        error_rate = 1 - precision
+        error_rate = 1 - accuracy_score(y_true, y_pred_labels)
         
         # Generate confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
@@ -244,7 +244,8 @@ class XgbClient(fl.client.Client):
             "true_negatives": int(tn),
             "false_positives": int(fp),
             "false_negatives": int(fn),
-            "true_positives": int(tp)
+            "true_positives": int(tp),
+            "num_predictions": self.num_val
         }
         
         # Add unlabeled predictions if available

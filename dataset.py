@@ -144,7 +144,7 @@ def transform_dataset_to_dmatrix(data):
         return xgb.DMatrix(x)
     
     # For labeled data, create DMatrix with labels
-    return xgb.DMatrix(x, label=y)
+    return xgb.DMatrix(x, label=y, enable_categorical=True)
 
 def train_test_split(
     partition: Dataset, 

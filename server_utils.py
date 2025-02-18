@@ -54,7 +54,12 @@ def evaluate_metrics_aggregation(eval_metrics):
     
     # Check if we're in prediction mode or evaluation mode
     first_metrics = eval_metrics[0][1]
-    is_prediction_mode = "num_predictions" in first_metrics
+    
+    # Update prediction mode check
+    is_prediction_mode = (
+        "total_predictions" in first_metrics or 
+        "num_predictions" in first_metrics
+    )
     
     if is_prediction_mode:
         # Aggregate prediction statistics
