@@ -44,8 +44,10 @@ jobs:
         run: |
           git config --local user.email "abde8473@stthomas.edu"
           git config --local user.name "moh-a-abde"
+          git add results/predictions_round_1.csv
+          git add results/predictions_round_2.csv
           git add results/eval_results_round_aggregated.json
-          git commit -m "Update aggregated eval results"
+          git commit -m "Update aggregated eval results and added prediction file"
 
       - name: Push changes
         uses: ad-m/github-push-action@master
