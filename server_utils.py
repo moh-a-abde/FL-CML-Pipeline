@@ -54,8 +54,6 @@ def evaluate_metrics_aggregation(eval_metrics):
     
     # Check if we're in prediction mode or evaluation mode
     first_metrics = eval_metrics[0][1]
-    
-    # Update prediction mode check
     is_prediction_mode = (
         "total_predictions" in first_metrics or 
         "num_predictions" in first_metrics
@@ -63,16 +61,14 @@ def evaluate_metrics_aggregation(eval_metrics):
     
     if is_prediction_mode:
         # Aggregate prediction statistics
-        total_predictions = sum([metrics["num_predictions"] * num for num, metrics in eval_metrics])
-        total_positives = sum([metrics["positive_predictions"] * num for num, metrics in eval_metrics])
-        total_negatives = sum([metrics["negative_predictions"] * num for num, metrics in eval_metrics])
-        avg_confidence = sum([metrics["mean_confidence"] * num for num, metrics in eval_metrics]) / total_num
+        total_predictions = sum([metrics.get("total_predictions", 0) * num for num, metrics in eval_metrics])
+        malicious_predictions = sum([metrics.get("malicious_predictions", 0) * num for num, metrics in eval_metrics])
+        benign_predictions = sum([metrics.get("benign_predictions", 0) * num for num, metrics in eval_metrics])
         
         metrics_aggregated = {
             "total_predictions": total_predictions,
-            "malicious_predictions": total_positives,
-            "benign_predictions": total_negatives,
-            "average_confidence": avg_confidence,
+            "malicious_predictions": malicious_predictions,
+            "benign_predictions": benign_predictions,
             "prediction_mode": True
         }
     else:
@@ -97,12 +93,12 @@ def evaluate_metrics_aggregation(eval_metrics):
             "true_positives": tp_aggregated,
             "prediction_mode": False
         }
-    
+
     # Save aggregated results
     save_evaluation_results(metrics_aggregated, "aggregated")
     
     return metrics_aggregated
-
+    
 def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = "results"):
     """
     Save dataset with predictions to CSV in the results directory.
