@@ -193,9 +193,15 @@ class XgbClient(fl.client.Client):
         # First evaluate on labeled validation data
         log(INFO, f"Evaluating on labeled dataset with {self.num_val} samples")
         
-        # Generate predictions for validation data
+        # Generate predictions with custom threshold
         y_pred_proba = bst.predict(self.valid_dmatrix)
-        y_pred_labels = y_pred_proba.astype(int)
+        THRESHOLD = 0.5  # Use 0.5 as default threshold
+        y_pred_labels = (y_pred_proba > THRESHOLD).astype(int)
+    
+        # Log prediction distribution
+        pred_counts = np.bincount(y_pred_labels.astype(int))
+        log(INFO, f"Prediction distribution: Benign={pred_counts[0]}, Malicious={pred_counts[1]}")
+        log(INFO, f"Prediction probabilities range: [{y_pred_proba.min():.3f}, {y_pred_proba.max():.3f}]")
         
         # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
