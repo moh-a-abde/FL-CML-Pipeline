@@ -142,6 +142,10 @@ class XgbClient(fl.client.Client):
         """
         Perform local model training.
         """
+        y_train = self.train_dmatrix.get_label()
+        class_counts = np.bincount(y_train.astype(int))
+        log(INFO, f"Training data class distribution: Benign={class_counts[0]}, Malicious={class_counts[1]}")
+        
         global_round = int(ins.config["global_round"])
         
         if global_round == 1:
