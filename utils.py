@@ -5,19 +5,19 @@ import argparse
 NUM_LOCAL_ROUND = 1
 BST_PARAMS = {
     "objective": "binary:logistic",
-    "eta": 0.1,                # Increased learning rate
-    "max_depth": 8,            # Increased depth
-    "min_child_weight": 1,
-    "gamma": 0.1,
+    "eta": 0.1,
+    "max_depth": 6,
+    "min_child_weight": 5,
+    "gamma": 0.5,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
     "nthread": 16,
-    "scale_pos_weight": 3.0,   # Increased to handle class imbalance
     "tree_method": "hist",
-    "eval_metric": ["error", "auc"],  # Added AUC metric
-    "max_delta_step": 1,
+    "eval_metric": ["error", "auc", "logloss"],
+    "max_delta_step": 5,
     "reg_alpha": 0.1,
     "reg_lambda": 1.0,
+    "base_score": 0.5  # Add this to start from a neutral point
 }
 
 
