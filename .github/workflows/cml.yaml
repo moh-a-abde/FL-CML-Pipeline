@@ -1,5 +1,8 @@
 name: federated-learning-flower
 on: [push]
+permissions:
+     contents: write
+     actions: write
 jobs:
   run:
     runs-on: ubuntu-latest
