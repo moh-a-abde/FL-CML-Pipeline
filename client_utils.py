@@ -163,19 +163,6 @@ class XgbClient(fl.client.Client):
             bst.load_model(global_model)
             bst = self._local_boost(bst)
 
-        # Add evaluation watchlist
-        watchlist = [(self.train_dmatrix, 'train'), (self.valid_dmatrix, 'eval')]
-        
-        # Train with early stopping
-        bst = xgb.train(
-            self.params,
-            self.train_dmatrix,
-            num_boost_round=self.num_local_round,
-            evals=watchlist,
-            early_stopping_rounds=5,
-            verbose_eval=True
-        )
-
         # Serialize model for transmission
         local_model = bst.save_raw("json")
         local_model_bytes = bytes(local_model)
@@ -264,4 +251,3 @@ class XgbClient(fl.client.Client):
             num_examples=self.num_val,
             metrics=metrics
         )
-
