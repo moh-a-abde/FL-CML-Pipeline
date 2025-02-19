@@ -56,22 +56,18 @@ if train_method == "bagging":
 else:
     # Cyclic training
     strategy = FedXgbCyclic(
-        min_fit_clients=args.pool_size,          # Use all clients
-        min_evaluate_clients=args.pool_size,     # Use all clients
-        min_available_clients=args.pool_size,    # Wait for all clients
+        fraction_fit=1.0,
+        min_available_clients=pool_size,
+        fraction_evaluate=1.0,
+        evaluate_metrics_aggregation_fn=evaluate_metrics_aggregation,
         on_evaluate_config_fn=eval_config,
         on_fit_config_fn=fit_config,
-        evaluate_metrics_aggregation_fn=evaluate_metrics_aggregation,
-        accept_failures=False                    # Don't accept failures in cyclic mode
     )
 
 # Start Flower server
 fl.server.start_server(
     server_address="0.0.0.0:8080",
-    config=fl.server.ServerConfig(
-        num_rounds=args.num_rounds,
-        round_timeout=600.0  # Increase timeout to 10 minutes
-    ),
+    config=fl.server.ServerConfig(num_rounds=num_rounds),
     strategy=strategy,
     client_manager=CyclicClientManager() if train_method == "cyclic" else None,
 )
