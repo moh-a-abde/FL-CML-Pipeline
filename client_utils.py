@@ -142,10 +142,6 @@ class XgbClient(fl.client.Client):
         """
         Perform local model training.
         """
-        y_train = self.train_dmatrix.get_label()
-        class_counts = np.bincount(y_train.astype(int))
-        log(INFO, f"Training data class distribution: Benign={class_counts[0]}, Malicious={class_counts[1]}")
-        
         global_round = int(ins.config["global_round"])
         
         if global_round == 1:
@@ -193,15 +189,9 @@ class XgbClient(fl.client.Client):
         # First evaluate on labeled validation data
         log(INFO, f"Evaluating on labeled dataset with {self.num_val} samples")
         
-        # Generate predictions with custom threshold
+        # Generate predictions for validation data
         y_pred_proba = bst.predict(self.valid_dmatrix)
-        THRESHOLD = 0.5  # Use 0.5 as default threshold
-        y_pred_labels = (y_pred_proba > THRESHOLD).astype(int)
-    
-        # Log prediction distribution
-        pred_counts = np.bincount(y_pred_labels.astype(int))
-        log(INFO, f"Prediction distribution: Benign={pred_counts[0]}, Malicious={pred_counts[1]}")
-        log(INFO, f"Prediction probabilities range: [{y_pred_proba.min():.3f}, {y_pred_proba.max():.3f}]")
+        y_pred_labels = y_pred_proba.astype(int)
         
         # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
@@ -210,8 +200,7 @@ class XgbClient(fl.client.Client):
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
-        loss = -np.mean(y_true * np.log(y_pred_proba + 1e-10) + (1 - y_true) * np.log(1 - y_pred_proba + 1e-10))
-        #error_rate = 1 - accuracy_score(y_true, y_pred_labels)
+        error_rate = 1 - accuracy_score(y_true, y_pred_labels)
         
         # Generate confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
@@ -258,7 +247,7 @@ class XgbClient(fl.client.Client):
 
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
-            loss=float(loss),
+            loss=float(error_rate),
             num_examples=self.num_val,
             metrics=metrics
         )
