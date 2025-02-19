@@ -122,7 +122,7 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     df['traffic_type'] = df['predicted_label'].map({1: 'malicious', 0: 'benign'})
     
     # Save to CSV in the results directory
-    output_path = os.path.join(output_dir, f"dataset_with_predictions_round_{round_num}.csv")
+    output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
     df.to_csv(output_path, index=False)
     log(INFO, f"Dataset with predictions saved to: {output_path}")
     
