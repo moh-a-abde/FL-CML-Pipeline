@@ -12,6 +12,7 @@ from utils import BST_PARAMS
 import os
 import json
 from datetime import datetime
+import numpy as np
 
 def eval_config(rnd: int) -> Dict[str, str]:
     """Return a configuration with global epochs."""
@@ -102,7 +103,6 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     """
     Save dataset with predictions to CSV in the results directory.
     """
-    log(INFO, f"Attempting to save predictions for round {round_num}")
     os.makedirs(output_dir, exist_ok=True)
     
     # Get feature names from the original dataset
@@ -111,7 +111,6 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
                     'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes',
                     'resp_pkts', 'resp_ip_bytes']
     
-    log(INFO, f"Processing data for round {round_num} predictions")
     # Convert DMatrix to DataFrame
     df = data.get_data()
     if isinstance(df, tuple):
@@ -125,62 +124,67 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     
     # Save to CSV in the results directory
     output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
-    log(INFO, f"Saving predictions to: {output_path}")
     df.to_csv(output_path, index=False)
-    log(INFO, f"Successfully saved predictions for round {round_num} to: {output_path}")
+    log(INFO, f"Predictions saved to: {output_path}")
     
     return output_path
 
-def get_evaluate_fn(test_data):
+def get_evaluate_fn(test_data, unlabeled_data=None):
     """Return a function for centralised evaluation."""
 
     def evaluate_fn(
         server_round: int, parameters: Parameters, config: Dict[str, Scalar]
     ):
-        log(INFO, f"Starting evaluation for round {server_round}")
         if server_round == 0:
             return 0, {}
-        else:
-            bst = xgb.Booster(params=BST_PARAMS)
-            for para in parameters.tensors:
-                para_b = bytearray(para)
+        
+        # Load model
+        bst = xgb.Booster(params=BST_PARAMS)
+        for para in parameters.tensors:
+            para_b = bytearray(para)
+        bst.load_model(para_b)
+        
+        # First evaluate on labeled test data
+        log(INFO, "Evaluating on labeled dataset with %d samples", test_data.num_row())
+        y_pred = bst.predict(test_data)
+        y_pred_labels = y_pred.astype(int)
+        y_true = test_data.get_label()
+        
+        # Compute metrics on labeled data
+        precision = precision_score(y_true, y_pred_labels, average='weighted')
+        recall = recall_score(y_true, y_pred_labels, average='weighted')
+        f1 = f1_score(y_true, y_pred_labels, average='weighted')
+        conf_matrix = confusion_matrix(y_true, y_pred_labels)
+        
+        # Create base metrics dictionary
+        metrics = {
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1": float(f1),
+            "true_negatives": int(conf_matrix[0][0]),
+            "false_positives": int(conf_matrix[0][1]),
+            "false_negatives": int(conf_matrix[1][0]),
+            "true_positives": int(conf_matrix[1][1])
+        }
+        
+        # If unlabeled data is provided, make predictions on it
+        if unlabeled_data is not None:
+            log(INFO, "Making predictions on unlabeled data")
+            unlabeled_pred = bst.predict(unlabeled_data)
+            unlabeled_pred_labels = unlabeled_pred.astype(int)
+            
+            # Save predictions
+            output_path = save_predictions_to_csv(unlabeled_data, unlabeled_pred_labels, server_round, "results")
+            metrics["predictions_file"] = output_path
+            
+            # Add prediction statistics
+            metrics.update({
+                "total_predictions": len(unlabeled_pred_labels),
+                "malicious_predictions": int(np.sum(unlabeled_pred_labels == 1)),
+                "benign_predictions": int(np.sum(unlabeled_pred_labels == 0))
+            })
 
-            bst.load_model(para_b)
-            
-            # Predict on test data
-            log(INFO, f"Generating predictions for round {server_round}")
-            y_pred = bst.predict(test_data)
-            y_pred_labels = y_pred.astype(int)
-            
-            # Get true labels
-            y_true = test_data.get_label()
-            
-            # Save dataset with predictions to results directory
-            log(INFO, f"Saving predictions for round {server_round}")
-            output_path = save_predictions_to_csv(test_data, y_pred_labels, server_round, "results")
-            
-            # Compute metrics
-            precision = precision_score(y_true, y_pred_labels, average='weighted')
-            recall = recall_score(y_true, y_pred_labels, average='weighted')
-            f1 = f1_score(y_true, y_pred_labels, average='weighted')
-            
-            # Generate confusion matrix
-            conf_matrix = confusion_matrix(y_true, y_pred_labels)
-            
-            # Create metrics dictionary
-            metrics = {
-                "precision": float(precision),
-                "recall": float(recall),
-                "f1": float(f1),
-                "true_negatives": int(conf_matrix[0][0]),
-                "false_positives": int(conf_matrix[0][1]),
-                "false_negatives": int(conf_matrix[1][0]),
-                "true_positives": int(conf_matrix[1][1]),
-                "predictions_file": output_path
-            }
-
-            log(INFO, f"Completed evaluation for round {server_round}")
-            return 0, metrics
+        return 0, metrics
 
     return evaluate_fn
 
