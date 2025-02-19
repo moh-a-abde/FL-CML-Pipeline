@@ -47,28 +47,7 @@ jobs:
         run: |
           git config --local user.email "abde8473@stthomas.edu"
           git config --local user.name "moh-a-abde"
-          git add results/predictions_round_1.csv
-          git add results/predictions_round_2.csv
-          git add results/predictions_round_3.csv
-          git add results/predictions_round_4.csv
-          git add results/predictions_round_5.csv
-          git add results/predictions_round_6.csv
-          git add results/predictions_round_7.csv
-          git add results/predictions_round_8.csv
-          git add results/predictions_round_9.csv
-          git add results/predictions_round_10.csv
-          git add results/predictions_round_11.csv
-          git add results/predictions_round_12.csv
-          git add results/predictions_round_13.csv
-          git add results/predictions_round_14.csv
-          git add results/predictions_round_15.csv
-          git add results/predictions_round_16.csv
-          git add results/predictions_round_17.csv
-          git add results/predictions_round_18.csv
-          git add results/predictions_round_19.csv
-          git add results/predictions_round_20.csv
-          
-          git add results/eval_results_round_aggregated.json
+          git add .
           git commit -m "Update aggregated eval results and add new prediction files"
 
       - name: Push changes
