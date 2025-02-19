@@ -19,50 +19,28 @@ jobs:
           python-version: '3.8'
       - uses: iterative/setup-cml@v1
       
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            
-      - name: Cache conda/mamba dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/conda_pkgs_dir
-          key: ${{ runner.os }}-conda-${{ hashFiles('environment.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-conda-
-            
       - name: Set up Python environment
         run: |
-          # Setup Mamba
           python -m pip install --upgrade pip
+          pip debug --verbose
+          pip install virtualenv
+          virtualenv venv
+          source venv/bin/activate
           pip install mamba
           mamba init
           source ~/.bashrc
-          
-          # Create and activate mamba environment if it doesn't exist
-          if [ ! -d "$HOME/conda_pkgs_dir" ]; then
-            mamba create -n fl-env python=3.8 -y
-            mamba activate fl-env
-            
-            # Install dependencies
-            pip install xgboost
-            pip install scikit-learn
-            pip install -U flwr["simulation"]
-            pip install -U "ray[all]"
-            pip install torch
-            pip install torchvision
-            pip install torchaudio
-            pip install hydra-core
-            pip install -r requirements.txt
-          else
-            mamba activate fl-env
-          fi
-          
-          # Run the training script
+          mamba create
+          mamba activate
+          pip install xgboost
+          pip install scikit-learn
+          pip install -U flwr["simulation"]
+          pip install -U "ray[all]"
+          pip install torch
+          pip install torchvision
+          pip install torchaudio
+          pip install hydra-core
+          pip install -r requirements.txt
+          #python sim.py
           ./run_bagging.sh
 
       - name: Commit results file
@@ -70,6 +48,7 @@ jobs:
           git config --local user.email "abde8473@stthomas.edu"
           git config --local user.name "moh-a-abde"
           git add results/predictions_round_*.csv
+          
           git add results/eval_results_round_aggregated.json
           git commit -m "Update aggregated eval results and add new prediction files"
 
