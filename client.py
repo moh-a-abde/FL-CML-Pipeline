@@ -115,7 +115,7 @@ if __name__ == "__main__":
         num_local_round=num_local_round,
         params=params,
         train_method=args.train_method,
-        is_prediction_only=True,  # Set to False for training
+        is_prediction_only=False,  # Set to False for training
         unlabeled_dmatrix=unlabeled_dmatrix  # Add unlabeled data for prediction
     )
     
