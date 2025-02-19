@@ -14,11 +14,9 @@ from server_utils import (
     CyclicClientManager,
 )
 
-from dataset import (
-    transform_dataset_to_dmatrix,
-    load_csv_data,
-    load_test_data
-)
+from dataset import transform_dataset_to_dmatrix
+
+
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -31,23 +29,19 @@ num_clients_per_round = args.num_clients_per_round
 num_evaluate_clients = args.num_evaluate_clients
 centralised_eval = args.centralised_eval
 
-# Load centralised test set and unlabeled data
+
+# Load centralised test set
 if centralised_eval:
-    log(INFO, "Loading centralised test set and unlabeled data...")
+    log(INFO, "Loading centralised test set...")
     test_set = load_test_data() 
     test_set.set_format("pandas")
     test_dmatrix = transform_dataset_to_dmatrix(test_set)
-    
-    # Load unlabeled data
-    unlabeled_data = load_csv_data("data/combined_unlabelled.csv")
-    unlabeled_data.set_format("pandas")
-    unlabeled_dmatrix = transform_dataset_to_dmatrix(unlabeled_data["train"])
 
 # Define strategy
 if train_method == "bagging":
     # Bagging training
     strategy = FedXgbBagging(
-        evaluate_function=get_evaluate_fn(test_dmatrix, unlabeled_dmatrix) if centralised_eval else None,
+        evaluate_function=get_evaluate_fn(test_dmatrix) if centralised_eval else None,
         fraction_fit=(float(num_clients_per_round) / pool_size),
         min_fit_clients=num_clients_per_round,
         min_available_clients=pool_size,
