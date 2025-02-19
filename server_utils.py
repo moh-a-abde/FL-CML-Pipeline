@@ -12,7 +12,6 @@ from utils import BST_PARAMS
 import os
 import json
 from datetime import datetime
-import numpy as np
 
 def eval_config(rnd: int) -> Dict[str, str]:
     """Return a configuration with global epochs."""
@@ -51,6 +50,8 @@ def fit_config(rnd: int) -> Dict[str, str]:
 
 def evaluate_metrics_aggregation(eval_metrics):
     """Return aggregated metrics for evaluation."""
+    total_num = sum([num for num, _ in eval_metrics])
+    
     # Check if we're in prediction mode or evaluation mode
     first_metrics = eval_metrics[0][1]
     is_prediction_mode = (
@@ -59,10 +60,10 @@ def evaluate_metrics_aggregation(eval_metrics):
     )
     
     if is_prediction_mode:
-        # Aggregate prediction statistics without multiplying by num
-        total_predictions = sum([metrics.get("total_predictions", 0) for num, metrics in eval_metrics])
-        malicious_predictions = sum([metrics.get("malicious_predictions", 0) for num, metrics in eval_metrics])
-        benign_predictions = sum([metrics.get("benign_predictions", 0) for num, metrics in eval_metrics])
+        # Aggregate prediction statistics
+        total_predictions = sum([metrics.get("total_predictions", 0) * num for num, metrics in eval_metrics])
+        malicious_predictions = sum([metrics.get("malicious_predictions", 0) * num for num, metrics in eval_metrics])
+        benign_predictions = sum([metrics.get("benign_predictions", 0) * num for num, metrics in eval_metrics])
         
         metrics_aggregated = {
             "total_predictions": total_predictions,
@@ -71,7 +72,6 @@ def evaluate_metrics_aggregation(eval_metrics):
             "prediction_mode": True
         }
     else:
-        total_num = sum([num for num, _ in eval_metrics])
         # Aggregate evaluation metrics
         precision_aggregated = sum([metrics["precision"] * num for num, metrics in eval_metrics]) / total_num
         recall_aggregated = sum([metrics["recall"] * num for num, metrics in eval_metrics]) / total_num
@@ -112,37 +112,24 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
                     'resp_pkts', 'resp_ip_bytes']
     
     # Convert DMatrix to DataFrame
-    try:
-        # First try to get data directly
-        df_data = data.get_data()
-        if isinstance(df_data, tuple):
-            features, _ = df_data
-            df = pd.DataFrame(features, columns=feature_names)
-        else:
-            df = pd.DataFrame(df_data, columns=feature_names)
-    except Exception as e:
-        log(INFO, f"Error converting DMatrix to DataFrame: {e}")
-        # Fallback: try to get numpy array
-        try:
-            features = data.get_label()
-            df = pd.DataFrame(features, columns=feature_names)
-        except:
-            # Last resort: create DataFrame with just predictions
-            df = pd.DataFrame()
+    df = data.get_data()
+    if isinstance(df, tuple):
+        features, labels = df
+        df = pd.DataFrame(features, columns=feature_names)  # Use feature names
+        df['true_label'] = labels
     
-    # Add predictions
+    # Add predictions and label them as malicious/benign
     df['predicted_label'] = predictions
-    df['prediction_confidence'] = predictions  # Store raw prediction values
     df['traffic_type'] = df['predicted_label'].map({1: 'malicious', 0: 'benign'})
     
     # Save to CSV in the results directory
-    output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
+    output_path = os.path.join(output_dir, f"dataset_with_predictions_round_{round_num}.csv")
     df.to_csv(output_path, index=False)
-    log(INFO, f"Predictions saved to: {output_path}")
+    log(INFO, f"Dataset with predictions saved to: {output_path}")
     
     return output_path
 
-def get_evaluate_fn(test_data, unlabeled_data=None):
+def get_evaluate_fn(test_data):
     """Return a function for centralised evaluation."""
 
     def evaluate_fn(
@@ -150,64 +137,47 @@ def get_evaluate_fn(test_data, unlabeled_data=None):
     ):
         if server_round == 0:
             return 0, {}
-        
-        # Load model
-        bst = xgb.Booster(params=BST_PARAMS)
-        para_b = bytearray()
-        for para in parameters.tensors:
-            para_b.extend(para)
-        bst.load_model(para_b)
-        
-        # First evaluate on labeled test data
-        log(INFO, "Evaluating on labeled dataset with %d samples", test_data.num_row())
-        y_pred = bst.predict(test_data)
-        y_pred_labels = (y_pred > 0.5).astype(int)  # Use threshold of 0.5
-        y_true = test_data.get_label()
-        
-        # Compute metrics on labeled data
-        precision = precision_score(y_true, y_pred_labels, average='weighted')
-        recall = recall_score(y_true, y_pred_labels, average='weighted')
-        f1 = f1_score(y_true, y_pred_labels, average='weighted')
-        conf_matrix = confusion_matrix(y_true, y_pred_labels)
-        
-        # Create base metrics dictionary
-        metrics = {
-            "precision": float(precision),
-            "recall": float(recall),
-            "f1": float(f1),
-            "true_negatives": int(conf_matrix[0][0]),
-            "false_positives": int(conf_matrix[0][1]),
-            "false_negatives": int(conf_matrix[1][0]),
-            "true_positives": int(conf_matrix[1][1])
-        }
-        
-        # If unlabeled data is provided, make predictions on it
-        if unlabeled_data is not None:
-            log(INFO, "Making predictions on unlabeled data")
-            try:
-                unlabeled_pred = bst.predict(unlabeled_data)
-                unlabeled_pred_labels = (unlabeled_pred > 0.5).astype(int)  # Use threshold of 0.5
-                
-                # Save predictions with both labels and raw probabilities
-                output_path = save_predictions_to_csv(unlabeled_data, unlabeled_pred, server_round)
-                
-                # Log prediction statistics
-                log(INFO, f"Made predictions for {len(unlabeled_pred_labels)} samples")
-                log(INFO, f"Malicious predictions: {np.sum(unlabeled_pred_labels == 1)}")
-                log(INFO, f"Benign predictions: {np.sum(unlabeled_pred_labels == 0)}")
-                
-                metrics.update({
-                    "predictions_file": output_path,
-                    "total_predictions": len(unlabeled_pred_labels),
-                    "malicious_predictions": int(np.sum(unlabeled_pred_labels == 1)),
-                    "benign_predictions": int(np.sum(unlabeled_pred_labels == 0))
-                })
-            except Exception as e:
-                log(INFO, f"Error making predictions on unlabeled data: {e}")
+        else:
+            bst = xgb.Booster(params=BST_PARAMS)
+            for para in parameters.tensors:
+                para_b = bytearray(para)
 
-        # Save evaluation results for this round
-        save_evaluation_results(metrics, server_round)
-        return 0, metrics
+            bst.load_model(para_b)
+            
+            # Predict on test data
+            y_pred = bst.predict(test_data)
+            y_pred_labels = y_pred.astype(int)
+            
+            # Get true labels
+            y_true = test_data.get_label()
+            
+            # Save dataset with predictions to results directory
+            output_path = save_predictions_to_csv(test_data, y_pred_labels, server_round, "results")
+            
+            # Compute metrics
+            precision = precision_score(y_true, y_pred_labels, average='weighted')
+            recall = recall_score(y_true, y_pred_labels, average='weighted')
+            f1 = f1_score(y_true, y_pred_labels, average='weighted')
+            
+            # Generate confusion matrix
+            conf_matrix = confusion_matrix(y_true, y_pred_labels)
+            
+            # Create metrics dictionary
+            metrics = {
+                "precision": float(precision),
+                "recall": float(recall),
+                "f1": float(f1),
+                "true_negatives": int(conf_matrix[0][0]),
+                "false_positives": int(conf_matrix[0][1]),
+                "false_negatives": int(conf_matrix[1][0]),
+                "true_positives": int(conf_matrix[1][1]),
+                "predictions_file": output_path
+            }
+
+            log(INFO, f"Precision = {precision}, Recall = {recall}, F1 Score = {f1} at round {server_round}")
+            log(INFO, f"Dataset with predictions saved to: {output_path}")
+
+            return 0, metrics
 
     return evaluate_fn
 
