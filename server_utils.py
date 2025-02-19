@@ -95,6 +95,7 @@ def evaluate_metrics_aggregation(eval_metrics):
 
     # Save aggregated results
     save_evaluation_results(metrics_aggregated, "aggregated")
+    save_predictions_to_csv(test_data, y_pred_labels, server_round, "results")
     
     return metrics_aggregated
     
@@ -152,6 +153,7 @@ def get_evaluate_fn(test_data):
             
             # Save dataset with predictions to results directory
             output_path = save_predictions_to_csv(test_data, y_pred_labels, server_round, "results")
+            log(INFO, f"Dataset with predictions saved to: {output_path}")
             
             # Compute metrics
             precision = precision_score(y_true, y_pred_labels, average='weighted')
@@ -174,7 +176,6 @@ def get_evaluate_fn(test_data):
             }
 
             log(INFO, f"Precision = {precision}, Recall = {recall}, F1 Score = {f1} at round {server_round}")
-            log(INFO, f"Dataset with predictions saved to: {output_path}")
 
             return 0, metrics
 
