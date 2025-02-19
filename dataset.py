@@ -217,17 +217,6 @@ def resplit(dataset: DatasetDict) -> DatasetDict:
         }
     )
 
-def load_test_data():
-    """
-    Load labeled test data for centralized evaluation.
-    
-    Returns:
-        Dataset: Test dataset in Hugging Face Dataset format
-    """
-    test_data_path = "data/combined_labelled.csv"
-    dataset = load_csv_data(test_data_path)
-    return dataset["test"]
-
 class ModelPredictor:
     """
     Handles model prediction and dataset labeling
@@ -256,6 +245,5 @@ class ModelPredictor:
         
         # Save labeled dataset
         self._save_output(data, predictions, confidence, output_path)
-
 
 
