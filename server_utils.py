@@ -102,6 +102,7 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     """
     Save dataset with predictions to CSV in the results directory.
     """
+    log(INFO, f"Attempting to save predictions for round {round_num}")
     os.makedirs(output_dir, exist_ok=True)
     
     # Get feature names from the original dataset
@@ -110,6 +111,7 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
                     'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes',
                     'resp_pkts', 'resp_ip_bytes']
     
+    log(INFO, f"Processing data for round {round_num} predictions")
     # Convert DMatrix to DataFrame
     df = data.get_data()
     if isinstance(df, tuple):
@@ -123,8 +125,9 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     
     # Save to CSV in the results directory
     output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
+    log(INFO, f"Saving predictions to: {output_path}")
     df.to_csv(output_path, index=False)
-    log(INFO, f"Dataset with predictions saved to: {output_path}")
+    log(INFO, f"Successfully saved predictions for round {round_num} to: {output_path}")
     
     return output_path
 
@@ -134,6 +137,7 @@ def get_evaluate_fn(test_data):
     def evaluate_fn(
         server_round: int, parameters: Parameters, config: Dict[str, Scalar]
     ):
+        log(INFO, f"Starting evaluation for round {server_round}")
         if server_round == 0:
             return 0, {}
         else:
@@ -144,6 +148,7 @@ def get_evaluate_fn(test_data):
             bst.load_model(para_b)
             
             # Predict on test data
+            log(INFO, f"Generating predictions for round {server_round}")
             y_pred = bst.predict(test_data)
             y_pred_labels = y_pred.astype(int)
             
@@ -151,9 +156,8 @@ def get_evaluate_fn(test_data):
             y_true = test_data.get_label()
             
             # Save dataset with predictions to results directory
+            log(INFO, f"Saving predictions for round {server_round}")
             output_path = save_predictions_to_csv(test_data, y_pred_labels, server_round, "results")
-            save_predictions_to_csv(test_data, y_pred_labels, server_round, "results")
-            log(INFO, f"Dataset with predictions saved to: {output_path}")
             
             # Compute metrics
             precision = precision_score(y_true, y_pred_labels, average='weighted')
@@ -175,8 +179,7 @@ def get_evaluate_fn(test_data):
                 "predictions_file": output_path
             }
 
-            log(INFO, f"Precision = {precision}, Recall = {recall}, F1 Score = {f1} at round {server_round}")
-
+            log(INFO, f"Completed evaluation for round {server_round}")
             return 0, metrics
 
     return evaluate_fn
