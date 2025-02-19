@@ -50,8 +50,6 @@ def fit_config(rnd: int) -> Dict[str, str]:
 
 def evaluate_metrics_aggregation(eval_metrics):
     """Return aggregated metrics for evaluation."""
-    total_num = sum([num for num, _ in eval_metrics])
-    
     # Check if we're in prediction mode or evaluation mode
     first_metrics = eval_metrics[0][1]
     is_prediction_mode = (
@@ -60,10 +58,10 @@ def evaluate_metrics_aggregation(eval_metrics):
     )
     
     if is_prediction_mode:
-        # Aggregate prediction statistics
-        total_predictions = sum([metrics.get("total_predictions", 0) * num for num, metrics in eval_metrics])
-        malicious_predictions = sum([metrics.get("malicious_predictions", 0) * num for num, metrics in eval_metrics])
-        benign_predictions = sum([metrics.get("benign_predictions", 0) * num for num, metrics in eval_metrics])
+        # Aggregate prediction statistics without multiplying by num
+        total_predictions = sum([metrics.get("total_predictions", 0) for num, metrics in eval_metrics])
+        malicious_predictions = sum([metrics.get("malicious_predictions", 0) for num, metrics in eval_metrics])
+        benign_predictions = sum([metrics.get("benign_predictions", 0) for num, metrics in eval_metrics])
         
         metrics_aggregated = {
             "total_predictions": total_predictions,
@@ -72,6 +70,7 @@ def evaluate_metrics_aggregation(eval_metrics):
             "prediction_mode": True
         }
     else:
+        total_num = sum([num for num, _ in eval_metrics])
         # Aggregate evaluation metrics
         precision_aggregated = sum([metrics["precision"] * num for num, metrics in eval_metrics]) / total_num
         recall_aggregated = sum([metrics["recall"] * num for num, metrics in eval_metrics]) / total_num
