@@ -19,55 +19,57 @@ jobs:
           python-version: '3.8'
       - uses: iterative/setup-cml@v1
       
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            
+      - name: Cache conda/mamba dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/conda_pkgs_dir
+          key: ${{ runner.os }}-conda-${{ hashFiles('environment.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-conda-
+            
       - name: Set up Python environment
         run: |
+          # Setup Mamba
           python -m pip install --upgrade pip
-          pip debug --verbose
-          pip install virtualenv
-          virtualenv venv
-          source venv/bin/activate
           pip install mamba
           mamba init
           source ~/.bashrc
-          mamba create
-          mamba activate
-          pip install xgboost
-          pip install scikit-learn
-          pip install -U flwr["simulation"]
-          pip install -U "ray[all]"
-          pip install torch
-          pip install torchvision
-          pip install torchaudio
-          pip install hydra-core
-          pip install -r requirements.txt
-          #python sim.py
+          
+          # Create and activate mamba environment if it doesn't exist
+          if [ ! -d "$HOME/conda_pkgs_dir" ]; then
+            mamba create -n fl-env python=3.8 -y
+            mamba activate fl-env
+            
+            # Install dependencies
+            pip install xgboost
+            pip install scikit-learn
+            pip install -U flwr["simulation"]
+            pip install -U "ray[all]"
+            pip install torch
+            pip install torchvision
+            pip install torchaudio
+            pip install hydra-core
+            pip install -r requirements.txt
+          else
+            mamba activate fl-env
+          fi
+          
+          # Run the training script
           ./run_bagging.sh
 
       - name: Commit results file
         run: |
           git config --local user.email "abde8473@stthomas.edu"
           git config --local user.name "moh-a-abde"
-          git add results/predictions_round_1.csv
-          git add results/predictions_round_2.csv
-          git add results/predictions_round_3.csv
-          git add results/predictions_round_4.csv
-          git add results/predictions_round_5.csv
-          git add results/predictions_round_6.csv
-          git add results/predictions_round_7.csv
-          git add results/predictions_round_8.csv
-          git add results/predictions_round_9.csv
-          git add results/predictions_round_10.csv
-          git add results/predictions_round_11.csv
-          git add results/predictions_round_12.csv
-          git add results/predictions_round_13.csv
-          git add results/predictions_round_14.csv
-          git add results/predictions_round_15.csv
-          git add results/predictions_round_16.csv
-          git add results/predictions_round_17.csv
-          git add results/predictions_round_18.csv
-          git add results/predictions_round_19.csv
-          git add results/predictions_round_20.csv
-          
+          git add results/predictions_round_*.csv
           git add results/eval_results_round_aggregated.json
           git commit -m "Update aggregated eval results and add new prediction files"
 
