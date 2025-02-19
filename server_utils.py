@@ -112,14 +112,27 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
                     'resp_pkts', 'resp_ip_bytes']
     
     # Convert DMatrix to DataFrame
-    df = data.get_data()
-    if isinstance(df, tuple):
-        features, labels = df
-        df = pd.DataFrame(features, columns=feature_names)  # Use feature names
-        df['true_label'] = labels
+    try:
+        # First try to get data directly
+        df_data = data.get_data()
+        if isinstance(df_data, tuple):
+            features, _ = df_data
+            df = pd.DataFrame(features, columns=feature_names)
+        else:
+            df = pd.DataFrame(df_data, columns=feature_names)
+    except Exception as e:
+        log(INFO, f"Error converting DMatrix to DataFrame: {e}")
+        # Fallback: try to get numpy array
+        try:
+            features = data.get_label()
+            df = pd.DataFrame(features, columns=feature_names)
+        except:
+            # Last resort: create DataFrame with just predictions
+            df = pd.DataFrame()
     
-    # Add predictions and label them as malicious/benign
+    # Add predictions
     df['predicted_label'] = predictions
+    df['prediction_confidence'] = predictions  # Store raw prediction values
     df['traffic_type'] = df['predicted_label'].map({1: 'malicious', 0: 'benign'})
     
     # Save to CSV in the results directory
@@ -140,14 +153,15 @@ def get_evaluate_fn(test_data, unlabeled_data=None):
         
         # Load model
         bst = xgb.Booster(params=BST_PARAMS)
+        para_b = bytearray()
         for para in parameters.tensors:
-            para_b = bytearray(para)
+            para_b.extend(para)
         bst.load_model(para_b)
         
         # First evaluate on labeled test data
         log(INFO, "Evaluating on labeled dataset with %d samples", test_data.num_row())
         y_pred = bst.predict(test_data)
-        y_pred_labels = y_pred.astype(int)
+        y_pred_labels = (y_pred > 0.5).astype(int)  # Use threshold of 0.5
         y_true = test_data.get_label()
         
         # Compute metrics on labeled data
@@ -170,20 +184,29 @@ def get_evaluate_fn(test_data, unlabeled_data=None):
         # If unlabeled data is provided, make predictions on it
         if unlabeled_data is not None:
             log(INFO, "Making predictions on unlabeled data")
-            unlabeled_pred = bst.predict(unlabeled_data)
-            unlabeled_pred_labels = unlabeled_pred.astype(int)
-            
-            # Save predictions
-            output_path = save_predictions_to_csv(unlabeled_data, unlabeled_pred_labels, server_round, "results")
-            metrics["predictions_file"] = output_path
-            
-            # Add prediction statistics
-            metrics.update({
-                "total_predictions": len(unlabeled_pred_labels),
-                "malicious_predictions": int(np.sum(unlabeled_pred_labels == 1)),
-                "benign_predictions": int(np.sum(unlabeled_pred_labels == 0))
-            })
+            try:
+                unlabeled_pred = bst.predict(unlabeled_data)
+                unlabeled_pred_labels = (unlabeled_pred > 0.5).astype(int)  # Use threshold of 0.5
+                
+                # Save predictions with both labels and raw probabilities
+                output_path = save_predictions_to_csv(unlabeled_data, unlabeled_pred, server_round)
+                
+                # Log prediction statistics
+                log(INFO, f"Made predictions for {len(unlabeled_pred_labels)} samples")
+                log(INFO, f"Malicious predictions: {np.sum(unlabeled_pred_labels == 1)}")
+                log(INFO, f"Benign predictions: {np.sum(unlabeled_pred_labels == 0)}")
+                
+                metrics.update({
+                    "predictions_file": output_path,
+                    "total_predictions": len(unlabeled_pred_labels),
+                    "malicious_predictions": int(np.sum(unlabeled_pred_labels == 1)),
+                    "benign_predictions": int(np.sum(unlabeled_pred_labels == 0))
+                })
+            except Exception as e:
+                log(INFO, f"Error making predictions on unlabeled data: {e}")
 
+        # Save evaluation results for this round
+        save_evaluation_results(metrics, server_round)
         return 0, metrics
 
     return evaluate_fn
