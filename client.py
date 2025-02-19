@@ -14,7 +14,6 @@ Key Components:
 import warnings
 from logging import INFO
 import os
-import time
 
 import flwr as fl
 from flwr.common.logger import log
@@ -48,46 +47,80 @@ def get_latest_csv(directory: str) -> str:
     latest_file = max(csv_files, key=lambda x: os.path.getctime(os.path.join(directory, x)))
     return os.path.join(directory, latest_file)
 
-def main():
+if __name__ == "__main__":
+    # Parse command line arguments for experimental settings
     args = client_args_parser()
     
-    # Load and preprocess data
+    # Load labeled data for training
     labeled_csv_path = "data/combined_labelled.csv"
-    unlabeled_csv_path = "data/combined_unlabelled.csv"
     labeled_dataset = load_csv_data(labeled_csv_path)
+    
+    # Load unlabeled data for prediction
+    unlabeled_csv_path = "data/combined_unlabelled.csv"
     unlabeled_dataset = load_csv_data(unlabeled_csv_path)
     
-    # Initialize client with retry mechanism
-    max_retries = 5
-    retry_delay = 10  # seconds
+    # Initialize data partitioner based on specified strategy
+    partitioner = instantiate_partitioner(
+        partitioner_type=args.partitioner_type,
+        num_partitions=args.num_partitions
+    )
     
-    for attempt in range(max_retries):
-        try:
-            # Create client
-            client = XgbClient(
-                partition_id=args.partition_id,
-                num_partitions=args.num_partitions,
-                labeled_dataset=labeled_dataset,
-                unlabeled_dataset=unlabeled_dataset,
-                partitioner_type=args.partitioner_type,
-                test_fraction=args.test_fraction,
-                seed=args.seed,
-                params=BST_PARAMS,
-                train_method=args.train_method
-            )
-            
-            # Start client
-            fl.client.start_client(
-                server_address="127.0.0.1:8080",
-                client=client,
-            )
-            break
-        except Exception as e:
-            if attempt < max_retries - 1:
-                log(INFO, f"Connection attempt {attempt + 1} failed, retrying in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-            else:
-                raise e
-
-if __name__ == "__main__":
-    main()
+    # Load the specific partition for training
+    log(INFO, "Loading training partition...")
+    train_partition = labeled_dataset["train"]
+    train_partition.set_format("numpy")
+    
+    # Handle data splitting based on evaluation strategy
+    if args.centralised_eval:
+        # Use centralized test set for evaluation
+        train_data = train_partition
+        valid_data = labeled_dataset["test"]
+        valid_data.set_format("numpy")
+        num_train = train_data.shape[0]
+        num_val = valid_data.shape[0]
+    else:
+        # Perform local train/test split
+        train_data, valid_data, num_train, num_val = train_test_split(
+            train_partition,
+            test_fraction=args.test_fraction,
+            seed=args.seed
+        )
+    
+    # Transform training data into XGBoost's DMatrix format
+    log(INFO, "Reformatting training data...")
+    train_dmatrix = transform_dataset_to_dmatrix(train_data)
+    valid_dmatrix = transform_dataset_to_dmatrix(valid_data)
+    
+    # Transform unlabeled data for prediction
+    log(INFO, "Reformatting unlabeled data...")
+    unlabeled_data = unlabeled_dataset["train"]
+    unlabeled_data.set_format("numpy")
+    unlabeled_dmatrix = transform_dataset_to_dmatrix(unlabeled_data)
+    
+    # Configure training parameters
+    num_local_round = NUM_LOCAL_ROUND
+    params = BST_PARAMS
+    
+    # Adjust learning rate for bagging method if specified
+    if args.train_method == "bagging" and args.scaled_lr:
+        new_lr = params["eta"] / args.num_partitions
+        params.update({"eta": new_lr})
+    
+    # Create client with both training and prediction data
+    client = XgbClient(
+        train_dmatrix=train_dmatrix,
+        valid_dmatrix=valid_dmatrix,
+        num_train=num_train,
+        num_val=num_val,
+        num_local_round=num_local_round,
+        params=params,
+        train_method=args.train_method,
+        is_prediction_only=True,  # Set to False for training
+        unlabeled_dmatrix=unlabeled_dmatrix  # Add unlabeled data for prediction
+    )
+    
+    # Initialize and start Flower client
+    fl.client.start_client(
+        server_address="127.0.0.1:8080",
+        client=client,
+    )
