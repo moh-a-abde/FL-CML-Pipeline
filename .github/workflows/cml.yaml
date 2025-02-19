@@ -44,8 +44,37 @@ jobs:
           ./run_bagging.sh
           git config --local user.email "abde8473@stthomas.edu"
           git config --local user.name "moh-a-abde"
-          git add .
-          git commit -m "Update aggregated eval results and add new prediction files"
+
+          # First check if results directory exists
+          if [ ! -d "results" ]; then
+            echo "Results directory not found!"
+            exit 1
+          fi
+          
+          # Add all prediction files that exist
+          for i in {1..20}; do
+            if [ -f "results/predictions_round_$i.csv" ]; then
+              echo "Adding predictions_round_$i.csv"
+              git add "results/predictions_round_$i.csv"
+            else
+              echo "Warning: predictions_round_$i.csv not found"
+            fi
+          done
+          
+          # Add aggregated results if it exists
+          if [ -f "results/eval_results_round_aggregated.json" ]; then
+            echo "Adding aggregated evaluation results"
+            git add "results/eval_results_round_aggregated.json"
+          else
+            echo "Warning: eval_results_round_aggregated.json not found"
+          fi
+          
+          # Only commit if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update prediction files and aggregated results"
+          fi
 
       - name: Push changes
         uses: ad-m/github-push-action@master
