@@ -142,6 +142,10 @@ class XgbClient(fl.client.Client):
         """
         Perform local model training.
         """
+        y_train = self.train_dmatrix.get_label()
+        class_counts = np.bincount(y_train.astype(int))
+        log(INFO, f"Training data class distribution: Benign={class_counts[0]}, Malicious={class_counts[1]}")
+        
         global_round = int(ins.config["global_round"])
         
         if global_round == 1:
@@ -189,9 +193,15 @@ class XgbClient(fl.client.Client):
         # First evaluate on labeled validation data
         log(INFO, f"Evaluating on labeled dataset with {self.num_val} samples")
         
-        # Generate predictions for validation data
+        # Generate predictions with custom threshold
         y_pred_proba = bst.predict(self.valid_dmatrix)
-        y_pred_labels = y_pred_proba.astype(int)
+        THRESHOLD = 0.5  # Use 0.5 as default threshold
+        y_pred_labels = (y_pred_proba > THRESHOLD).astype(int)
+    
+        # Log prediction distribution
+        pred_counts = np.bincount(y_pred_labels.astype(int))
+        log(INFO, f"Prediction distribution: Benign={pred_counts[0]}, Malicious={pred_counts[1]}")
+        log(INFO, f"Prediction probabilities range: [{y_pred_proba.min():.3f}, {y_pred_proba.max():.3f}]")
         
         # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
@@ -200,43 +210,14 @@ class XgbClient(fl.client.Client):
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
-        error_rate = 1 - accuracy_score(y_true, y_pred_labels)
+        loss = -np.mean(y_true * np.log(y_pred_proba + 1e-10) + (1 - y_true) * np.log(1 - y_pred_proba + 1e-10))
+        #error_rate = 1 - accuracy_score(y_true, y_pred_labels)
         
         # Generate confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
         tn, fp, fn, tp = conf_matrix.ravel()
         
-        # Now make predictions on unlabeled data if available
-        unlabeled_predictions = None
-        if self.unlabeled_dmatrix is not None:
-            log(INFO, "Making predictions on unlabeled data")
-            unlabeled_pred = bst.predict(self.unlabeled_dmatrix)
-            unlabeled_pred_labels = unlabeled_pred.astype(int)
-            
-            # Save predictions to file
-            predictions_df = pd.DataFrame({
-                'predicted_label': unlabeled_pred_labels,
-                'confidence': unlabeled_pred,
-                'prediction_type': ['malicious' if p == 1 else 'benign' for p in unlabeled_pred_labels]
-            })
-            
-            # Save predictions
-            output_dir = "results"
-            os.makedirs(output_dir, exist_ok=True)
-            round_num = ins.config.get("global_round", "final")
-            output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
-            predictions_df.to_csv(output_path, index=False)
-            log(INFO, f"Predictions saved to: {output_path}")
-            
-            # Count predictions
-            unlabeled_predictions = {
-                "total_predictions": len(unlabeled_pred_labels),
-                "malicious_predictions": int(np.sum(unlabeled_pred_labels == 1)),
-                "benign_predictions": int(np.sum(unlabeled_pred_labels == 0)),
-                "predictions_file": output_path
-            }
-
-        # Create metrics dictionary
+        # Create base metrics dictionary
         metrics = {
             "precision": float(precision),
             "recall": float(recall),
@@ -249,12 +230,35 @@ class XgbClient(fl.client.Client):
         }
         
         # Add unlabeled predictions if available
-        if unlabeled_predictions:
-            metrics.update(unlabeled_predictions)
+        if self.unlabeled_dmatrix is not None:
+            unlabeled_pred = bst.predict(self.unlabeled_dmatrix)
+            unlabeled_pred_labels = unlabeled_pred.astype(int)
+            
+            # Save predictions
+            predictions_df = pd.DataFrame({
+                'predicted_label': unlabeled_pred_labels,
+                'confidence': unlabeled_pred,
+                'prediction_type': ['malicious' if p == 1 else 'benign' for p in unlabeled_pred_labels]
+            })
+            
+            # Save to file
+            output_dir = "results"
+            os.makedirs(output_dir, exist_ok=True)
+            round_num = ins.config.get("global_round", "final")
+            output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
+            predictions_df.to_csv(output_path, index=False)
+            
+            # Add prediction metrics
+            metrics.update({
+                "total_predictions": len(unlabeled_pred_labels),
+                "malicious_predictions": int(np.sum(unlabeled_pred_labels == 1)),
+                "benign_predictions": int(np.sum(unlabeled_pred_labels == 0)),
+                "predictions_file": output_path
+            })
 
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
-            loss=float(error_rate),
+            loss=float(loss),
             num_examples=self.num_val,
             metrics=metrics
         )
