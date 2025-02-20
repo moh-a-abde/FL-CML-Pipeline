@@ -42,39 +42,34 @@ jobs:
           pip install -r requirements.txt
           #python sim.py
           ./run_bagging.sh
+
+      - name: Commit results file
+        run: |
           git config --local user.email "abde8473@stthomas.edu"
           git config --local user.name "moh-a-abde"
-
-          # First check if results directory exists
-          if [ ! -d "results" ]; then
-            echo "Results directory not found!"
-            exit 1
-          fi
+          git add results/predictions_round_1.csv
+          git add results/predictions_round_2.csv
+          git add results/predictions_round_3.csv
+          git add results/predictions_round_4.csv
+          git add results/predictions_round_5.csv
+          git add results/predictions_round_6.csv
+          git add results/predictions_round_7.csv
+          git add results/predictions_round_8.csv
+          git add results/predictions_round_9.csv
+          git add results/predictions_round_10.csv
+          git add results/predictions_round_11.csv
+          git add results/predictions_round_12.csv
+          git add results/predictions_round_13.csv
+          git add results/predictions_round_14.csv
+          git add results/predictions_round_15.csv
+          git add results/predictions_round_16.csv
+          git add results/predictions_round_17.csv
+          git add results/predictions_round_18.csv
+          git add results/predictions_round_19.csv
+          git add results/predictions_round_20.csv
           
-          # Add all prediction files that exist
-          for i in {1..20}; do
-            if [ -f "results/predictions_round_$i.csv" ]; then
-              echo "Adding predictions_round_$i.csv"
-              git add "results/predictions_round_$i.csv"
-            else
-              echo "Warning: predictions_round_$i.csv not found"
-            fi
-          done
-          
-          # Add aggregated results if it exists
-          if [ -f "results/eval_results_round_aggregated.json" ]; then
-            echo "Adding aggregated evaluation results"
-            git add "results/eval_results_round_aggregated.json"
-          else
-            echo "Warning: eval_results_round_aggregated.json not found"
-          fi
-          
-          # Only commit if there are changes to commit
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Update prediction files and aggregated results"
-          fi
+          git add results/eval_results_round_aggregated.json
+          git commit -m "Update aggregated eval results and add new prediction files"
 
       - name: Push changes
         uses: ad-m/github-push-action@master
