@@ -32,6 +32,7 @@ from flwr.common import Status
 import numpy as np
 import pandas as pd
 import os
+from server_utils import save_predictions_to_csv
 
 
 class XgbClient(fl.client.Client):
@@ -211,7 +212,6 @@ class XgbClient(fl.client.Client):
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
         loss = -np.mean(y_true * np.log(y_pred_proba + 1e-10) + (1 - y_true) * np.log(1 - y_pred_proba + 1e-10))
-        #error_rate = 1 - accuracy_score(y_true, y_pred_labels)
         
         # Generate confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
@@ -234,19 +234,14 @@ class XgbClient(fl.client.Client):
             unlabeled_pred = bst.predict(self.unlabeled_dmatrix)
             unlabeled_pred_labels = unlabeled_pred.astype(int)
             
-            # Save predictions
-            predictions_df = pd.DataFrame({
-                'predicted_label': unlabeled_pred_labels,
-                'confidence': unlabeled_pred,
-                'prediction_type': ['malicious' if p == 1 else 'benign' for p in unlabeled_pred_labels]
-            })
-            
-            # Save to file
-            output_dir = "results"
-            os.makedirs(output_dir, exist_ok=True)
+            # Save predictions using the server_utils function
             round_num = ins.config.get("global_round", "final")
-            output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
-            predictions_df.to_csv(output_path, index=False)
+            output_path = save_predictions_to_csv(
+                self.unlabeled_dmatrix,
+                unlabeled_pred_labels,
+                round_num,
+                output_dir="results"
+            )
             
             # Add prediction metrics
             metrics.update({
