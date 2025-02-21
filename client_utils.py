@@ -231,13 +231,14 @@ class XgbClient(fl.client.Client):
         
         # Add unlabeled predictions if available
         if self.unlabeled_dmatrix is not None:
-            unlabeled_pred = bst.predict(self.unlabeled_dmatrix)
-            unlabeled_pred_labels = unlabeled_pred.astype(int)
+            # Get predictions
+            unlabeled_pred_proba = bst.predict(self.unlabeled_dmatrix)
+            unlabeled_pred_labels = (unlabeled_pred_proba > THRESHOLD).astype(int)
             
             # Save predictions using the server_utils function
             round_num = ins.config.get("global_round", "final")
             output_path = save_predictions_to_csv(
-                self.unlabeled_dmatrix,
+                None,  # We don't need the data anymore since we simplified save_predictions_to_csv
                 unlabeled_pred_labels,
                 round_num,
                 output_dir="results"
