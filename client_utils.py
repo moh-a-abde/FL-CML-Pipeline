@@ -199,39 +199,9 @@ class XgbClient(fl.client.Client):
         THRESHOLD = 0.2  # Use 0.5 as default threshold
         y_pred_labels = (y_pred_proba > THRESHOLD).astype(int)
     
-        # Enhanced logging for diagnosis
-        log(INFO, "=== Prediction Distribution Analysis ===")
-        log(INFO, f"Using classification threshold: {THRESHOLD}")
-        
-        # Analyze probability distribution in bins
-        prob_bins = np.histogram(y_pred_proba, bins=10, range=(0,1))[0]
-        bin_edges = np.linspace(0, 1, 11)
-        for i, count in enumerate(prob_bins):
-            log(INFO, f"Probability range {bin_edges[i]:.1f}-{bin_edges[i+1]:.1f}: {count} samples")
-            
-        # Log predictions with different thresholds
-        thresholds = [0.1, 0.3, 0.5, 0.7, 0.9]
-        for thresh in thresholds:
-            pred_at_thresh = (y_pred_proba > thresh).astype(int)
-            mal_count = np.sum(pred_at_thresh == 1)
-            ben_count = np.sum(pred_at_thresh == 0)
-            log(INFO, f"At threshold {thresh}: Benign={ben_count}, Malicious={mal_count}")
-        
-        # Analyze training data balance
-        train_labels = self.train_dmatrix.get_label()
-        train_pos = np.sum(train_labels == 1)
-        train_neg = np.sum(train_labels == 0)
-        log(INFO, f"Training data balance: Benign={train_neg}, Malicious={train_pos}")
-        
-        # Log basic statistics of probabilities
-        log(INFO, f"Probability stats: mean={y_pred_proba.mean():.3f}, std={y_pred_proba.std():.3f}")
-        log(INFO, f"Probability quantiles: 25%={np.quantile(y_pred_proba, 0.25):.3f}, " + 
-                  f"50%={np.quantile(y_pred_proba, 0.5):.3f}, " + 
-                  f"75%={np.quantile(y_pred_proba, 0.75):.3f}")
-        
-        # Original prediction distribution logging
+        # Log prediction distribution
         pred_counts = np.bincount(y_pred_labels.astype(int))
-        log(INFO, f"Final prediction distribution: Benign={pred_counts[0]}, Malicious={pred_counts[1]}")
+        log(INFO, f"Prediction distribution: Benign={pred_counts[0]}, Malicious={pred_counts[1]}")
         log(INFO, f"Prediction probabilities range: [{y_pred_proba.min():.3f}, {y_pred_proba.max():.3f}]")
         
         # Get ground truth labels
