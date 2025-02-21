@@ -275,7 +275,6 @@ predicted_label,prediction_type
 1,malicious
 1,malicious
 1,malicious
-0,benign
 1,malicious
 1,malicious
 1,malicious
@@ -2396,7 +2395,6 @@ predicted_label,prediction_type
 1,malicious
 1,malicious
 1,malicious
-0,benign
 1,malicious
 1,malicious
 1,malicious
@@ -6653,7 +6651,6 @@ predicted_label,prediction_type
 1,malicious
 1,malicious
 1,malicious
-0,benign
 1,malicious
 1,malicious
 1,malicious
@@ -37157,7 +37154,6 @@ predicted_label,prediction_type
 1,malicious
 1,malicious
 1,malicious
-0,benign
 1,malicious
 1,malicious
 1,malicious
@@ -37451,7 +37447,6 @@ predicted_label,prediction_type
 1,malicious
 1,malicious
 1,malicious
-0,benign
 1,malicious
 1,malicious
 1,malicious
@@ -41988,7 +41983,12 @@ predicted_label,prediction_type
 1,malicious
 1,malicious
 1,malicious
-0,benign
+1,malicious
+1,malicious
+1,malicious
+1,malicious
+1,malicious
+1,malicious
 1,malicious
 1,malicious
 1,malicious
