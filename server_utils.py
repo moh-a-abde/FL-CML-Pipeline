@@ -61,9 +61,9 @@ def evaluate_metrics_aggregation(eval_metrics):
     
     if is_prediction_mode:
         # Aggregate prediction statistics
-        total_predictions = sum([metrics.get("total_predictions", 0) * num for num, metrics in eval_metrics])
-        malicious_predictions = sum([metrics.get("malicious_predictions", 0) * num for num, metrics in eval_metrics])
-        benign_predictions = sum([metrics.get("benign_predictions", 0) * num for num, metrics in eval_metrics])
+        total_predictions = sum([metrics.get("total_predictions", 0)for num, metrics in eval_metrics])
+        malicious_predictions = sum([metrics.get("malicious_predictions", 0)for num, metrics in eval_metrics])
+        benign_predictions = sum([metrics.get("benign_predictions", 0)for num, metrics in eval_metrics])
         
         metrics_aggregated = {
             "total_predictions": total_predictions,
@@ -73,15 +73,15 @@ def evaluate_metrics_aggregation(eval_metrics):
         }
     else:
         # Aggregate evaluation metrics
-        precision_aggregated = sum([metrics["precision"] * num for num, metrics in eval_metrics]) / total_num
-        recall_aggregated = sum([metrics["recall"] * num for num, metrics in eval_metrics]) / total_num
-        f1_aggregated = sum([metrics["f1"] * num for num, metrics in eval_metrics]) / total_num
+        precision_aggregated = sum([metrics["precision"] for num, metrics in eval_metrics]) / total_num
+        recall_aggregated = sum([metrics["recall"] for num, metrics in eval_metrics]) / total_num
+        f1_aggregated = sum([metrics["f1"] for num, metrics in eval_metrics]) / total_num
         
         # Aggregate confusion matrix metrics
-        tn_aggregated = sum([metrics["true_negatives"] * num for num, metrics in eval_metrics]) / total_num
-        fp_aggregated = sum([metrics["false_positives"] * num for num, metrics in eval_metrics]) / total_num
-        fn_aggregated = sum([metrics["false_negatives"] * num for num, metrics in eval_metrics]) / total_num
-        tp_aggregated = sum([metrics["true_positives"] * num for num, metrics in eval_metrics]) / total_num
+        tn_aggregated = sum([metrics["true_negatives"] for num, metrics in eval_metrics]) / total_num
+        fp_aggregated = sum([metrics["false_positives"] for num, metrics in eval_metrics]) / total_num
+        fn_aggregated = sum([metrics["false_negatives"] for num, metrics in eval_metrics]) / total_num
+        tp_aggregated = sum([metrics["true_positives"] for num, metrics in eval_metrics]) / total_num
         
         metrics_aggregated = {
             "precision": precision_aggregated,
@@ -105,27 +105,16 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     """
     os.makedirs(output_dir, exist_ok=True)
     
-    # Get feature names from the original dataset
-    feature_names = ['id.orig_h', 'id.orig_p', 'id.resp_h', 'id.resp_p', 'proto', 
-                    'duration', 'orig_bytes', 'resp_bytes', 'conn_state', 'local_orig',
-                    'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes',
-                    'resp_pkts', 'resp_ip_bytes']
-    
-    # Convert DMatrix to DataFrame
-    df = data.get_data()
-    if isinstance(df, tuple):
-        features, labels = df
-        df = pd.DataFrame(features, columns=feature_names)  # Use feature names
-        df['true_label'] = labels
-    
-    # Add predictions and label them as malicious/benign
-    df['predicted_label'] = predictions
-    df['traffic_type'] = df['predicted_label'].map({1: 'malicious', 0: 'benign'})
+    # Create predictions DataFrame
+    predictions_df = pd.DataFrame({
+        'predicted_label': predictions,
+        'prediction_type': ['malicious' if p == 1 else 'benign' for p in predictions]
+    })
     
     # Save to CSV in the results directory
-    output_path = os.path.join(output_dir, f"dataset_with_predictions_round_{round_num}.csv")
-    df.to_csv(output_path, index=False)
-    log(INFO, f"Dataset with predictions saved to: {output_path}")
+    output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
+    predictions_df.to_csv(output_path, index=False)
+    log(INFO, f"Predictions saved to: {output_path}")
     
     return output_path
 
