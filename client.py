@@ -52,7 +52,7 @@ if __name__ == "__main__":
     args = client_args_parser()
     
     # Load labeled data for training
-    labeled_csv_path = "data/combined_labelled.csv"
+    labeled_csv_path = "data/shuffled_merged.csv"
     labeled_dataset = load_csv_data(labeled_csv_path)
     
     # Load unlabeled data for prediction
