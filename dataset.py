@@ -75,8 +75,63 @@ def instantiate_partitioner(partitioner_type: str, num_partitions: int):
         num_partitions=num_partitions
     )
     return partitioner
-    
+
 def preprocess_data(data):
+    """
+    Preprocess the static_data.csv dataset by:
+      - Dropping the 'Timestamp' column.
+      - Converting 'Dst Port' and 'Protocol' to categorical features.
+      - Converting remaining features (except 'Label') to numerical (float).
+      - Separating features and target (Label), and encoding the target if necessary.
+    
+    Args:
+        filepath (str): Path to the static_data.csv file.
+    
+    Returns:
+        tuple: (features DataFrame, labels Series or None if unlabeled)
+    """
+    # Load the CSV file
+    df = pd.read_csv(filepath)
+    
+    # Print out the columns for verification
+    print("Columns in static_data.csv:", df.columns.tolist())
+    
+    # Drop 'Timestamp' as it is not used for training directly
+    if 'Timestamp' in df.columns:
+        df.drop(columns=['Timestamp'], inplace=True)
+    
+    # Define which columns to treat as categorical based on domain knowledge
+    categorical_features = []
+    if 'Dst Port' in df.columns:
+        categorical_features.append('Dst Port')
+    if 'Protocol' in df.columns:
+        categorical_features.append('Protocol')
+    
+    # Convert categorical features to type 'category' and then to numerical codes
+    for col in categorical_features:
+        df[col] = df[col].astype('category').cat.codes
+    
+    # The numerical features are all columns except the ones we have categorized or the target
+    numerical_features = [col for col in df.columns if col not in categorical_features + ['Label']]
+    
+    # Convert these numerical features to float
+    for col in numerical_features:
+        df[col] = df[col].astype(float)
+    
+    # Process the target variable if present
+    if 'Label' in df.columns:
+        # If the label column is non-numeric (object), encode it as categorical codes.
+        if df['Label'].dtype == object:
+            labels = df['Label'].astype('category').cat.codes
+        else:
+            labels = df['Label']
+        features = df.drop(columns=['Label'])
+        return features, labels
+    else:
+        # If no label column, return the processed DataFrame and None for labels
+        return df, None
+        
+def preprocess_data_stebn(data):
     """
     Preprocess the data by encoding categorical features and separating features and labels.
     
