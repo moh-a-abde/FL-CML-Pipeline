@@ -1,0 +1,14 @@
+graph LR
+    subgraph ClientOperations [Client Operations client.py_client_utils.py]
+        A[Receive Parameters from Server] --> B[Local Training: fit]
+        B --> C[Evaluation: evaluate]
+        C --> D[Metrics Calculation]
+        D --> E[Send Results to Server]
+        B --> F[Update Model]
+        F --> B
+        C --> G[Prediction if unlabeled data]
+        G --> H[Save Predictions]
+    end
+
+    classDef component fill:#f9f,stroke:#333,stroke-width:2px;
+    class ClientOperations component;

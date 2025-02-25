@@ -1,0 +1,12 @@
+graph LR
+    subgraph DataHandling [Data Handling dataset.py]
+        A[Load CSV: load_csv_data] --> B[Preprocessing: preprocess_data]
+        B --> C[Separate Features/Labels: separate_xy]
+        C --> D[DMatrix Conversion: transform_dataset_to_dmatrix]
+        D --> E[Train/Test Split: train_test_split]
+        B --> F[Handle inf/NaN]
+        F --> C
+    end
+
+    classDef component fill:#f9f,stroke:#333,stroke-width:2px;
+    class DataHandling component;

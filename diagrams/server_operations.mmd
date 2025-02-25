@@ -1,0 +1,12 @@
+graph LR
+    subgraph ServerOperations [Server Operations server.py]
+        A[Strategy Selection: FedXgbBagging/FedXgbCyclic] --> B[Client Management]
+        B --> C[Model Aggregation]
+        C --> D[Send Parameters to Clients]
+        B --> E[Receive Results from Clients]
+        E --> F[Metrics Aggregation]
+        C --> G[Evaluation if centralized]
+    end
+
+    classDef component fill:#f9f,stroke:#333,stroke-width:2px;
+    class ServerOperations component;

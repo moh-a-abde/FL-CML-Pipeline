@@ -1,0 +1,10 @@
+graph LR
+    subgraph OverallWorkflow [Overall Workflow]
+        A[Client] --> B[Server]
+        B --> A
+        A --> C[Data]
+        C --> A
+    end
+    
+    classDef component fill:#f9f,stroke:#333,stroke-width:2px;
+    class OverallWorkflow component
