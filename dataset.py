@@ -90,8 +90,8 @@ def preprocess_data(data):
     Returns:
         tuple: (features DataFrame, labels Series or None if unlabeled)
     """
-    # Load the CSV file
-    df = pd.read_csv(filepath)
+     # Create a copy to avoid modifying original data
+    df = data.copy()
     
     # Print out the columns for verification
     print("Columns in static_data.csv:", df.columns.tolist())
