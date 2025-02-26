@@ -4,7 +4,6 @@ from logging import INFO
 import flwr as fl
 from flwr.common.logger import log
 from flwr.server.strategy import FedXgbBagging, FedXgbCyclic
-from flwr.server.history import ServerCallback
 
 from utils import server_args_parser
 from server_utils import (
@@ -93,40 +92,21 @@ else:
         on_fit_config_fn=fit_config,
     )
 
-# Create a custom callback to save results after training
-class SaveResultsCallback(ServerCallback):
-    def __init__(self, output_dir):
-        self.output_dir = output_dir
-        self.history = {"loss": [], "metrics": {}}
-        
-    def on_evaluate_end(self, server_round, loss, metrics, failures):
-        # Save round results
-        self.history["loss"].append((server_round, loss))
-        
-        # Initialize metric dictionaries if they don't exist
-        for key, value in metrics.items():
-            if key not in self.history["metrics"]:
-                self.history["metrics"][key] = []
-            self.history["metrics"][key].append((server_round, value))
-        
-        # Save results after each round
-        save_results_pickle(self.history, self.output_dir)
-        
-        # Also save to the output directory
-        if "loss" in metrics:
-            eval_metrics = metrics.copy()
-            evaluate_metrics_aggregation_fn = strategy.evaluate_metrics_aggregation_fn
-            if evaluate_metrics_aggregation_fn is not None:
-                # Use the same aggregation function as the strategy
-                aggregated_metrics = evaluate_metrics_aggregation_fn([(1, metrics)])
-                from server_utils import save_evaluation_results
-                save_evaluation_results(aggregated_metrics, server_round, self.output_dir)
-
 # Start Flower server
-fl.server.start_server(
+history = fl.server.start_server(
     server_address="0.0.0.0:8080",
     config=fl.server.ServerConfig(num_rounds=num_rounds),
     strategy=strategy,
     client_manager=CyclicClientManager() if train_method == "cyclic" else None,
-    server_callback=SaveResultsCallback(output_dir),
 )
+
+# Save the results after training is complete
+log(INFO, "Training complete. Saving results...")
+save_results_pickle({"loss": history.losses_distributed, "metrics": history.metrics_distributed}, output_dir)
+
+# Also save the final evaluation results
+if history.metrics_distributed:
+    from server_utils import save_evaluation_results
+    final_round = num_rounds
+    final_metrics = history.metrics_distributed[-1][1] if history.metrics_distributed else {}
+    save_evaluation_results(final_metrics, final_round, output_dir)
