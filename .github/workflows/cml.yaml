@@ -50,15 +50,14 @@ jobs:
           git config --local user.email "abde8473@stthomas.edu"
           git config --local user.name "moh-a-abde"
           
-          # Add traditional results files
-          git add results/predictions_round_*.csv
-          git add results/eval_results_round_*.json
+          # Add aggegrated results files
+          git add latestAggregated/eval_results_round_aggregated.json
           
-          # Add new output directory structure
+          # Add new files in outputs directory
           git add outputs/
           
           # Commit all changes
-          git commit -m "Update results and add new output directory structure"
+          git commit -m "workflow in action🚀"
 
       - name: Push changes
         uses: ad-m/github-push-action@master
