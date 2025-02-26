@@ -300,16 +300,21 @@ class XgbClient(fl.client.Client):
             if hasattr(self.unlabeled_dmatrix, 'get_label'):
                 try:
                     unlabeled_true_labels = self.unlabeled_dmatrix.get_label()
-                    log(INFO, f"Found true labels for unlabeled data, shape: {unlabeled_true_labels.shape}")
-                except:
-                    log(INFO, "No true labels available for unlabeled data")
+                    if len(unlabeled_true_labels) > 0:
+                        log(INFO, "Found true labels for unlabeled data, shape: %s", unlabeled_true_labels.shape)
+                    else:
+                        log(INFO, "Found empty true labels array for unlabeled data, not using for output")
+                        unlabeled_true_labels = None
+                except Exception as e:
+                    log(INFO, "Error getting true labels for unlabeled data: %s", str(e))
+                    unlabeled_true_labels = None
             
             output_path = save_predictions_to_csv(
                 None,  # We don't need the data anymore since we simplified save_predictions_to_csv
                 unlabeled_pred_labels,
                 round_num,
                 output_dir=output_dir,
-                true_labels=unlabeled_true_labels  # Pass true labels if available
+                true_labels=unlabeled_true_labels  # Pass true labels if available and non-empty
             )
             
             # Add prediction metrics

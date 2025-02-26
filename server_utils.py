@@ -227,10 +227,13 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
         'prediction_type': ['malicious' if p == 1 else 'benign' for p in predictions]
     }
     
-    # Add true labels if available
-    if true_labels is not None:
+    # Add true labels if available and have the same length as predictions
+    if true_labels is not None and len(true_labels) == len(predictions):
+        log(INFO, "Including true labels in the output CSV (same length as predictions)")
         predictions_dict['true_label'] = true_labels
         predictions_dict['true_label_type'] = ['malicious' if t == 1 else 'benign' for t in true_labels]
+    elif true_labels is not None:
+        log(INFO, f"True labels available but length mismatch: predictions={len(predictions)}, true_labels={len(true_labels)}. Not including true labels in output.")
         
     predictions_df = pd.DataFrame(predictions_dict)
     
