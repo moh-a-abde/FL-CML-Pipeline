@@ -56,7 +56,7 @@ if __name__ == "__main__":
     labeled_dataset = load_csv_data(labeled_csv_path)
     
     # Load unlabeled data for prediction
-    unlabeled_csv_path = "data/static_data.csv"
+    unlabeled_csv_path = "data/testing_data.csv"
     unlabeled_dataset = load_csv_data(unlabeled_csv_path)
     
     # Initialize data partitioner based on specified strategy
