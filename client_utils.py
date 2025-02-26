@@ -211,7 +211,7 @@ class XgbClient(fl.client.Client):
             log(INFO, f"Threshold {threshold}: Benign={benign_count}, Malicious={malicious_count}")
         
         # Use the original threshold for actual predictions
-        THRESHOLD = 0.2  # Use 0.5 as default threshold
+        THRESHOLD = 0.5  # Use 0.5 as default threshold
         y_pred_labels = (y_pred_proba > THRESHOLD).astype(int)
     
         # Log prediction distribution
