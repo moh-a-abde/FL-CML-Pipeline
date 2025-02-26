@@ -52,6 +52,13 @@ def evaluate_metrics_aggregation(eval_metrics):
     """Return aggregated metrics for evaluation."""
     total_num = sum([num for num, _ in eval_metrics])
     
+    # Log the raw metrics received from clients
+    log(INFO, f"Received metrics from {len(eval_metrics)} clients")
+    for i, (num, metrics) in enumerate(eval_metrics):
+        log(INFO, f"Client {i+1} metrics: {metrics.keys()}")
+        if "loss" in metrics:
+            log(INFO, f"Client {i+1} loss: {metrics['loss']}")
+    
     # Check if we're in prediction mode or evaluation mode
     first_metrics = eval_metrics[0][1]
     is_prediction_mode = (
@@ -65,34 +72,55 @@ def evaluate_metrics_aggregation(eval_metrics):
         malicious_predictions = sum([metrics.get("malicious_predictions", 0)for num, metrics in eval_metrics])
         benign_predictions = sum([metrics.get("benign_predictions", 0)for num, metrics in eval_metrics])
         
+        # Calculate loss if available
+        if all("loss" in metrics for _, metrics in eval_metrics):
+            loss_aggregated = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
+            log(INFO, f"Aggregated loss: {loss_aggregated}")
+        else:
+            log(INFO, "Loss not available in all client metrics")
+            loss_aggregated = 0
+        
         metrics_aggregated = {
             "total_predictions": total_predictions,
             "malicious_predictions": malicious_predictions,
             "benign_predictions": benign_predictions,
-            "prediction_mode": True
+            "prediction_mode": True,
+            "loss": loss_aggregated  # Add aggregated loss
         }
     else:
         # Aggregate evaluation metrics
-        precision_aggregated = sum([metrics["precision"] for num, metrics in eval_metrics]) / total_num
-        recall_aggregated = sum([metrics["recall"] for num, metrics in eval_metrics]) / total_num
-        f1_aggregated = sum([metrics["f1"] for num, metrics in eval_metrics]) / total_num
+        precision_aggregated = sum([metrics["precision"] * num for num, metrics in eval_metrics]) / total_num
+        recall_aggregated = sum([metrics["recall"] * num for num, metrics in eval_metrics]) / total_num
+        f1_aggregated = sum([metrics["f1"] * num for num, metrics in eval_metrics]) / total_num
+        
+        # Aggregate loss if available
+        if all("loss" in metrics for _, metrics in eval_metrics):
+            loss_aggregated = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
+            log(INFO, f"Aggregated loss: {loss_aggregated}")
+        else:
+            log(INFO, "Loss not available in all client metrics")
+            loss_aggregated = 0
         
         # Aggregate confusion matrix metrics
-        tn_aggregated = sum([metrics["true_negatives"] for num, metrics in eval_metrics]) / total_num
-        fp_aggregated = sum([metrics["false_positives"] for num, metrics in eval_metrics]) / total_num
-        fn_aggregated = sum([metrics["false_negatives"] for num, metrics in eval_metrics]) / total_num
-        tp_aggregated = sum([metrics["true_positives"] for num, metrics in eval_metrics]) / total_num
+        tn_aggregated = sum([metrics["true_negatives"] * num for num, metrics in eval_metrics]) / total_num
+        fp_aggregated = sum([metrics["false_positives"] * num for num, metrics in eval_metrics]) / total_num
+        fn_aggregated = sum([metrics["false_negatives"] * num for num, metrics in eval_metrics]) / total_num
+        tp_aggregated = sum([metrics["true_positives"] * num for num, metrics in eval_metrics]) / total_num
         
         metrics_aggregated = {
             "precision": precision_aggregated,
             "recall": recall_aggregated,
             "f1": f1_aggregated,
+            "loss": loss_aggregated,  # Add aggregated loss
             "true_negatives": tn_aggregated,
             "false_positives": fp_aggregated,
             "false_negatives": fn_aggregated,
             "true_positives": tp_aggregated,
             "prediction_mode": False
         }
+
+    # Log the aggregated metrics
+    log(INFO, f"Aggregated metrics: {metrics_aggregated}")
 
     # Save aggregated results
     save_evaluation_results(metrics_aggregated, "aggregated")

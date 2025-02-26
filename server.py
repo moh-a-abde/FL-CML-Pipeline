@@ -14,7 +14,7 @@ from server_utils import (
     CyclicClientManager,
 )
 
-from dataset import transform_dataset_to_dmatrix
+from dataset import transform_dataset_to_dmatrix, load_csv_data
 
 
 
@@ -33,7 +33,7 @@ centralised_eval = args.centralised_eval
 # Load centralised test set
 if centralised_eval:
     log(INFO, "Loading centralised test set...")
-    test_set = load_test_data() 
+    test_set = load_csv_data("data/static_data.csv")["test"]
     test_set.set_format("pandas")
     test_dmatrix = transform_dataset_to_dmatrix(test_set)
 
@@ -53,6 +53,17 @@ if train_method == "bagging":
             evaluate_metrics_aggregation if not centralised_eval else None
         ),
     )
+    
+    # Add a monkey patch to log the loss value before it's returned
+    original_aggregate_evaluate = strategy.aggregate_evaluate
+    
+    def patched_aggregate_evaluate(server_round, results, failures):
+        log(INFO, "Aggregating evaluation results for round %s", server_round)
+        aggregated_result = original_aggregate_evaluate(server_round, results, failures)
+        log(INFO, "Aggregated loss for round %s: %s", server_round, aggregated_result[0])
+        return aggregated_result
+    
+    strategy.aggregate_evaluate = patched_aggregate_evaluate
 else:
     # Cyclic training
     strategy = FedXgbCyclic(

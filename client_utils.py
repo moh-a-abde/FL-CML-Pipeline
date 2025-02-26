@@ -196,6 +196,21 @@ class XgbClient(fl.client.Client):
         
         # Generate predictions with custom threshold
         y_pred_proba = bst.predict(self.valid_dmatrix)
+        
+        # Log raw prediction probabilities for a sample of data points
+        log(INFO, f"Raw prediction probabilities (first 10): {y_pred_proba[:10]}")
+        log(INFO, f"Prediction probability histogram: {np.histogram(y_pred_proba, bins=10)[0]}")
+        
+        # Try different thresholds
+        thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        for threshold in thresholds:
+            temp_labels = (y_pred_proba > threshold).astype(int)
+            temp_counts = np.bincount(temp_labels.astype(int))
+            benign_count = temp_counts[0] if len(temp_counts) > 0 else 0
+            malicious_count = temp_counts[1] if len(temp_counts) > 1 else 0
+            log(INFO, f"Threshold {threshold}: Benign={benign_count}, Malicious={malicious_count}")
+        
+        # Use the original threshold for actual predictions
         THRESHOLD = 0.2  # Use 0.5 as default threshold
         y_pred_labels = (y_pred_proba > THRESHOLD).astype(int)
     
@@ -207,21 +222,30 @@ class XgbClient(fl.client.Client):
         # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
         
+        # Log ground truth distribution
+        true_counts = np.bincount(y_true.astype(int))
+        log(INFO, f"Ground truth distribution: Benign={true_counts[0]}, Malicious={true_counts[1]}")
+        
         # Compute metrics for labeled data
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
         loss = -np.mean(y_true * np.log(y_pred_proba + 1e-10) + (1 - y_true) * np.log(1 - y_pred_proba + 1e-10))
         
+        # Log detailed metrics
+        log(INFO, f"Evaluation metrics - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}, Loss: {loss:.4f}")
+        
         # Generate confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
         tn, fp, fn, tp = conf_matrix.ravel()
+        log(INFO, f"Confusion matrix: TN={tn}, FP={fp}, FN={fn}, TP={tp}")
         
         # Create base metrics dictionary
         metrics = {
             "precision": float(precision),
             "recall": float(recall),
             "f1": float(f1),
+            "loss": float(loss),  # Add loss to metrics dictionary
             "true_negatives": int(tn),
             "false_positives": int(fp),
             "false_negatives": int(fn),
