@@ -60,8 +60,16 @@ if train_method == "bagging":
     def patched_aggregate_evaluate(server_round, results, failures):
         log(INFO, "Aggregating evaluation results for round %s", server_round)
         aggregated_result = original_aggregate_evaluate(server_round, results, failures)
-        log(INFO, "Aggregated loss for round %s: %s", server_round, aggregated_result[0])
-        return aggregated_result
+        
+        # Extract the actual loss from the metrics
+        metrics = aggregated_result[1]
+        actual_loss = metrics.get("loss", 0.0)
+        
+        log(INFO, "Original aggregated loss for round %s: %s", server_round, aggregated_result[0])
+        log(INFO, "Actual loss from metrics for round %s: %s", server_round, actual_loss)
+        
+        # Return the corrected result with the actual loss value
+        return (actual_loss, aggregated_result[1])
     
     strategy.aggregate_evaluate = patched_aggregate_evaluate
 else:

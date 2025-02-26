@@ -203,15 +203,33 @@ class XgbClient(fl.client.Client):
         
         # Try different thresholds
         thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        best_threshold = 0.5
+        best_balance = float('inf')
+        
         for threshold in thresholds:
             temp_labels = (y_pred_proba > threshold).astype(int)
             temp_counts = np.bincount(temp_labels.astype(int))
             benign_count = temp_counts[0] if len(temp_counts) > 0 else 0
             malicious_count = temp_counts[1] if len(temp_counts) > 1 else 0
-            log(INFO, f"Threshold {threshold}: Benign={benign_count}, Malicious={malicious_count}")
+            
+            # Calculate class balance ratio (closer to 1 is better)
+            true_benign = true_counts[0]
+            true_malicious = true_counts[1]
+            
+            # Calculate how well this threshold preserves the true class distribution
+            balance_score = abs((benign_count/malicious_count) - (true_benign/true_malicious)) if malicious_count > 0 else float('inf')
+            
+            log(INFO, f"Threshold {threshold}: Benign={benign_count}, Malicious={malicious_count}, Balance Score={balance_score:.4f}")
+            
+            # Update best threshold if this one gives better class balance
+            if balance_score < best_balance:
+                best_balance = balance_score
+                best_threshold = threshold
         
-        # Use the original threshold for actual predictions
-        THRESHOLD = 0.5  # Use 0.5 as default threshold
+        log(INFO, f"Selected best threshold: {best_threshold} with balance score: {best_balance:.4f}")
+        
+        # Use the best threshold for actual predictions
+        THRESHOLD = best_threshold
         y_pred_labels = (y_pred_proba > THRESHOLD).astype(int)
     
         # Log prediction distribution
@@ -257,7 +275,19 @@ class XgbClient(fl.client.Client):
         if self.unlabeled_dmatrix is not None:
             # Get predictions
             unlabeled_pred_proba = bst.predict(self.unlabeled_dmatrix)
+            
+            # Log unlabeled prediction distribution
+            log(INFO, f"Unlabeled prediction probabilities range: [{unlabeled_pred_proba.min():.3f}, {unlabeled_pred_proba.max():.3f}]")
+            log(INFO, f"Unlabeled prediction probability histogram: {np.histogram(unlabeled_pred_proba, bins=10)[0]}")
+            
+            # Use the same threshold determined for validation data
             unlabeled_pred_labels = (unlabeled_pred_proba > THRESHOLD).astype(int)
+            
+            # Log prediction distribution
+            unlabeled_counts = np.bincount(unlabeled_pred_labels.astype(int))
+            benign_count = unlabeled_counts[0] if len(unlabeled_counts) > 0 else 0
+            malicious_count = unlabeled_counts[1] if len(unlabeled_counts) > 1 else 0
+            log(INFO, f"Unlabeled predictions with threshold {THRESHOLD}: Benign={benign_count}, Malicious={malicious_count}")
             
             # Save predictions using the server_utils function
             round_num = ins.config.get("global_round", "final")
