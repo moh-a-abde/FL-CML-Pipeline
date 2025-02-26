@@ -189,7 +189,7 @@ config_fit:
 
 ---
 
-## **⚠️📂 Output Structure**
+## **⚠📂 Output Structure**
 
 Experiment outputs are automatically saved in the `outputs/` directory, organized by date and time. Each experiment run generates a unique folder with the following structure:  
 
@@ -197,21 +197,15 @@ Experiment outputs are automatically saved in the `outputs/` directory, organize
 outputs/
 └── YYYY-MM-DD/                  # Run date
     └── HH-MM-SS/                # Run time
-        ├── .hydra/              # Config snapshots
+        ├── .hydra/              # ⚠️Config snapshots
         │   ├── config.yaml
         │   └── hydra.yaml
         ├── results.pkl          # Training history
         ├── predictions/         # Model predictions
-        │   ├── client_X_predictions.csv  # Per-client predictions
-        │   └── global_predictions.csv    # Aggregated predictions
-        └── evaluation/          # Evaluation metrics
-            ├── client_X_evaluation.csv   # Per-client metrics
-            └── global_evaluation.csv     # Aggregated metrics
-```
+            ├── predictions_round_X.csv  # Per-round predictions
 
-The system now organizes evaluation results and predictions in dedicated subdirectories:
-- `predictions/`: Contains CSV files with raw prediction probabilities and final classifications
-- `evaluation/`: Stores detailed evaluation metrics including precision, recall, F1-score, and confusion matrices
+
+```
 
 All these files are automatically tracked by the CML workflow and included in result reports.
 
