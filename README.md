@@ -200,8 +200,20 @@ outputs/
         ├── .hydra/              # Config snapshots
         │   ├── config.yaml
         │   └── hydra.yaml
-        └── results.pkl          # Training history
+        ├── results.pkl          # Training history
+        ├── predictions/         # Model predictions
+        │   ├── client_X_predictions.csv  # Per-client predictions
+        │   └── global_predictions.csv    # Aggregated predictions
+        └── evaluation/          # Evaluation metrics
+            ├── client_X_evaluation.csv   # Per-client metrics
+            └── global_evaluation.csv     # Aggregated metrics
 ```
+
+The system now organizes evaluation results and predictions in dedicated subdirectories:
+- `predictions/`: Contains CSV files with raw prediction probabilities and final classifications
+- `evaluation/`: Stores detailed evaluation metrics including precision, recall, F1-score, and confusion matrices
+
+All these files are automatically tracked by the CML workflow and included in result reports.
 
 ---
 

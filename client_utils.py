@@ -201,6 +201,13 @@ class XgbClient(fl.client.Client):
         log(INFO, f"Raw prediction probabilities (first 10): {y_pred_proba[:10]}")
         log(INFO, f"Prediction probability histogram: {np.histogram(y_pred_proba, bins=10)[0]}")
         
+        # Get ground truth labels before threshold selection
+        y_true = self.valid_dmatrix.get_label()
+        
+        # Log ground truth distribution
+        true_counts = np.bincount(y_true.astype(int))
+        log(INFO, f"Ground truth distribution: Benign={true_counts[0]}, Malicious={true_counts[1]}")
+        
         # Try different thresholds
         thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
         best_threshold = 0.5
@@ -236,13 +243,6 @@ class XgbClient(fl.client.Client):
         pred_counts = np.bincount(y_pred_labels.astype(int))
         log(INFO, f"Prediction distribution: Benign={pred_counts[0]}, Malicious={pred_counts[1]}")
         log(INFO, f"Prediction probabilities range: [{y_pred_proba.min():.3f}, {y_pred_proba.max():.3f}]")
-        
-        # Get ground truth labels
-        y_true = self.valid_dmatrix.get_label()
-        
-        # Log ground truth distribution
-        true_counts = np.bincount(y_true.astype(int))
-        log(INFO, f"Ground truth distribution: Benign={true_counts[0]}, Malicious={true_counts[1]}")
         
         # Compute metrics for labeled data
         precision = precision_score(y_true, y_pred_labels, average='weighted')
@@ -291,11 +291,15 @@ class XgbClient(fl.client.Client):
             
             # Save predictions using the server_utils function
             round_num = ins.config.get("global_round", "final")
+            
+            # Check if output directory is provided in config
+            output_dir = ins.config.get("output_dir", "results")
+            
             output_path = save_predictions_to_csv(
                 None,  # We don't need the data anymore since we simplified save_predictions_to_csv
                 unlabeled_pred_labels,
                 round_num,
-                output_dir="results"
+                output_dir=output_dir
             )
             
             # Add prediction metrics

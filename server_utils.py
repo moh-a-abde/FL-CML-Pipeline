@@ -11,19 +11,93 @@ from flwr.server.criterion import Criterion
 from utils import BST_PARAMS
 import os
 import json
+import shutil
 from datetime import datetime
+import pickle
 
-def eval_config(rnd: int) -> Dict[str, str]:
-    """Return a configuration with global epochs."""
+def setup_output_directory():
+    """
+    Creates a date and time-based directory structure for outputs.
+    
+    Returns:
+        str: Path to the created output directory
+    """
+    # Create base outputs directory if it doesn't exist
+    base_dir = "outputs"
+    os.makedirs(base_dir, exist_ok=True)
+    
+    # Create date directory
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    date_dir = os.path.join(base_dir, date_str)
+    os.makedirs(date_dir, exist_ok=True)
+    
+    # Create time directory
+    time_str = datetime.now().strftime("%H-%M-%S")
+    output_dir = os.path.join(date_dir, time_str)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Create .hydra directory
+    hydra_dir = os.path.join(output_dir, ".hydra")
+    os.makedirs(hydra_dir, exist_ok=True)
+    
+    # Copy existing .hydra files if they exist
+    if os.path.exists(".hydra"):
+        for file in os.listdir(".hydra"):
+            if file.endswith(".yaml"):
+                src_path = os.path.join(".hydra", file)
+                dst_path = os.path.join(hydra_dir, file)
+                shutil.copy2(src_path, dst_path)
+    
+    log(INFO, "Created output directory: %s", output_dir)
+    return output_dir
+
+def save_results_pickle(results, output_dir):
+    """
+    Save results dictionary to a pickle file.
+    
+    Args:
+        results (dict): Results to save
+        output_dir (str): Directory to save to
+    """
+    output_path = os.path.join(output_dir, "results.pkl")
+    with open(output_path, 'wb') as f:
+        pickle.dump(results, f)
+    log(INFO, "Saved results to: %s", output_path)
+
+def eval_config(rnd: int, output_dir: str = None) -> Dict[str, str]:
+    """
+    Return a configuration with global round and output directory.
+    
+    Args:
+        rnd (int): Current round number
+        output_dir (str, optional): Output directory path
+        
+    Returns:
+        Dict[str, str]: Configuration dictionary
+    """
     config = {
         "global_round": str(rnd),
     }
+    
+    # Add output directory if provided
+    if output_dir is not None:
+        config["output_dir"] = output_dir
+        
     return config
 
-def save_evaluation_results(eval_metrics: Dict, round_num: int, output_dir: str = "results"):
+def save_evaluation_results(eval_metrics: Dict, round_num: int, output_dir: str = None):
     """
     Save evaluation results for each round.
+    
+    Args:
+        eval_metrics (Dict): Evaluation metrics to save
+        round_num (int or str): Round number or identifier
+        output_dir (str, optional): Directory to save results to. If None, uses the default results directory.
     """
+    # Use default results directory if no output_dir is provided
+    if output_dir is None:
+        output_dir = "results"
+    
     os.makedirs(output_dir, exist_ok=True)
     
     # Format results
@@ -38,7 +112,7 @@ def save_evaluation_results(eval_metrics: Dict, round_num: int, output_dir: str 
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=4)
     
-    log(INFO, f"Evaluation results saved to: {output_path}")
+    log(INFO, "Evaluation results saved to: %s", output_path)
 
 def fit_config(rnd: int) -> Dict[str, str]:
     """Return a configuration with global epochs."""
@@ -127,10 +201,23 @@ def evaluate_metrics_aggregation(eval_metrics):
     
     return metrics_aggregated
     
-def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = "results"):
+def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None):
     """
-    Save dataset with predictions to CSV in the results directory.
+    Save dataset with predictions to CSV in the specified directory.
+    
+    Args:
+        data: Original data (not used in this simplified version)
+        predictions: Prediction labels
+        round_num (int): Round number
+        output_dir (str, optional): Directory to save results to. If None, uses the default results directory.
+        
+    Returns:
+        str: Path to the saved CSV file
     """
+    # Use default results directory if no output_dir is provided
+    if output_dir is None:
+        output_dir = "results"
+        
     os.makedirs(output_dir, exist_ok=True)
     
     # Create predictions DataFrame
@@ -139,10 +226,10 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
         'prediction_type': ['malicious' if p == 1 else 'benign' for p in predictions]
     })
     
-    # Save to CSV in the results directory
+    # Save to CSV in the specified directory
     output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
     predictions_df.to_csv(output_path, index=False)
-    log(INFO, f"Predictions saved to: {output_path}")
+    log(INFO, "Predictions saved to: %s", output_path)
     
     return output_path
 
