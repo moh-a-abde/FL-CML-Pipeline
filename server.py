@@ -4,6 +4,7 @@ from logging import INFO
 import flwr as fl
 from flwr.common.logger import log
 from flwr.server.strategy import FedXgbBagging, FedXgbCyclic
+from flwr.server.history import ServerCallback
 
 from utils import server_args_parser
 from server_utils import (
@@ -93,7 +94,7 @@ else:
     )
 
 # Create a custom callback to save results after training
-class SaveResultsCallback(fl.server.ServerCallback):
+class SaveResultsCallback(ServerCallback):
     def __init__(self, output_dir):
         self.output_dir = output_dir
         self.history = {"loss": [], "metrics": {}}
