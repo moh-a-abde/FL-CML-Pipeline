@@ -295,11 +295,21 @@ class XgbClient(fl.client.Client):
             # Check if output directory is provided in config
             output_dir = ins.config.get("output_dir", "results")
             
+            # Get true labels if available for unlabeled data
+            unlabeled_true_labels = None
+            if hasattr(self.unlabeled_dmatrix, 'get_label'):
+                try:
+                    unlabeled_true_labels = self.unlabeled_dmatrix.get_label()
+                    log(INFO, f"Found true labels for unlabeled data, shape: {unlabeled_true_labels.shape}")
+                except:
+                    log(INFO, "No true labels available for unlabeled data")
+            
             output_path = save_predictions_to_csv(
                 None,  # We don't need the data anymore since we simplified save_predictions_to_csv
                 unlabeled_pred_labels,
                 round_num,
-                output_dir=output_dir
+                output_dir=output_dir,
+                true_labels=unlabeled_true_labels  # Pass true labels if available
             )
             
             # Add prediction metrics

@@ -201,7 +201,7 @@ def evaluate_metrics_aggregation(eval_metrics):
     
     return metrics_aggregated
     
-def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None):
+def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None, true_labels=None):
     """
     Save dataset with predictions to CSV in the specified directory.
     
@@ -210,6 +210,7 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
         predictions: Prediction labels
         round_num (int): Round number
         output_dir (str, optional): Directory to save results to. If None, uses the default results directory.
+        true_labels (array, optional): True labels if available
         
     Returns:
         str: Path to the saved CSV file
@@ -221,10 +222,17 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     os.makedirs(output_dir, exist_ok=True)
     
     # Create predictions DataFrame
-    predictions_df = pd.DataFrame({
+    predictions_dict = {
         'predicted_label': predictions,
         'prediction_type': ['malicious' if p == 1 else 'benign' for p in predictions]
-    })
+    }
+    
+    # Add true labels if available
+    if true_labels is not None:
+        predictions_dict['true_label'] = true_labels
+        predictions_dict['true_label_type'] = ['malicious' if t == 1 else 'benign' for t in true_labels]
+        
+    predictions_df = pd.DataFrame(predictions_dict)
     
     # Save to CSV in the specified directory
     output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
@@ -256,7 +264,7 @@ def get_evaluate_fn(test_data):
             y_true = test_data.get_label()
             
             # Save dataset with predictions to results directory
-            output_path = save_predictions_to_csv(test_data, y_pred_labels, server_round, "results")
+            output_path = save_predictions_to_csv(test_data, y_pred_labels, server_round, "results", y_true)
             
             # Compute metrics
             precision = precision_score(y_true, y_pred_labels, average='weighted')
