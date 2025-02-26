@@ -102,11 +102,41 @@ history = fl.server.start_server(
 
 # Save the results after training is complete
 log(INFO, "Training complete. Saving results...")
-save_results_pickle({"loss": history.losses_distributed, "metrics": history.metrics_distributed}, output_dir)
+
+# Create a dictionary to store the results
+results = {}
+
+# Add losses if available
+if hasattr(history, 'losses_distributed') and history.losses_distributed:
+    results["loss"] = history.losses_distributed
+else:
+    results["loss"] = []
+    log(INFO, "No distributed losses found in history")
+
+# Add metrics if available
+if hasattr(history, 'metrics_distributed') and history.metrics_distributed:
+    results["metrics"] = history.metrics_distributed
+else:
+    results["metrics"] = {}
+    log(INFO, "No distributed metrics found in history")
+
+# Save the results
+save_results_pickle(results, output_dir)
 
 # Also save the final evaluation results
-if history.metrics_distributed:
+if hasattr(history, 'metrics_distributed') and history.metrics_distributed:
     from server_utils import save_evaluation_results
     final_round = num_rounds
-    final_metrics = history.metrics_distributed[-1][1] if history.metrics_distributed else {}
+    
+    # Check if metrics_distributed is a dictionary or a list
+    if isinstance(history.metrics_distributed, dict):
+        final_metrics = history.metrics_distributed
+    elif isinstance(history.metrics_distributed, list) and len(history.metrics_distributed) > 0:
+        final_metrics = history.metrics_distributed[-1][1]  # Get the metrics from the last round
+    else:
+        final_metrics = {}
+        log(INFO, "No metrics available to save")
+    
     save_evaluation_results(final_metrics, final_round, output_dir)
+else:
+    log(INFO, "No metrics available to save")
