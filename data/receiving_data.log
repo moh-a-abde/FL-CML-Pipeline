@@ -97,3 +97,393 @@ FileNotFoundError: [Errno 2] No such file or directory: 'data/invalid_json_20250
 2025-02-26 19:31:29,053 - INFO - Waiting for connection...
 2025-02-26 19:32:44,329 - INFO - Server stopped by user
 2025-02-26 19:32:44,329 - INFO - Server socket closed
+2025-02-26 19:40:28,069 - INFO - Starting receiving_data.py
+2025-02-26 19:40:28,069 - INFO - Server listening on 192.168.1.3:9000
+2025-02-26 19:40:28,069 - INFO - Waiting for connection...
+2025-02-26 19:40:43,032 - INFO - Got a connection from ('192.168.1.3', 52722)
+2025-02-26 19:40:43,032 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:43,032 - INFO - Received 20 chunks (163840 bytes) so far
+2025-02-26 19:40:43,033 - INFO - Received 30 chunks (245760 bytes) so far
+2025-02-26 19:40:43,033 - INFO - Received 40 chunks (327680 bytes) so far
+2025-02-26 19:40:43,033 - INFO - Connection closed. Received 351700 bytes in 43 chunks
+2025-02-26 19:40:43,033 - INFO - Data decoded successfully, length: 351700
+2025-02-26 19:40:43,033 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.103","proto":"udp","orig_bytes
+2025-02-26 19:40:43,033 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:43,048 - INFO - JSON parsed successfully. DataFrame shape: (717, 23)
+2025-02-26 19:40:43,052 - INFO - Data saved to data/received_data_20250226_194043.csv
+2025-02-26 19:40:43,052 - INFO - Raw sample saved to data/raw_sample_20250226_194043.json
+2025-02-26 19:40:43,052 - INFO - Waiting for connection...
+2025-02-26 19:40:43,805 - INFO - Got a connection from ('192.168.1.3', 52728)
+2025-02-26 19:40:43,805 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:43,806 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:43,806 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:43,806 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:43,807 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:43,807 - INFO - Connection closed. Received 424207 bytes in 52 chunks
+2025-02-26 19:40:43,807 - INFO - Data decoded successfully, length: 424207
+2025-02-26 19:40:43,807 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"172.253.122.94","proto":"udp","orig_bytes
+2025-02-26 19:40:43,807 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:43,820 - INFO - JSON parsed successfully. DataFrame shape: (866, 23)
+2025-02-26 19:40:43,825 - INFO - Data saved to data/received_data_20250226_194043.csv
+2025-02-26 19:40:43,825 - INFO - Raw sample saved to data/raw_sample_20250226_194043.json
+2025-02-26 19:40:43,825 - INFO - Waiting for connection...
+2025-02-26 19:40:44,575 - INFO - Got a connection from ('192.168.1.3', 52730)
+2025-02-26 19:40:44,575 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:44,575 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:44,576 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:44,576 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:44,576 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:44,576 - INFO - Connection closed. Received 419992 bytes in 52 chunks
+2025-02-26 19:40:44,576 - INFO - Data decoded successfully, length: 419992
+2025-02-26 19:40:44,576 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.99","proto":"udp","orig_bytes"
+2025-02-26 19:40:44,577 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:44,588 - INFO - JSON parsed successfully. DataFrame shape: (852, 23)
+2025-02-26 19:40:44,593 - INFO - Data saved to data/received_data_20250226_194044.csv
+2025-02-26 19:40:44,593 - INFO - Raw sample saved to data/raw_sample_20250226_194044.json
+2025-02-26 19:40:44,593 - INFO - Waiting for connection...
+2025-02-26 19:40:45,308 - INFO - Got a connection from ('192.168.1.3', 52744)
+2025-02-26 19:40:45,308 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:45,308 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:45,309 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:45,309 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:45,309 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:45,309 - INFO - Connection closed. Received 420186 bytes in 52 chunks
+2025-02-26 19:40:45,310 - INFO - Data decoded successfully, length: 420186
+2025-02-26 19:40:45,310 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.250.31.95","proto":"udp","orig_bytes"
+2025-02-26 19:40:45,310 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:45,322 - INFO - JSON parsed successfully. DataFrame shape: (854, 23)
+2025-02-26 19:40:45,327 - INFO - Data saved to data/received_data_20250226_194045.csv
+2025-02-26 19:40:45,327 - INFO - Raw sample saved to data/raw_sample_20250226_194045.json
+2025-02-26 19:40:45,327 - INFO - Waiting for connection...
+2025-02-26 19:40:46,073 - INFO - Got a connection from ('192.168.1.3', 52756)
+2025-02-26 19:40:46,073 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:46,073 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:46,073 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:46,074 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:46,074 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:46,074 - INFO - Connection closed. Received 448475 bytes in 55 chunks
+2025-02-26 19:40:46,074 - INFO - Data decoded successfully, length: 448475
+2025-02-26 19:40:46,074 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"216.239.38.181","proto":"udp","orig_bytes
+2025-02-26 19:40:46,074 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:46,088 - INFO - JSON parsed successfully. DataFrame shape: (908, 23)
+2025-02-26 19:40:46,093 - INFO - Data saved to data/received_data_20250226_194046.csv
+2025-02-26 19:40:46,093 - INFO - Raw sample saved to data/raw_sample_20250226_194046.json
+2025-02-26 19:40:46,093 - INFO - Waiting for connection...
+2025-02-26 19:40:46,843 - INFO - Got a connection from ('192.168.1.3', 52762)
+2025-02-26 19:40:46,843 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:46,843 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:46,844 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:46,844 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:46,844 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:46,844 - INFO - Connection closed. Received 433754 bytes in 53 chunks
+2025-02-26 19:40:46,844 - INFO - Data decoded successfully, length: 433754
+2025-02-26 19:40:46,844 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.103","proto":"udp","orig_bytes
+2025-02-26 19:40:46,844 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:46,857 - INFO - JSON parsed successfully. DataFrame shape: (885, 23)
+2025-02-26 19:40:46,862 - INFO - Data saved to data/received_data_20250226_194046.csv
+2025-02-26 19:40:46,862 - INFO - Raw sample saved to data/raw_sample_20250226_194046.json
+2025-02-26 19:40:46,862 - INFO - Waiting for connection...
+2025-02-26 19:40:47,631 - INFO - Got a connection from ('192.168.1.3', 52764)
+2025-02-26 19:40:47,631 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:47,631 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:47,631 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:47,632 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:47,632 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:47,632 - INFO - Connection closed. Received 434080 bytes in 54 chunks
+2025-02-26 19:40:47,632 - INFO - Data decoded successfully, length: 434080
+2025-02-26 19:40:47,632 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.103","proto":"tcp","orig_bytes
+2025-02-26 19:40:47,632 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:47,646 - INFO - JSON parsed successfully. DataFrame shape: (878, 23)
+2025-02-26 19:40:47,650 - INFO - Data saved to data/received_data_20250226_194047.csv
+2025-02-26 19:40:47,651 - INFO - Raw sample saved to data/raw_sample_20250226_194047.json
+2025-02-26 19:40:47,651 - INFO - Waiting for connection...
+2025-02-26 19:40:48,359 - INFO - Got a connection from ('192.168.1.3', 52772)
+2025-02-26 19:40:48,359 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:48,359 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:48,360 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:48,360 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:48,360 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:48,360 - INFO - Connection closed. Received 415193 bytes in 51 chunks
+2025-02-26 19:40:48,360 - INFO - Data decoded successfully, length: 415193
+2025-02-26 19:40:48,360 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"104.98.115.154","proto":"udp","orig_bytes
+2025-02-26 19:40:48,361 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:48,373 - INFO - JSON parsed successfully. DataFrame shape: (844, 23)
+2025-02-26 19:40:48,378 - INFO - Data saved to data/received_data_20250226_194048.csv
+2025-02-26 19:40:48,378 - INFO - Raw sample saved to data/raw_sample_20250226_194048.json
+2025-02-26 19:40:48,378 - INFO - Waiting for connection...
+2025-02-26 19:40:49,132 - INFO - Got a connection from ('192.168.1.3', 52788)
+2025-02-26 19:40:49,132 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:49,132 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:49,133 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:49,133 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:49,133 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:49,134 - INFO - Connection closed. Received 436050 bytes in 54 chunks
+2025-02-26 19:40:49,134 - INFO - Data decoded successfully, length: 436050
+2025-02-26 19:40:49,134 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"104.98.115.154","proto":"udp","orig_bytes
+2025-02-26 19:40:49,134 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:49,148 - INFO - JSON parsed successfully. DataFrame shape: (890, 23)
+2025-02-26 19:40:49,153 - INFO - Data saved to data/received_data_20250226_194049.csv
+2025-02-26 19:40:49,153 - INFO - Raw sample saved to data/raw_sample_20250226_194049.json
+2025-02-26 19:40:49,153 - INFO - Waiting for connection...
+2025-02-26 19:40:49,902 - INFO - Got a connection from ('192.168.1.3', 55760)
+2025-02-26 19:40:49,902 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:49,903 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:49,903 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:49,903 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:49,903 - INFO - Connection closed. Received 397786 bytes in 49 chunks
+2025-02-26 19:40:49,903 - INFO - Data decoded successfully, length: 397786
+2025-02-26 19:40:49,903 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"64.233.180.95","proto":"udp","orig_bytes"
+2025-02-26 19:40:49,904 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:49,916 - INFO - JSON parsed successfully. DataFrame shape: (803, 23)
+2025-02-26 19:40:49,920 - INFO - Data saved to data/received_data_20250226_194049.csv
+2025-02-26 19:40:49,920 - INFO - Raw sample saved to data/raw_sample_20250226_194049.json
+2025-02-26 19:40:49,920 - INFO - Waiting for connection...
+2025-02-26 19:40:50,674 - INFO - Got a connection from ('192.168.1.3', 55766)
+2025-02-26 19:40:50,675 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:50,675 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:50,675 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:50,675 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:50,676 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:50,676 - INFO - Connection closed. Received 422882 bytes in 52 chunks
+2025-02-26 19:40:50,676 - INFO - Data decoded successfully, length: 422882
+2025-02-26 19:40:50,676 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"64.233.180.95","proto":"udp","orig_bytes"
+2025-02-26 19:40:50,676 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:50,689 - INFO - JSON parsed successfully. DataFrame shape: (857, 23)
+2025-02-26 19:40:50,694 - INFO - Data saved to data/received_data_20250226_194050.csv
+2025-02-26 19:40:50,694 - INFO - Raw sample saved to data/raw_sample_20250226_194050.json
+2025-02-26 19:40:50,694 - INFO - Waiting for connection...
+2025-02-26 19:40:51,403 - INFO - Got a connection from ('192.168.1.3', 55776)
+2025-02-26 19:40:51,403 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:51,403 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:51,404 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:51,404 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:51,404 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:51,405 - INFO - Connection closed. Received 441754 bytes in 54 chunks
+2025-02-26 19:40:51,405 - INFO - Data decoded successfully, length: 441754
+2025-02-26 19:40:51,405 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.105","proto":"udp","orig_bytes
+2025-02-26 19:40:51,405 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:51,418 - INFO - JSON parsed successfully. DataFrame shape: (899, 23)
+2025-02-26 19:40:51,423 - INFO - Data saved to data/received_data_20250226_194051.csv
+2025-02-26 19:40:51,423 - INFO - Raw sample saved to data/raw_sample_20250226_194051.json
+2025-02-26 19:40:51,423 - INFO - Waiting for connection...
+2025-02-26 19:40:52,187 - INFO - Got a connection from ('192.168.1.3', 55788)
+2025-02-26 19:40:52,187 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:52,187 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:52,187 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:52,188 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:52,188 - INFO - Received 50 chunks (405526 bytes) so far
+2025-02-26 19:40:52,188 - INFO - Connection closed. Received 405526 bytes in 50 chunks
+2025-02-26 19:40:52,188 - INFO - Data decoded successfully, length: 405526
+2025-02-26 19:40:52,188 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.103","proto":"udp","orig_bytes
+2025-02-26 19:40:52,188 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:52,200 - INFO - JSON parsed successfully. DataFrame shape: (815, 23)
+2025-02-26 19:40:52,205 - INFO - Data saved to data/received_data_20250226_194052.csv
+2025-02-26 19:40:52,205 - INFO - Raw sample saved to data/raw_sample_20250226_194052.json
+2025-02-26 19:40:52,205 - INFO - Waiting for connection...
+2025-02-26 19:40:52,959 - INFO - Got a connection from ('192.168.1.3', 55792)
+2025-02-26 19:40:52,960 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:52,960 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:52,960 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:52,960 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:52,961 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:52,961 - INFO - Connection closed. Received 424017 bytes in 52 chunks
+2025-02-26 19:40:52,961 - INFO - Data decoded successfully, length: 424017
+2025-02-26 19:40:52,961 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.99","proto":"udp","orig_bytes"
+2025-02-26 19:40:52,961 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:52,974 - INFO - JSON parsed successfully. DataFrame shape: (861, 23)
+2025-02-26 19:40:52,979 - INFO - Data saved to data/received_data_20250226_194052.csv
+2025-02-26 19:40:52,979 - INFO - Raw sample saved to data/raw_sample_20250226_194052.json
+2025-02-26 19:40:52,979 - INFO - Waiting for connection...
+2025-02-26 19:40:53,692 - INFO - Got a connection from ('192.168.1.3', 55802)
+2025-02-26 19:40:53,692 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:53,692 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:53,693 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:53,693 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:53,693 - INFO - Received 50 chunks (409326 bytes) so far
+2025-02-26 19:40:53,693 - INFO - Connection closed. Received 409326 bytes in 50 chunks
+2025-02-26 19:40:53,694 - INFO - Data decoded successfully, length: 409326
+2025-02-26 19:40:53,694 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"64.233.180.95","proto":"udp","orig_bytes"
+2025-02-26 19:40:53,694 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:53,706 - INFO - JSON parsed successfully. DataFrame shape: (832, 23)
+2025-02-26 19:40:53,711 - INFO - Data saved to data/received_data_20250226_194053.csv
+2025-02-26 19:40:53,711 - INFO - Raw sample saved to data/raw_sample_20250226_194053.json
+2025-02-26 19:40:53,711 - INFO - Waiting for connection...
+2025-02-26 19:40:54,458 - INFO - Got a connection from ('192.168.1.3', 55804)
+2025-02-26 19:40:54,458 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:54,459 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:54,459 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:54,459 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:54,459 - INFO - Received 50 chunks (405723 bytes) so far
+2025-02-26 19:40:54,460 - INFO - Connection closed. Received 405723 bytes in 50 chunks
+2025-02-26 19:40:54,460 - INFO - Data decoded successfully, length: 405723
+2025-02-26 19:40:54,460 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.103","proto":"udp","orig_bytes
+2025-02-26 19:40:54,460 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:54,472 - INFO - JSON parsed successfully. DataFrame shape: (827, 23)
+2025-02-26 19:40:54,477 - INFO - Data saved to data/received_data_20250226_194054.csv
+2025-02-26 19:40:54,477 - INFO - Raw sample saved to data/raw_sample_20250226_194054.json
+2025-02-26 19:40:54,477 - INFO - Waiting for connection...
+2025-02-26 19:40:55,233 - INFO - Got a connection from ('192.168.1.3', 55814)
+2025-02-26 19:40:55,233 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:55,233 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:55,233 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:55,234 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:55,234 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:55,234 - INFO - Connection closed. Received 445177 bytes in 55 chunks
+2025-02-26 19:40:55,234 - INFO - Data decoded successfully, length: 445177
+2025-02-26 19:40:55,235 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.103","proto":"udp","orig_bytes
+2025-02-26 19:40:55,235 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:55,248 - INFO - JSON parsed successfully. DataFrame shape: (905, 23)
+2025-02-26 19:40:55,253 - INFO - Data saved to data/received_data_20250226_194055.csv
+2025-02-26 19:40:55,253 - INFO - Raw sample saved to data/raw_sample_20250226_194055.json
+2025-02-26 19:40:55,253 - INFO - Waiting for connection...
+2025-02-26 19:40:56,014 - INFO - Got a connection from ('192.168.1.3', 55820)
+2025-02-26 19:40:56,014 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:56,014 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:56,014 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:56,015 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:56,015 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:56,015 - INFO - Connection closed. Received 436665 bytes in 54 chunks
+2025-02-26 19:40:56,015 - INFO - Data decoded successfully, length: 436665
+2025-02-26 19:40:56,015 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"13.107.42.16","proto":"udp","orig_bytes":
+2025-02-26 19:40:56,015 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:56,028 - INFO - JSON parsed successfully. DataFrame shape: (887, 23)
+2025-02-26 19:40:56,033 - INFO - Data saved to data/received_data_20250226_194056.csv
+2025-02-26 19:40:56,033 - INFO - Raw sample saved to data/raw_sample_20250226_194056.json
+2025-02-26 19:40:56,033 - INFO - Waiting for connection...
+2025-02-26 19:40:56,721 - INFO - Got a connection from ('192.168.1.3', 55836)
+2025-02-26 19:40:56,721 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:56,721 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:56,721 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:56,722 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:56,722 - INFO - Connection closed. Received 400272 bytes in 49 chunks
+2025-02-26 19:40:56,722 - INFO - Data decoded successfully, length: 400272
+2025-02-26 19:40:56,722 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.103","proto":"udp","orig_bytes
+2025-02-26 19:40:56,722 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:56,734 - INFO - JSON parsed successfully. DataFrame shape: (816, 23)
+2025-02-26 19:40:56,739 - INFO - Data saved to data/received_data_20250226_194056.csv
+2025-02-26 19:40:56,739 - INFO - Raw sample saved to data/raw_sample_20250226_194056.json
+2025-02-26 19:40:56,739 - INFO - Waiting for connection...
+2025-02-26 19:40:57,489 - INFO - Got a connection from ('192.168.1.3', 55852)
+2025-02-26 19:40:57,489 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:57,490 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:57,490 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:57,490 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:57,491 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:57,491 - INFO - Connection closed. Received 443404 bytes in 55 chunks
+2025-02-26 19:40:57,491 - INFO - Data decoded successfully, length: 443404
+2025-02-26 19:40:57,491 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"172.253.122.94","proto":"udp","orig_bytes
+2025-02-26 19:40:57,491 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:57,504 - INFO - JSON parsed successfully. DataFrame shape: (905, 23)
+2025-02-26 19:40:57,509 - INFO - Data saved to data/received_data_20250226_194057.csv
+2025-02-26 19:40:57,509 - INFO - Raw sample saved to data/raw_sample_20250226_194057.json
+2025-02-26 19:40:57,509 - INFO - Waiting for connection...
+2025-02-26 19:40:58,242 - INFO - Got a connection from ('192.168.1.3', 55864)
+2025-02-26 19:40:58,243 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:58,243 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:58,243 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:58,243 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:58,244 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:58,244 - INFO - Connection closed. Received 427918 bytes in 53 chunks
+2025-02-26 19:40:58,244 - INFO - Data decoded successfully, length: 427918
+2025-02-26 19:40:58,244 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"104.98.115.154","proto":"udp","orig_bytes
+2025-02-26 19:40:58,244 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:58,257 - INFO - JSON parsed successfully. DataFrame shape: (870, 23)
+2025-02-26 19:40:58,261 - INFO - Data saved to data/received_data_20250226_194058.csv
+2025-02-26 19:40:58,262 - INFO - Raw sample saved to data/raw_sample_20250226_194058.json
+2025-02-26 19:40:58,262 - INFO - Waiting for connection...
+2025-02-26 19:40:58,964 - INFO - Got a connection from ('192.168.1.3', 55868)
+2025-02-26 19:40:58,964 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:58,964 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:58,964 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:58,965 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:58,965 - INFO - Connection closed. Received 365478 bytes in 45 chunks
+2025-02-26 19:40:58,965 - INFO - Data decoded successfully, length: 365478
+2025-02-26 19:40:58,965 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"172.253.122.94","proto":"udp","orig_bytes
+2025-02-26 19:40:58,965 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:58,977 - INFO - JSON parsed successfully. DataFrame shape: (743, 23)
+2025-02-26 19:40:58,981 - INFO - Data saved to data/received_data_20250226_194058.csv
+2025-02-26 19:40:58,981 - INFO - Raw sample saved to data/raw_sample_20250226_194058.json
+2025-02-26 19:40:58,981 - INFO - Waiting for connection...
+2025-02-26 19:40:59,723 - INFO - Got a connection from ('192.168.1.3', 40114)
+2025-02-26 19:40:59,724 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:40:59,724 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:40:59,724 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:40:59,724 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:40:59,725 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:40:59,725 - INFO - Connection closed. Received 447284 bytes in 55 chunks
+2025-02-26 19:40:59,725 - INFO - Data decoded successfully, length: 447284
+2025-02-26 19:40:59,725 - INFO - First 100 chars of data: [{"id.resp_p":53.0,"id.orig_h":"192.168.1.3","id.resp_h":"192.168.1.1","proto":"udp","orig_bytes":57
+2025-02-26 19:40:59,725 - INFO - Attempting to parse JSON data
+2025-02-26 19:40:59,738 - INFO - JSON parsed successfully. DataFrame shape: (908, 23)
+2025-02-26 19:40:59,743 - INFO - Data saved to data/received_data_20250226_194059.csv
+2025-02-26 19:40:59,743 - INFO - Raw sample saved to data/raw_sample_20250226_194059.json
+2025-02-26 19:40:59,744 - INFO - Waiting for connection...
+2025-02-26 19:41:00,479 - INFO - Got a connection from ('192.168.1.3', 40120)
+2025-02-26 19:41:00,480 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:41:00,480 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:41:00,480 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:41:00,480 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:41:00,481 - INFO - Received 50 chunks (406508 bytes) so far
+2025-02-26 19:41:00,481 - INFO - Connection closed. Received 406508 bytes in 50 chunks
+2025-02-26 19:41:00,481 - INFO - Data decoded successfully, length: 406508
+2025-02-26 19:41:00,481 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.250.31.95","proto":"udp","orig_bytes"
+2025-02-26 19:41:00,481 - INFO - Attempting to parse JSON data
+2025-02-26 19:41:00,493 - INFO - JSON parsed successfully. DataFrame shape: (826, 23)
+2025-02-26 19:41:00,498 - INFO - Data saved to data/received_data_20250226_194100.csv
+2025-02-26 19:41:00,498 - INFO - Raw sample saved to data/raw_sample_20250226_194100.json
+2025-02-26 19:41:00,498 - INFO - Waiting for connection...
+2025-02-26 19:41:01,249 - INFO - Got a connection from ('192.168.1.3', 40124)
+2025-02-26 19:41:01,249 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:41:01,250 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:41:01,250 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:41:01,250 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:41:01,251 - INFO - Received 50 chunks (408131 bytes) so far
+2025-02-26 19:41:01,251 - INFO - Connection closed. Received 408131 bytes in 50 chunks
+2025-02-26 19:41:01,251 - INFO - Data decoded successfully, length: 408131
+2025-02-26 19:41:01,251 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.103","proto":"udp","orig_bytes
+2025-02-26 19:41:01,251 - INFO - Attempting to parse JSON data
+2025-02-26 19:41:01,263 - INFO - JSON parsed successfully. DataFrame shape: (832, 23)
+2025-02-26 19:41:01,267 - INFO - Data saved to data/received_data_20250226_194101.csv
+2025-02-26 19:41:01,267 - INFO - Raw sample saved to data/raw_sample_20250226_194101.json
+2025-02-26 19:41:01,268 - INFO - Waiting for connection...
+2025-02-26 19:41:01,974 - INFO - Got a connection from ('192.168.1.3', 40140)
+2025-02-26 19:41:01,974 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:41:01,974 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:41:01,975 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:41:01,975 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:41:01,975 - INFO - Connection closed. Received 380935 bytes in 47 chunks
+2025-02-26 19:41:01,975 - INFO - Data decoded successfully, length: 380935
+2025-02-26 19:41:01,975 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.105","proto":"udp","orig_bytes
+2025-02-26 19:41:01,976 - INFO - Attempting to parse JSON data
+2025-02-26 19:41:01,987 - INFO - JSON parsed successfully. DataFrame shape: (775, 23)
+2025-02-26 19:41:01,992 - INFO - Data saved to data/received_data_20250226_194101.csv
+2025-02-26 19:41:01,992 - INFO - Raw sample saved to data/raw_sample_20250226_194101.json
+2025-02-26 19:41:01,992 - INFO - Waiting for connection...
+2025-02-26 19:41:02,748 - INFO - Got a connection from ('192.168.1.3', 40142)
+2025-02-26 19:41:02,748 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:41:02,749 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:41:02,749 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:41:02,749 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:41:02,750 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:41:02,750 - INFO - Connection closed. Received 440834 bytes in 54 chunks
+2025-02-26 19:41:02,750 - INFO - Data decoded successfully, length: 440834
+2025-02-26 19:41:02,750 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"216.239.38.181","proto":"udp","orig_bytes
+2025-02-26 19:41:02,750 - INFO - Attempting to parse JSON data
+2025-02-26 19:41:02,763 - INFO - JSON parsed successfully. DataFrame shape: (900, 23)
+2025-02-26 19:41:02,768 - INFO - Data saved to data/received_data_20250226_194102.csv
+2025-02-26 19:41:02,768 - INFO - Raw sample saved to data/raw_sample_20250226_194102.json
+2025-02-26 19:41:02,768 - INFO - Waiting for connection...
+2025-02-26 19:41:03,528 - INFO - Got a connection from ('192.168.1.3', 40148)
+2025-02-26 19:41:03,528 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 19:41:03,528 - INFO - Received 20 chunks (163705 bytes) so far
+2025-02-26 19:41:03,529 - INFO - Received 30 chunks (245625 bytes) so far
+2025-02-26 19:41:03,529 - INFO - Received 40 chunks (327545 bytes) so far
+2025-02-26 19:41:03,529 - INFO - Received 50 chunks (409465 bytes) so far
+2025-02-26 19:41:03,529 - INFO - Connection closed. Received 428295 bytes in 53 chunks
+2025-02-26 19:41:03,529 - INFO - Data decoded successfully, length: 428295
+2025-02-26 19:41:03,530 - INFO - First 100 chars of data: [{"id.resp_p":443.0,"id.orig_h":"192.168.1.3","id.resp_h":"142.251.16.103","proto":"udp","orig_bytes
+2025-02-26 19:41:03,530 - INFO - Attempting to parse JSON data
+2025-02-26 19:41:03,543 - INFO - JSON parsed successfully. DataFrame shape: (872, 23)
+2025-02-26 19:41:03,548 - INFO - Data saved to data/received_data_20250226_194103.csv
+2025-02-26 19:41:03,548 - INFO - Raw sample saved to data/raw_sample_20250226_194103.json
+2025-02-26 19:41:03,548 - INFO - Waiting for connection...
