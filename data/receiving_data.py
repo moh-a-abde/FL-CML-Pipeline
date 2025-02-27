@@ -15,7 +15,7 @@ logging.basicConfig(
     ]
 )
 
-def start_server(host='localhost', port=9000):
+def start_server(host='192.168.1.3', port=9000):
     # Create a socket object
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     

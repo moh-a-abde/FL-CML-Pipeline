@@ -157,7 +157,7 @@ def process_data():
     try:
         logging.info("Starting data processing")
         topic = "zeek"
-        bootstrap_servers = ["192.168.1.4:9092"]
+        bootstrap_servers = ["192.168.1.3:9000"]
         df = read_kafka_topic(topic, bootstrap_servers)
         
         if df is None:
