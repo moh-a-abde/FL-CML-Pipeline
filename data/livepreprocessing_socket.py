@@ -51,9 +51,7 @@ def read_kafka_topic(topic, bootstrap_servers):
             if message_count % 100 == 0:
                 logging.info(f"Received {message_count} messages so far")
             messages.append(message.value)
-            if len(messages) >= 10000:  # You can adjust the number of messages to consume
-                break
-        
+            
         if not messages:
             logging.warning("No messages received from Kafka topic")
             return None
