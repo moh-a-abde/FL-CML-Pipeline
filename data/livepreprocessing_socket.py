@@ -7,14 +7,7 @@ import sys
 from kafka import KafkaConsumer
 from json import loads
 from sklearn.utils import shuffle
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report
 from datetime import datetime
-import json
 import os
 
 # Create received directory if it doesn't exist
@@ -35,7 +28,7 @@ warnings.filterwarnings("ignore")
 
 def read_kafka_topic(topic, bootstrap_servers):
     try:
-        logging.info(f"Attempting to connect to Kafka topic '{topic}' on {bootstrap_servers}")
+        logging.info("Attempting to connect to Kafka topic '%s' on %s", topic, bootstrap_servers)
         consumer = KafkaConsumer(
             topic,
             bootstrap_servers=bootstrap_servers,
@@ -49,7 +42,7 @@ def read_kafka_topic(topic, bootstrap_servers):
         for message in consumer:
             message_count += 1
             if message_count % 100 == 0:
-                logging.info(f"Received {message_count} messages so far")
+                logging.info("Received %d messages so far", message_count)
             messages.append(message.value)
             if len(messages) >= 992200:  # You can adjust the number of messages to consume
                 break
@@ -58,12 +51,12 @@ def read_kafka_topic(topic, bootstrap_servers):
             logging.warning("No messages received from Kafka topic")
             return None
             
-        logging.info(f"Total messages consumed: {len(messages)}")
+        logging.info("Total messages consumed: %d", len(messages))
         df = pd.DataFrame(messages)
         logging.info("Messages converted to DataFrame successfully!")
         return df
-    except Exception as e:
-        logging.error(f"An error occurred while reading from Kafka: {e}", exc_info=True)
+    except Exception as exc:
+        logging.error("An error occurred while reading from Kafka: %s", exc, exc_info=True)
         return None
 
 def clean(dfLocal):
@@ -72,12 +65,13 @@ def clean(dfLocal):
             logging.warning("DataFrame is empty, nothing to clean")
             return dfLocal
             
-        logging.info(f"Initial DataFrame shape: {dfLocal.shape}")
-        logging.info(f"Initial columns: {dfLocal.columns.tolist()}")
+        logging.info("Initial DataFrame shape: %s", dfLocal.shape)
+        logging.info("Initial columns: %s", dfLocal.columns.tolist())
         
+        # Drop non-essential columns
         drop_columns = [
             "peer", "metric_type", "prefix", "name", "labels",
-            "label_values", "value", "mem", "pkts_proc", "events_proc", "events_queued",
+            "mem", "pkts_proc", "events_proc", "events_queued",
             "bytes_recv", "pkts_dropped", "pkts_link", "pkts_lag", "active_tcp_conns",
             "active_udp_conns", "active_icmp_conns", "tcp_conns", "udp_conns", "icmp_conns",
             "timers", "active_timers", "files", "active_files", "dns_requests", "active_dns_requests",
@@ -86,29 +80,20 @@ def clean(dfLocal):
             "unparsed_version", "port_num", "port_proto", "ts_delta", "gaps", "ack", "percent_lost",
             "action", "size", "times.modified", "times.accessed", "times.created", "times.changed",
             "mode", "stratum", "poll", "precision", "root_delay", "root_disp", "ref_id", "ref_time",
-            "org_time", "rec_time", "xmt_time", "num_exts", "notice", "source", "uids", "mac", "requested_addr",
-            "msg_types", "host_name", "fingerprint", "certificate.version", "certificate.serial", "certificate.subject",
-            "certificate.issuer", "certificate.not_valid_before", "certificate.not_valid_after", "certificate.key_alg",
-            "certificate.sig_alg", "certificate.key_type", "certificate.key_length", "certificate.exponent",
-            "san.dns", "basic_constraints.ca", "host_cert", "client_cert", "fuid", "depth", "analyzers", "mime_type",
-            "acks", "is_orig", "seen_bytes", "total_bytes", "missing_bytes", "overflow_bytes", "timedout", "md5", "sha1",
-            "extracted", "extracted_cutoff", "resp_fuids", "resp_mime_types", "cert_chain_fps", "client_cert_chain_fps",
-            "subject", "issuer", "sni_matches_cert", "validation_status", "client_addr", "version.minor2", "host_p",
-            "note", "msg", "sub", "src", "actions", "email_dest", "suppress_for", "direction", "level",
-            "message", "location", "server_addr", "domain", "assigned_addr", "lease_time"
+            "org_time", "rec_time", "xmt_time", "num_exts", "notice", "source", "uids", "mac"
         ]
         
         # Check which columns actually exist before dropping
         existing_columns = [col for col in drop_columns if col in dfLocal.columns]
-        logging.info(f"Dropping {len(existing_columns)} columns out of {len(drop_columns)} specified")
+        logging.info("Dropping %d columns out of %d specified", len(existing_columns), len(drop_columns))
         
         dfLocal.drop(existing_columns, axis=1, inplace=True, errors='ignore')
         dfLocal = shuffle(dfLocal)
         
-        logging.info(f"DataFrame shape after cleaning: {dfLocal.shape}")
+        logging.info("DataFrame shape after cleaning: %s", dfLocal.shape)
         return dfLocal
-    except Exception as e:
-        logging.error(f"Error in clean function: {e}", exc_info=True)
+    except Exception as exc:
+        logging.error("Error in clean function: %s", exc, exc_info=True)
         return dfLocal
 
 def summary(dfLocal):
@@ -119,30 +104,12 @@ def summary(dfLocal):
         logging.info("DataFrame shape: %s", str(dfLocal.shape))
         logging.info("DataFrame numeric summary:\n%s", dfLocal.describe().to_string())
         logging.info("DataFrame non-numeric summary:\n%s", dfLocal.describe(exclude=np.number).to_string())
-    except Exception as e:
-        logging.error(f"Error in summary function: {e}", exc_info=True)
-
-port_label_mapping = {
-    53: 'DNS',
-    22: 'SSH',
-    80: 'HTTP',
-    443: 'HTTPS',
-    21: 'FTP'
-}
-
-def get_label(port):
-    try:
-        # Convert float to int if needed
-        if isinstance(port, float):
-            port = int(port)
-        return port_label_mapping.get(port, None)
-    except Exception as e:
-        logging.error(f"Error in get_label function with port {port} (type: {type(port)}): {e}", exc_info=True)
-        return None
+    except Exception as exc:
+        logging.error("Error in summary function: %s", exc, exc_info=True)
 
 def send_data_to_port(data, port=9000):
     try:
-        logging.info(f"Attempting to send data to 192.168.1.3:{port}")
+        logging.info("Attempting to send data to 192.168.1.3:%d", port)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(5)  # 5 second timeout
         sock.connect(('192.168.1.3', port))
@@ -151,13 +118,13 @@ def send_data_to_port(data, port=9000):
         logging.info("Data sent successfully!")
         return True
     except ConnectionRefusedError:
-        logging.error(f"Connection refused to 192.168.1.3:{port}. Is the receiving server running?")
+        logging.error("Connection refused to 192.168.1.3:%d. Is the receiving server running?", port)
         return False
     except socket.timeout:
-        logging.error(f"Connection to 192.168.1.3:{port} timed out")
+        logging.error("Connection to 192.168.1.3:%d timed out", port)
         return False
-    except Exception as e:
-        logging.error(f"Failed to send data: {e}", exc_info=True)
+    except Exception as exc:
+        logging.error("Failed to send data: %s", exc, exc_info=True)
         return False
 
 def process_data():
@@ -169,7 +136,7 @@ def process_data():
         # Generate a timestamp for this processing run
         run_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         output_file_path = f'received/network_traffic_{run_timestamp}.csv'
-        logging.info(f"This run will save data to: {output_file_path}")
+        logging.info("This run will save data to: %s", output_file_path)
         
         # Create a list to collect all processed data
         all_processed_data = []
@@ -184,59 +151,24 @@ def process_data():
             logging.warning("Received empty DataFrame from Kafka, skipping processing")
             return False
         
-        logging.info(f"Initial DataFrame columns: {df.columns.tolist()}")
+        logging.info("Initial DataFrame columns: %s", df.columns.tolist())
         df = clean(df)
         summary(df)
         
-        # Check if 'id.resp_p' exists
-        if 'id.resp_p' not in df.columns:
-            logging.error("Column 'id.resp_p' not found in DataFrame")
-            return False
-            
-        # Add logging for label creation
-        logging.info(f"Unique values in 'id.resp_p' before labeling: {df['id.resp_p'].unique()}")
-        logging.info(f"Data types in 'id.resp_p': {df['id.resp_p'].apply(type).unique()}")
+        # Make a copy of df to avoid modifying the original
+        data = df.copy()
         
-        # Apply labels more safely
-        df['label'] = df['id.resp_p'].apply(
-            lambda x: get_label(x) if pd.notna(x) else None
-        )
-        
-        logging.info(f"Label distribution: {df['label'].value_counts().to_dict()}")
-        
-        # Filter rows with valid labels
-        data = df.dropna(subset=['label'])
-        
-        if data.empty:
-            logging.warning("No data left after filtering for valid labels")
-            # Instead of returning False, let's use all data and assign a default label
-            logging.info("Using all data with a default 'UNKNOWN' label for ports not in mapping")
-            df['label'] = df['id.resp_p'].apply(
-                lambda x: get_label(x) if pd.notna(x) and get_label(x) is not None else 'UNKNOWN'
-            )
-            data = df
-            logging.info(f"New label distribution: {data['label'].value_counts().to_dict()}")
-        
-        logging.info(f"DataFrame shape after label filtering: {data.shape}")
-        
+        # Drop additional non-essential columns
         drop_columns = [
-            "version", "auth_attempts", "curve", "server_name", "resumed", "established", "ssl_history",
-            "addl", "user_agent", "certificate.curve", "referrer", "host", "server", "status_msg",
+            "version", "auth_attempts", "curve", "server_name", "resumed", "established",
+            "addl", "user_agent", "certificate.curve", "referrer", "host", "server",
             "cipher", "tags", "response_body_len", "status_code", "pkt_lag", "request_body_len",
-            "uri", "service", "client", "mac_alg", "method", "trans_depth", "cipher_alg", "host_key",
-            'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC',
-            'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'compression_alg', 'kex_alg', 'host_key_alg',
-            'auth_success', "orig_fuids", "orig_mime_types", "origin", "cause", "analyzer_kind", "analyzer_name",
-            "failure_reason", "analyzer", "next_protocol", "id", "hashAlgorithm", "issuerNameHash",
-            "issuerKeyHash", "serialNumber", "certStatus", "thisUpdate", "nextUpdate", "version.minor3",
-            "last_alert", "proxied", "request_type", "till", "forwardable", "renewable", "cookie",
-            "security_protocol", "cert_count", "dst", "p", "tunnel_type", "status", "request.host",
-            "request_p", "bound.host", "bound_p", "client_scid", "failure_data", "san.ip", "resp_filenames"
+            "uri", "service", "client", "mac_alg", "method", "trans_depth", "cipher_alg", "host_key"
         ]
         
         # Check which columns actually exist before dropping
         existing_columns = [col for col in drop_columns if col in data.columns]
-        logging.info(f"Dropping {len(existing_columns)} columns out of {len(drop_columns)} specified in second drop")
+        logging.info("Dropping %d columns out of %d specified in second drop", len(existing_columns), len(drop_columns))
         
         data = data.drop(columns=existing_columns, errors='ignore')
         data.fillna(method='ffill', inplace=True)
@@ -246,36 +178,37 @@ def process_data():
             logging.warning("No data left after dropping NA values")
             return False
             
-        logging.info(f"DataFrame shape after NA dropping: {data.shape}")
+        logging.info("DataFrame shape after NA dropping: %s", data.shape)
         
         # Add processed data to our collection
         all_processed_data.append(data)
         
         # Combine all processed data
-        if all_processed_data:
-            final_data = pd.concat(all_processed_data, ignore_index=True)
-            logging.info(f"Total processed data shape: {final_data.shape}")
-            
-            # Save all processed data to a single file for this run
-            final_data.to_csv(output_file_path, index=False)
-            logging.info(f"Saved all processed data to {output_file_path}")
-            
-            # Send the final cleaned data to port 9000
-            data_json = final_data.to_json(orient='records')
-            logging.info(f"JSON data size: {len(data_json)} bytes")
-            success = send_data_to_port(data_json)
-            
-            if success:
-                logging.info("Data processing and transmission completed successfully")
-            else:
-                logging.warning("Data processing completed but transmission failed")
-                
-            return success
-        else:
+        if not all_processed_data:
             logging.warning("No data was processed")
             return False
-    except Exception as e:
-        logging.error(f"Error in process_data function: {e}", exc_info=True)
+            
+        final_data = pd.concat(all_processed_data, ignore_index=True)
+        logging.info("Total processed data shape: %s", final_data.shape)
+        
+        # Save all processed data to a single file for this run
+        final_data.to_csv(output_file_path, index=False)
+        logging.info("Saved all processed data to %s", output_file_path)
+        
+        # Send the final cleaned data to port 9000
+        data_json = final_data.to_json(orient='records')
+        logging.info("JSON data size: %d bytes", len(data_json))
+        send_result = send_data_to_port(data_json)
+        
+        if send_result:
+            logging.info("Data processing and transmission completed successfully")
+        else:
+            logging.warning("Data processing completed but transmission failed")
+            
+        return send_result
+        
+    except Exception as exc:
+        logging.error("Error in process_data function: %s", exc, exc_info=True)
         return False
 
 if __name__ == "__main__":
@@ -291,5 +224,5 @@ if __name__ == "__main__":
             
     except KeyboardInterrupt:
         logging.info("Process interrupted by user.")
-    except Exception as e:
-        logging.error(f"Unhandled exception in main: {e}", exc_info=True)
+    except Exception as exc:
+        logging.error("Unhandled exception in main: %s", exc, exc_info=True)
