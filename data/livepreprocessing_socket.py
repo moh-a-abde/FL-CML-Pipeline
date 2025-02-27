@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import warnings
 import socket
+import logging
+import sys
 from kafka import KafkaConsumer
 from json import loads
 from sklearn.utils import shuffle
@@ -14,62 +16,107 @@ from sklearn.metrics import classification_report
 from datetime import datetime
 import json
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("livepreprocessing.log"),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
 # Ignore warnings
 warnings.filterwarnings("ignore")
 
 def read_kafka_topic(topic, bootstrap_servers):
     try:
+        logging.info(f"Attempting to connect to Kafka topic '{topic}' on {bootstrap_servers}")
         consumer = KafkaConsumer(
             topic,
             bootstrap_servers=bootstrap_servers,
-            value_deserializer=lambda x: loads(x.decode('utf-8'))
+            value_deserializer=lambda x: loads(x.decode('utf-8')),
+            auto_offset_reset='earliest',
+            consumer_timeout_ms=30000  # 30 seconds timeout
         )
         messages = []
+        logging.info("Connected to Kafka. Waiting for messages...")
+        message_count = 0
         for message in consumer:
+            message_count += 1
+            if message_count % 100 == 0:
+                logging.info(f"Received {message_count} messages so far")
             messages.append(message.value)
             if len(messages) >= 10000:  # You can adjust the number of messages to consume
                 break
+        
+        if not messages:
+            logging.warning("No messages received from Kafka topic")
+            return None
+            
+        logging.info(f"Total messages consumed: {len(messages)}")
         df = pd.DataFrame(messages)
-        print("Messages consumed successfully!")
+        logging.info("Messages converted to DataFrame successfully!")
         return df
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        logging.error(f"An error occurred while reading from Kafka: {e}", exc_info=True)
         return None
 
 def clean(dfLocal):
-    drop_columns = [
-        "peer", "metric_type", "prefix", "name", "labels",
-        "label_values", "value", "mem", "pkts_proc", "events_proc", "events_queued",
-        "bytes_recv", "pkts_dropped", "pkts_link", "pkts_lag", "active_tcp_conns",
-        "active_udp_conns", "active_icmp_conns", "tcp_conns", "udp_conns", "icmp_conns",
-        "timers", "active_timers", "files", "active_files", "dns_requests", "active_dns_requests",
-        "reassem_tcp_size", "reassem_file_size", "reassem_frag_size", "reassem_unknown_size",
-        "unit", "trans_id", "software_type", "version.major", "version.minor", "version.addl",
-        "unparsed_version", "port_num", "port_proto", "ts_delta", "gaps", "ack", "percent_lost",
-        "action", "size", "times.modified", "times.accessed", "times.created", "times.changed",
-        "mode", "stratum", "poll", "precision", "root_delay", "root_disp", "ref_id", "ref_time",
-        "org_time", "rec_time", "xmt_time", "num_exts", "notice", "source", "uids", "mac", "requested_addr",
-        "msg_types", "host_name", "fingerprint", "certificate.version", "certificate.serial", "certificate.subject",
-        "certificate.issuer", "certificate.not_valid_before", "certificate.not_valid_after", "certificate.key_alg",
-        "certificate.sig_alg", "certificate.key_type", "certificate.key_length", "certificate.exponent",
-        "san.dns", "basic_constraints.ca", "host_cert", "client_cert", "fuid", "depth", "analyzers", "mime_type",
-        "acks", "is_orig", "seen_bytes", "total_bytes", "missing_bytes", "overflow_bytes", "timedout", "md5", "sha1",
-        "extracted", "extracted_cutoff", "resp_fuids", "resp_mime_types", "cert_chain_fps", "client_cert_chain_fps",
-        "subject", "issuer", "sni_matches_cert", "validation_status", "client_addr", "version.minor2", "host_p",
-        "note", "msg", "sub", "src", "actions", "email_dest", "suppress_for", "direction", "level",
-        "message", "location", "server_addr", "domain", "assigned_addr", "lease_time"
-    ]
-    dfLocal.drop(drop_columns, axis=1, inplace=True, errors='ignore')
-    dfLocal = shuffle(dfLocal)
-    return dfLocal
+    try:
+        if dfLocal.empty:
+            logging.warning("DataFrame is empty, nothing to clean")
+            return dfLocal
+            
+        logging.info(f"Initial DataFrame shape: {dfLocal.shape}")
+        logging.info(f"Initial columns: {dfLocal.columns.tolist()}")
+        
+        drop_columns = [
+            "peer", "metric_type", "prefix", "name", "labels",
+            "label_values", "value", "mem", "pkts_proc", "events_proc", "events_queued",
+            "bytes_recv", "pkts_dropped", "pkts_link", "pkts_lag", "active_tcp_conns",
+            "active_udp_conns", "active_icmp_conns", "tcp_conns", "udp_conns", "icmp_conns",
+            "timers", "active_timers", "files", "active_files", "dns_requests", "active_dns_requests",
+            "reassem_tcp_size", "reassem_file_size", "reassem_frag_size", "reassem_unknown_size",
+            "unit", "trans_id", "software_type", "version.major", "version.minor", "version.addl",
+            "unparsed_version", "port_num", "port_proto", "ts_delta", "gaps", "ack", "percent_lost",
+            "action", "size", "times.modified", "times.accessed", "times.created", "times.changed",
+            "mode", "stratum", "poll", "precision", "root_delay", "root_disp", "ref_id", "ref_time",
+            "org_time", "rec_time", "xmt_time", "num_exts", "notice", "source", "uids", "mac", "requested_addr",
+            "msg_types", "host_name", "fingerprint", "certificate.version", "certificate.serial", "certificate.subject",
+            "certificate.issuer", "certificate.not_valid_before", "certificate.not_valid_after", "certificate.key_alg",
+            "certificate.sig_alg", "certificate.key_type", "certificate.key_length", "certificate.exponent",
+            "san.dns", "basic_constraints.ca", "host_cert", "client_cert", "fuid", "depth", "analyzers", "mime_type",
+            "acks", "is_orig", "seen_bytes", "total_bytes", "missing_bytes", "overflow_bytes", "timedout", "md5", "sha1",
+            "extracted", "extracted_cutoff", "resp_fuids", "resp_mime_types", "cert_chain_fps", "client_cert_chain_fps",
+            "subject", "issuer", "sni_matches_cert", "validation_status", "client_addr", "version.minor2", "host_p",
+            "note", "msg", "sub", "src", "actions", "email_dest", "suppress_for", "direction", "level",
+            "message", "location", "server_addr", "domain", "assigned_addr", "lease_time"
+        ]
+        
+        # Check which columns actually exist before dropping
+        existing_columns = [col for col in drop_columns if col in dfLocal.columns]
+        logging.info(f"Dropping {len(existing_columns)} columns out of {len(drop_columns)} specified")
+        
+        dfLocal.drop(existing_columns, axis=1, inplace=True, errors='ignore')
+        dfLocal = shuffle(dfLocal)
+        
+        logging.info(f"DataFrame shape after cleaning: {dfLocal.shape}")
+        return dfLocal
+    except Exception as e:
+        logging.error(f"Error in clean function: {e}", exc_info=True)
+        return dfLocal
 
 def summary(dfLocal):
-    print(dfLocal.columns)
-    print("number of columns", len(dfLocal.columns))
-    print(dfLocal.head())
-    print(dfLocal.shape)
-    print(dfLocal.describe())
-    print(dfLocal.describe(exclude=np.number))
+    try:
+        logging.info("DataFrame columns: %s", dfLocal.columns.tolist())
+        logging.info("Number of columns: %d", len(dfLocal.columns))
+        logging.info("DataFrame head:\n%s", dfLocal.head().to_string())
+        logging.info("DataFrame shape: %s", str(dfLocal.shape))
+        logging.info("DataFrame numeric summary:\n%s", dfLocal.describe().to_string())
+        logging.info("DataFrame non-numeric summary:\n%s", dfLocal.describe(exclude=np.number).to_string())
+    except Exception as e:
+        logging.error(f"Error in summary function: {e}", exc_info=True)
 
 port_label_mapping = {
     53: 'DNS',
@@ -80,31 +127,74 @@ port_label_mapping = {
 }
 
 def get_label(port):
-    return port_label_mapping.get(port, None)
+    try:
+        return port_label_mapping.get(port, None)
+    except Exception as e:
+        logging.error(f"Error in get_label function with port {port}: {e}", exc_info=True)
+        return None
 
 def send_data_to_port(data, port=9000):
     try:
+        logging.info(f"Attempting to send data to localhost:{port}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)  # 5 second timeout
         sock.connect(('localhost', port))
         sock.sendall(data.encode('utf-8'))
         sock.close()
-        print("Data sent successfully!")
+        logging.info("Data sent successfully!")
+        return True
+    except ConnectionRefusedError:
+        logging.error(f"Connection refused to localhost:{port}. Is the receiving server running?")
+        return False
+    except socket.timeout:
+        logging.error(f"Connection to localhost:{port} timed out")
+        return False
     except Exception as e:
-        print(f"Failed to send data: {e}")
+        logging.error(f"Failed to send data: {e}", exc_info=True)
+        return False
 
 def process_data():
-    topic = "zeek"
-    bootstrap_servers = ["192.168.1.4:9092"]
-    df = read_kafka_topic(topic, bootstrap_servers)
-    
-    if df is not None:
-        print(df.columns)
+    try:
+        logging.info("Starting data processing")
+        topic = "zeek"
+        bootstrap_servers = ["192.168.1.4:9092"]
+        df = read_kafka_topic(topic, bootstrap_servers)
+        
+        if df is None:
+            logging.warning("No data received from Kafka, skipping processing")
+            return False
+            
+        if df.empty:
+            logging.warning("Received empty DataFrame from Kafka, skipping processing")
+            return False
+        
+        logging.info(f"Initial DataFrame columns: {df.columns.tolist()}")
         df = clean(df)
         summary(df)
         
-        df['label'] = df['id.resp_p'].apply(lambda x: get_label(int(x)) if not pd.isna(x) else None)
+        # Check if 'id.resp_p' exists
+        if 'id.resp_p' not in df.columns:
+            logging.error("Column 'id.resp_p' not found in DataFrame")
+            return False
+            
+        # Add logging for label creation
+        logging.info(f"Unique values in 'id.resp_p' before labeling: {df['id.resp_p'].unique()}")
         
+        # Apply labels more safely
+        df['label'] = df['id.resp_p'].apply(
+            lambda x: get_label(int(x)) if pd.notna(x) and str(x).isdigit() else None
+        )
+        
+        logging.info(f"Label distribution: {df['label'].value_counts().to_dict()}")
+        
+        # Filter rows with valid labels
         data = df.dropna(subset=['label'])
+        
+        if data.empty:
+            logging.warning("No data left after filtering for valid labels")
+            return False
+            
+        logging.info(f"DataFrame shape after label filtering: {data.shape}")
         
         drop_columns = [
             "version", "auth_attempts", "curve", "server_name", "resumed", "established", "ssl_history",
@@ -121,13 +211,41 @@ def process_data():
             "request_p", "bound.host", "bound_p", "client_scid", "failure_data", "san.ip", "resp_filenames"
         ]
         
-        data = data.drop(columns=drop_columns, errors='ignore')
+        # Check which columns actually exist before dropping
+        existing_columns = [col for col in drop_columns if col in data.columns]
+        logging.info(f"Dropping {len(existing_columns)} columns out of {len(drop_columns)} specified in second drop")
+        
+        data = data.drop(columns=existing_columns, errors='ignore')
         data.fillna(method='ffill', inplace=True)
         data = data.dropna()
         
+        if data.empty:
+            logging.warning("No data left after dropping NA values")
+            return False
+            
+        logging.info(f"DataFrame shape after NA dropping: {data.shape}")
+        
+        # Check if required features exist
         categorical_features = ['id.orig_h', 'id.resp_h', 'proto', 'history', 'uid', 'conn_state']
         numerical_features = ['id.orig_p', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'missed_bytes', 'local_resp',
                               'local_orig', 'resp_bytes', 'orig_bytes', 'duration', 'id.resp_p']
+        
+        missing_cat = [col for col in categorical_features if col not in data.columns]
+        missing_num = [col for col in numerical_features if col not in data.columns]
+        
+        if missing_cat or missing_num:
+            logging.error(f"Missing categorical features: {missing_cat}")
+            logging.error(f"Missing numerical features: {missing_num}")
+            # Use only available features
+            categorical_features = [col for col in categorical_features if col in data.columns]
+            numerical_features = [col for col in numerical_features if col in data.columns]
+            
+        if not categorical_features or not numerical_features:
+            logging.error("No features available for model training")
+            return False
+            
+        logging.info(f"Using categorical features: {categorical_features}")
+        logging.info(f"Using numerical features: {numerical_features}")
         
         preprocessor = ColumnTransformer(
             transformers=[
@@ -141,23 +259,59 @@ def process_data():
             ('classifier', RandomForestClassifier())
         ])
         
-        X = data.drop(columns=['label', 'ts'])
+        # Check if 'ts' exists
+        drop_cols_for_X = ['label']
+        if 'ts' in data.columns:
+            drop_cols_for_X.append('ts')
+            
+        X = data.drop(columns=drop_cols_for_X)
         y = data['label']
+        
+        logging.info(f"X shape: {X.shape}, y shape: {y.shape}")
+        logging.info(f"Label distribution in training data: {y.value_counts().to_dict()}")
+        
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         
+        logging.info("Training model...")
         model.fit(X_train, y_train)
         
+        logging.info("Predicting on test data...")
         y_pred = model.predict(X_test).astype(str)
         
-        print(classification_report(y_test, y_pred))
+        report = classification_report(y_test, y_pred, output_dict=True)
+        logging.info(f"Classification report:\n{json.dumps(report, indent=2)}")
+
+        # Save processed data locally as backup
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        local_file_path = f'processed_data_{timestamp}.csv'
+        data.to_csv(local_file_path, index=False)
+        logging.info(f"Saved processed data locally to {local_file_path}")
 
         # Send the final cleaned data to port 9000
         data_json = data.to_json(orient='records')
-        send_data_to_port(data_json)
+        logging.info(f"JSON data size: {len(data_json)} bytes")
+        success = send_data_to_port(data_json)
+        
+        if success:
+            logging.info("Data processing and transmission completed successfully")
+        else:
+            logging.warning("Data processing completed but transmission failed")
+            
+        return success
+    except Exception as e:
+        logging.error(f"Error in process_data function: {e}", exc_info=True)
+        return False
 
 if __name__ == "__main__":
     try:
+        logging.info("Starting livepreprocessing_socket.py")
         while True:
-            process_data()
+            success = process_data()
+            if not success:
+                logging.info("Waiting 30 seconds before retrying...")
+                import time
+                time.sleep(30)
     except KeyboardInterrupt:
-        print("Process interrupted by user.")
+        logging.info("Process interrupted by user.")
+    except Exception as e:
+        logging.error(f"Unhandled exception in main loop: {e}", exc_info=True)
