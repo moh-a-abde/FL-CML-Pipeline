@@ -15,13 +15,14 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
 from datetime import datetime
 import json
+import os
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("livepreprocessing.log"),
+        logging.FileHandler("received/livepreprocessing.log"),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -176,6 +177,15 @@ def process_data():
         logging.info("Starting data processing")
         topic = "zeek"
         bootstrap_servers = ["192.168.1.3:9092"]
+        
+        # Generate a timestamp for this processing run
+        run_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_file_path = f'received/network_traffic_{run_timestamp}.csv'
+        logging.info(f"This run will save data to: {output_file_path}")
+        
+        # Create a list to collect all processed data
+        all_processed_data = []
+        
         df = read_kafka_topic(topic, bootstrap_servers)
         
         if df is None:
@@ -306,23 +316,33 @@ def process_data():
         report = classification_report(y_test, y_pred, output_dict=True)
         logging.info(f"Classification report:\n{json.dumps(report, indent=2)}")
 
-        # Save processed data locally as backup
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        local_file_path = f'processed_data_{timestamp}.csv'
-        data.to_csv(local_file_path, index=False)
-        logging.info(f"Saved processed data locally to {local_file_path}")
-
-        # Send the final cleaned data to port 9000
-        data_json = data.to_json(orient='records')
-        logging.info(f"JSON data size: {len(data_json)} bytes")
-        success = send_data_to_port(data_json)
+        # Add processed data to our collection
+        all_processed_data.append(data)
         
-        if success:
-            logging.info("Data processing and transmission completed successfully")
-        else:
-            logging.warning("Data processing completed but transmission failed")
+        # Combine all processed data
+        if all_processed_data:
+            final_data = pd.concat(all_processed_data, ignore_index=True)
+            logging.info(f"Total processed data shape: {final_data.shape}")
             
-        return success
+            # Save all processed data to a single file for this run
+            os.makedirs('received', exist_ok=True)
+            final_data.to_csv(output_file_path, index=False)
+            logging.info(f"Saved all processed data to {output_file_path}")
+            
+            # Send the final cleaned data to port 9000
+            data_json = final_data.to_json(orient='records')
+            logging.info(f"JSON data size: {len(data_json)} bytes")
+            success = send_data_to_port(data_json)
+            
+            if success:
+                logging.info("Data processing and transmission completed successfully")
+            else:
+                logging.warning("Data processing completed but transmission failed")
+                
+            return success
+        else:
+            logging.warning("No data was processed")
+            return False
     except Exception as e:
         logging.error(f"Error in process_data function: {e}", exc_info=True)
         return False
@@ -331,19 +351,23 @@ if __name__ == "__main__":
     try:
         logging.info("Starting livepreprocessing_socket.py")
         
+        # Make sure the received directory exists
+        os.makedirs('received', exist_ok=True)
+        
         # First, test socket communication
         if send_test_message():
             logging.info("Socket communication test successful, proceeding with data processing")
         else:
             logging.warning("Socket communication test failed, but proceeding anyway")
         
-        while True:
-            success = process_data()
-            if not success:
-                logging.info("Waiting 30 seconds before retrying...")
-                import time
-                time.sleep(30)
+        # Run process_data only once instead of in a loop
+        success = process_data()
+        if success:
+            logging.info("Data processing completed successfully. Exiting.")
+        else:
+            logging.error("Data processing failed. Exiting.")
+            
     except KeyboardInterrupt:
         logging.info("Process interrupted by user.")
     except Exception as e:
-        logging.error(f"Unhandled exception in main loop: {e}", exc_info=True)
+        logging.error(f"Unhandled exception in main: {e}", exc_info=True)

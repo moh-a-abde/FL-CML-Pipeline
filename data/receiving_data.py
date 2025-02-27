@@ -12,7 +12,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("receiving_data.log"),
+        logging.FileHandler("received/receiving_data.log"),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -131,7 +131,10 @@ def start_server(host='192.168.1.3', port=9000):
 
 if __name__ == "__main__":
     try:
-        logging.info("Starting receiving_data.py")
+        # Create received directory if it doesn't exist
+        os.makedirs('received', exist_ok=True)
+        
+        logging.info("Starting receiving server...")
         start_server()
     except KeyboardInterrupt:
         logging.info("Process interrupted by user")
