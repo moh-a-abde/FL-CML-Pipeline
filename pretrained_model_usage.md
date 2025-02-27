@@ -65,28 +65,6 @@ python use_saved_model.py --model_path outputs/2023-05-01/12-34-56/final_model.j
 
 When using the `--has_labels` flag, the script will also calculate and display evaluation metrics such as accuracy, precision, recall, and F1 score.
 
-## Using the Model in Your Own Code
-
-If you want to integrate the model into your own application, you can use the utility functions provided in `server_utils.py`:
-
-```python
-from server_utils import load_saved_model, predict_with_saved_model
-import xgboost as xgb
-
-# Load the model
-model_path = "outputs/2023-05-01/12-34-56/final_model.json"
-model = load_saved_model(model_path)
-
-# Prepare your data
-data = xgb.DMatrix(your_data)
-
-# Make predictions
-predictions = model.predict(data)
-
-# Convert to binary labels if needed
-binary_predictions = predictions.astype(int)
-```
-
 ## Troubleshooting
 
 ### Model File Not Found
