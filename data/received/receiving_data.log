@@ -72,3 +72,49 @@
 2025-02-26 20:21:18,872 - INFO - Waiting for connection...
 2025-02-26 20:21:57,087 - INFO - Server stopped by user
 2025-02-26 20:21:57,087 - INFO - Server socket closed
+2025-02-26 20:25:40,452 - INFO - Starting receiving server...
+2025-02-26 20:25:40,452 - INFO - Server listening on 192.168.1.3:9000
+2025-02-26 20:25:40,452 - INFO - Waiting for connection...
+2025-02-26 20:26:24,820 - INFO - Got a connection from ('192.168.1.3', 53054)
+2025-02-26 20:26:24,820 - INFO - Received 10 chunks (81920 bytes) so far
+2025-02-26 20:26:24,820 - INFO - Received 20 chunks (163840 bytes) so far
+2025-02-26 20:26:24,821 - INFO - Received 30 chunks (245760 bytes) so far
+2025-02-26 20:26:24,821 - INFO - Received 40 chunks (327680 bytes) so far
+2025-02-26 20:26:24,821 - INFO - Received 50 chunks (409600 bytes) so far
+2025-02-26 20:26:24,822 - INFO - Received 60 chunks (491520 bytes) so far
+2025-02-26 20:26:24,822 - INFO - Received 70 chunks (573440 bytes) so far
+2025-02-26 20:26:24,825 - INFO - Received 80 chunks (655360 bytes) so far
+2025-02-26 20:26:24,828 - INFO - Received 90 chunks (737280 bytes) so far
+2025-02-26 20:26:24,831 - INFO - Received 100 chunks (819200 bytes) so far
+2025-02-26 20:26:24,835 - INFO - Received 110 chunks (901120 bytes) so far
+2025-02-26 20:26:24,839 - INFO - Received 120 chunks (983040 bytes) so far
+2025-02-26 20:26:24,843 - INFO - Received 130 chunks (1064960 bytes) so far
+2025-02-26 20:26:24,848 - INFO - Received 140 chunks (1146880 bytes) so far
+2025-02-26 20:26:24,853 - INFO - Received 150 chunks (1228800 bytes) so far
+2025-02-26 20:26:24,858 - INFO - Received 160 chunks (1310720 bytes) so far
+2025-02-26 20:26:24,864 - INFO - Received 170 chunks (1392640 bytes) so far
+2025-02-26 20:26:24,870 - INFO - Received 180 chunks (1474560 bytes) so far
+2025-02-26 20:26:24,876 - INFO - Received 190 chunks (1556480 bytes) so far
+2025-02-26 20:26:24,883 - INFO - Received 200 chunks (1638400 bytes) so far
+2025-02-26 20:26:24,890 - INFO - Received 210 chunks (1720320 bytes) so far
+2025-02-26 20:26:24,898 - INFO - Received 220 chunks (1802240 bytes) so far
+2025-02-26 20:26:24,905 - INFO - Received 230 chunks (1884160 bytes) so far
+2025-02-26 20:26:24,913 - INFO - Received 240 chunks (1966080 bytes) so far
+2025-02-26 20:26:24,922 - INFO - Received 250 chunks (2048000 bytes) so far
+2025-02-26 20:26:24,930 - INFO - Received 260 chunks (2129920 bytes) so far
+2025-02-26 20:26:24,939 - INFO - Received 270 chunks (2211840 bytes) so far
+2025-02-26 20:26:24,949 - INFO - Received 280 chunks (2293760 bytes) so far
+2025-02-26 20:26:24,958 - INFO - Received 290 chunks (2375680 bytes) so far
+2025-02-26 20:26:24,968 - INFO - Received 300 chunks (2457600 bytes) so far
+2025-02-26 20:26:24,979 - INFO - Received 310 chunks (2539520 bytes) so far
+2025-02-26 20:26:24,989 - INFO - Received 320 chunks (2617269 bytes) so far
+2025-02-26 20:26:24,989 - INFO - Connection closed. Received 2617269 bytes in 320 chunks
+2025-02-26 20:26:24,990 - INFO - Data decoded successfully, length: 2617269
+2025-02-26 20:26:24,990 - INFO - First 100 chars of data: [{"id.resp_p":80.0,"id.orig_h":"192.168.1.3","id.resp_h":"91.189.91.82","proto":"tcp","orig_bytes":2
+2025-02-26 20:26:24,991 - INFO - Attempting to parse JSON data
+2025-02-26 20:26:25,044 - INFO - JSON parsed successfully. DataFrame shape: (4677, 25)
+2025-02-26 20:26:25,073 - INFO - Data saved to received/received_data_20250226_202624.csv
+2025-02-26 20:26:25,073 - INFO - Raw sample saved to received/raw_sample_20250226_202624.json
+2025-02-26 20:26:25,073 - INFO - Waiting for connection...
+2025-02-26 20:26:30,338 - INFO - Server stopped by user
+2025-02-26 20:26:30,338 - INFO - Server socket closed
