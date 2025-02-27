@@ -115,7 +115,9 @@ Two main training approaches:
 │       └── cml.yaml      # CI/CD workflow definition
 ├── pyecache/             # Python cache directory
 ├── data/                 # Dataset files, data capture script, and data cleaning script
-├── plot/                 # Visualization outputs - 🚧 under construction (implementation phase) 🚧
+├   └── received/         # Data from Zeek/Kafka stream
+├── outputs/              # Model, Predictions, Eval; Output files
+├── results/              # Latest aggregated metrics
 ├── client.py             # Flower client logic
 ├── client_utils.py       # Client helper functions
 ├── dataset.py            # Data loading/preprocessing
