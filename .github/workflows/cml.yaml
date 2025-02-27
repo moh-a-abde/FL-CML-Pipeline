@@ -51,7 +51,7 @@ jobs:
           git config --local user.name "moh-a-abde"
           
           # Add aggegrated results files
-          git add latestAggregated/eval_results_round_aggregated.json
+          git add results/eval_results_round_aggregated.json
           
           # Add new files in outputs directory
           git add outputs/
