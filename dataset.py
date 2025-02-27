@@ -75,7 +75,7 @@ def instantiate_partitioner(partitioner_type: str, num_partitions: int):
     )
     return partitioner
     
-def preprocess_data_stebn(data):
+def preprocess_data(data):
     """/
     Preprocess the data by encoding categorical features and separating features and labels.
     
@@ -114,7 +114,7 @@ def preprocess_data_stebn(data):
         # For unlabeled data
         return df, None
 
-def preprocess_data(data):
+def preprocess_data_stebn(data):
     """
     Preprocess the static_data.csv dataset by:
       - Dropping the 'Timestamp' column.
