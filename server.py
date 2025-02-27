@@ -68,17 +68,60 @@ if train_method == "bagging":
     
     def patched_aggregate_evaluate(server_round, eval_results, failures):
         log(INFO, "Aggregating evaluation results for round %s", server_round)
+        
+        # Call the original function
         aggregated_result = original_aggregate_evaluate(server_round, eval_results, failures)
         
-        # The aggregated_result is already in the correct format (loss, metrics)
-        # No need to extract loss from metrics as evaluate_metrics_aggregation now returns it directly
-        loss, metrics = aggregated_result
-        
-        log(INFO, "Aggregated loss for round %s: %s", server_round, loss)
-        log(INFO, "Metrics for round %s: %s", server_round, metrics.keys())
-        
-        # Return the result as is
-        return aggregated_result
+        # Check the format of the result
+        if isinstance(aggregated_result, tuple) and len(aggregated_result) == 2:
+            # The result is already in the correct format (loss, metrics)
+            loss, metrics = aggregated_result
+            
+            log(INFO, "Aggregated loss for round %s: %s", server_round, loss)
+            
+            # Check if metrics is a dictionary before trying to access keys
+            if isinstance(metrics, dict):
+                log(INFO, "Metrics for round %s: %s", server_round, metrics.keys())
+            else:
+                log(INFO, "Metrics for round %s is not a dictionary: %s", server_round, type(metrics))
+                
+                # If metrics is not a dictionary, create a new dictionary
+                if metrics is None:
+                    metrics = {}
+                elif not isinstance(metrics, dict):
+                    # Try to convert to dictionary if possible
+                    try:
+                        metrics = dict(metrics)
+                    except (TypeError, ValueError):
+                        # If conversion fails, create a new dictionary with the original metrics as a value
+                        metrics = {"original_metrics": metrics}
+                
+                log(INFO, "Created new metrics dictionary: %s", metrics)
+            
+            # Return the result in the correct format
+            return loss, metrics
+        else:
+            # The result is not in the expected format
+            log(INFO, "Unexpected format from original_aggregate_evaluate: %s", type(aggregated_result))
+            
+            # Try to extract loss and metrics
+            if isinstance(aggregated_result, (int, float)):
+                # Only loss was returned
+                loss = aggregated_result
+                metrics = {}
+            elif isinstance(aggregated_result, dict):
+                # Only metrics were returned
+                loss = aggregated_result.get("loss", 0.0)
+                metrics = aggregated_result
+            else:
+                # Unknown format, use defaults
+                loss = 0.0
+                metrics = {}
+            
+            log(INFO, "Extracted loss: %s, metrics: %s", loss, metrics)
+            
+            # Return in the correct format
+            return loss, metrics
     
     strategy.aggregate_evaluate = patched_aggregate_evaluate
 else:
@@ -91,6 +134,68 @@ else:
         on_evaluate_config_fn=custom_eval_config,
         on_fit_config_fn=fit_config,
     )
+    
+    # Add a monkey patch to handle the new return format from evaluate_metrics_aggregation
+    original_aggregate_evaluate_cyclic = strategy.aggregate_evaluate
+    
+    def patched_aggregate_evaluate_cyclic(server_round, eval_results, failures):
+        log(INFO, "Aggregating evaluation results for round %s (cyclic)", server_round)
+        
+        # Call the original function
+        aggregated_result = original_aggregate_evaluate_cyclic(server_round, eval_results, failures)
+        
+        # Check the format of the result
+        if isinstance(aggregated_result, tuple) and len(aggregated_result) == 2:
+            # The result is already in the correct format (loss, metrics)
+            loss, metrics = aggregated_result
+            
+            log(INFO, "Aggregated loss for round %s: %s", server_round, loss)
+            
+            # Check if metrics is a dictionary before trying to access keys
+            if isinstance(metrics, dict):
+                log(INFO, "Metrics for round %s: %s", server_round, metrics.keys())
+            else:
+                log(INFO, "Metrics for round %s is not a dictionary: %s", server_round, type(metrics))
+                
+                # If metrics is not a dictionary, create a new dictionary
+                if metrics is None:
+                    metrics = {}
+                elif not isinstance(metrics, dict):
+                    # Try to convert to dictionary if possible
+                    try:
+                        metrics = dict(metrics)
+                    except (TypeError, ValueError):
+                        # If conversion fails, create a new dictionary with the original metrics as a value
+                        metrics = {"original_metrics": metrics}
+                
+                log(INFO, "Created new metrics dictionary: %s", metrics)
+            
+            # Return the result in the correct format
+            return loss, metrics
+        else:
+            # The result is not in the expected format
+            log(INFO, "Unexpected format from original_aggregate_evaluate_cyclic: %s", type(aggregated_result))
+            
+            # Try to extract loss and metrics
+            if isinstance(aggregated_result, (int, float)):
+                # Only loss was returned
+                loss = aggregated_result
+                metrics = {}
+            elif isinstance(aggregated_result, dict):
+                # Only metrics were returned
+                loss = aggregated_result.get("loss", 0.0)
+                metrics = aggregated_result
+            else:
+                # Unknown format, use defaults
+                loss = 0.0
+                metrics = {}
+            
+            log(INFO, "Extracted loss: %s, metrics: %s", loss, metrics)
+            
+            # Return in the correct format
+            return loss, metrics
+    
+    strategy.aggregate_evaluate = patched_aggregate_evaluate_cyclic
 
 # Start Flower server
 history = fl.server.start_server(
