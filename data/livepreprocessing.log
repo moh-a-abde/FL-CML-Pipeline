@@ -1,0 +1,813 @@
+2025-02-26 19:26:47,784 - INFO - Starting livepreprocessing_socket.py
+2025-02-26 19:26:47,784 - INFO - Starting data processing
+2025-02-26 19:26:47,784 - INFO - Attempting to connect to Kafka topic 'zeek' on ['192.168.1.3:9000']
+2025-02-26 19:26:47,786 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9000 <connecting> [IPv4 ('192.168.1.3', 9000)]>: connecting to 192.168.1.3:9000 [('192.168.1.3', 9000) IPv4]
+2025-02-26 19:26:47,786 - INFO - Probing node bootstrap-0 broker version
+2025-02-26 19:26:47,786 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9000 <connecting> [IPv4 ('192.168.1.3', 9000)]>: Connection complete.
+2025-02-26 19:26:49,889 - WARNING - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9000 <connected> [IPv4 ('192.168.1.3', 9000)]> timed out after 1998.4943866729736 ms. Closing connection.
+2025-02-26 19:26:49,889 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9000 <connected> [IPv4 ('192.168.1.3', 9000)]>: Closing connection. [Error 7] RequestTimedOutError: Request timed out after 1998.4943866729736 ms
+2025-02-26 19:26:49,890 - INFO - Broker is not v(0, 10) -- it did not recognize ApiVersionRequest_v0
+2025-02-26 19:26:49,890 - ERROR - An error occurred while reading from Kafka: NoBrokersAvailable
+Traceback (most recent call last):
+  File "/home/mohamed/Desktop/workstation/FL-CML-Pipeline/data/livepreprocessing_socket.py", line 35, in read_kafka_topic
+    consumer = KafkaConsumer(
+  File "/home/mohamed/.pyenv/versions/3.10.4/lib/python3.10/site-packages/kafka/consumer/group.py", line 356, in __init__
+    self._client = KafkaClient(metrics=self._metrics, **self.config)
+  File "/home/mohamed/.pyenv/versions/3.10.4/lib/python3.10/site-packages/kafka/client_async.py", line 244, in __init__
+    self.config['api_version'] = self.check_version(timeout=check_timeout)
+  File "/home/mohamed/.pyenv/versions/3.10.4/lib/python3.10/site-packages/kafka/client_async.py", line 927, in check_version
+    raise Errors.NoBrokersAvailable()
+kafka.errors.NoBrokersAvailable: NoBrokersAvailable
+2025-02-26 19:26:49,891 - WARNING - No data received from Kafka, skipping processing
+2025-02-26 19:26:49,891 - INFO - Waiting 30 seconds before retrying...
+2025-02-26 19:27:19,922 - INFO - Starting data processing
+2025-02-26 19:27:19,922 - INFO - Attempting to connect to Kafka topic 'zeek' on ['192.168.1.3:9000']
+2025-02-26 19:27:19,923 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9000 <connecting> [IPv4 ('192.168.1.3', 9000)]>: connecting to 192.168.1.3:9000 [('192.168.1.3', 9000) IPv4]
+2025-02-26 19:27:19,923 - INFO - Probing node bootstrap-0 broker version
+2025-02-26 19:27:19,923 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9000 <connecting> [IPv4 ('192.168.1.3', 9000)]>: Connection complete.
+2025-02-26 19:27:22,026 - WARNING - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9000 <connected> [IPv4 ('192.168.1.3', 9000)]> timed out after 1999.4769096374512 ms. Closing connection.
+2025-02-26 19:27:22,027 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9000 <connected> [IPv4 ('192.168.1.3', 9000)]>: Closing connection. [Error 7] RequestTimedOutError: Request timed out after 1999.4769096374512 ms
+2025-02-26 19:27:22,027 - INFO - Broker is not v(0, 10) -- it did not recognize ApiVersionRequest_v0
+2025-02-26 19:27:22,027 - ERROR - An error occurred while reading from Kafka: NoBrokersAvailable
+Traceback (most recent call last):
+  File "/home/mohamed/Desktop/workstation/FL-CML-Pipeline/data/livepreprocessing_socket.py", line 35, in read_kafka_topic
+    consumer = KafkaConsumer(
+  File "/home/mohamed/.pyenv/versions/3.10.4/lib/python3.10/site-packages/kafka/consumer/group.py", line 356, in __init__
+    self._client = KafkaClient(metrics=self._metrics, **self.config)
+  File "/home/mohamed/.pyenv/versions/3.10.4/lib/python3.10/site-packages/kafka/client_async.py", line 244, in __init__
+    self.config['api_version'] = self.check_version(timeout=check_timeout)
+  File "/home/mohamed/.pyenv/versions/3.10.4/lib/python3.10/site-packages/kafka/client_async.py", line 927, in check_version
+    raise Errors.NoBrokersAvailable()
+kafka.errors.NoBrokersAvailable: NoBrokersAvailable
+2025-02-26 19:27:22,028 - WARNING - No data received from Kafka, skipping processing
+2025-02-26 19:27:22,028 - INFO - Waiting 30 seconds before retrying...
+2025-02-26 19:27:39,939 - INFO - Process interrupted by user.
+2025-02-26 19:28:56,980 - INFO - Starting livepreprocessing_socket.py
+2025-02-26 19:28:56,980 - INFO - Starting data processing
+2025-02-26 19:28:56,980 - INFO - Attempting to connect to Kafka topic 'zeek' on ['192.168.1.3:9092']
+2025-02-26 19:28:56,982 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connecting> [IPv4 ('192.168.1.3', 9092)]>: connecting to 192.168.1.3:9092 [('192.168.1.3', 9092) IPv4]
+2025-02-26 19:28:56,982 - INFO - Probing node bootstrap-0 broker version
+2025-02-26 19:28:56,982 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connecting> [IPv4 ('192.168.1.3', 9092)]>: Connection complete.
+2025-02-26 19:28:57,087 - INFO - Broker version identified as 2.5.0
+2025-02-26 19:28:57,087 - INFO - Set configuration api_version=(2, 5, 0) to skip auto check_version requests on startup
+2025-02-26 19:28:57,088 - WARNING - group_id is None: disabling auto-commit.
+2025-02-26 19:28:57,088 - INFO - Updating subscribed topics to: ('zeek',)
+2025-02-26 19:28:57,088 - INFO - Connected to Kafka. Waiting for messages...
+2025-02-26 19:28:57,089 - INFO - Updated partition assignment: [TopicPartition(topic='zeek', partition=0)]
+2025-02-26 19:28:57,090 - INFO - <BrokerConnection node_id=0 host=Atlas:9092 <connecting> [IPv4 ('127.0.1.1', 9092)]>: connecting to Atlas:9092 [('127.0.1.1', 9092) IPv4]
+2025-02-26 19:28:57,090 - INFO - <BrokerConnection node_id=0 host=Atlas:9092 <connecting> [IPv4 ('127.0.1.1', 9092)]>: Connection complete.
+2025-02-26 19:28:57,090 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connected> [IPv4 ('192.168.1.3', 9092)]>: Closing connection. 
+2025-02-26 19:28:57,250 - INFO - Received 100 messages so far
+2025-02-26 19:28:57,251 - INFO - Received 200 messages so far
+2025-02-26 19:28:57,251 - INFO - Received 300 messages so far
+2025-02-26 19:28:57,251 - INFO - Received 400 messages so far
+2025-02-26 19:28:57,251 - INFO - Received 500 messages so far
+2025-02-26 19:28:57,252 - INFO - Received 600 messages so far
+2025-02-26 19:28:57,252 - INFO - Received 700 messages so far
+2025-02-26 19:28:57,252 - INFO - Received 800 messages so far
+2025-02-26 19:28:57,252 - INFO - Received 900 messages so far
+2025-02-26 19:28:57,253 - INFO - Received 1000 messages so far
+2025-02-26 19:28:57,253 - INFO - Received 1100 messages so far
+2025-02-26 19:28:57,253 - INFO - Received 1200 messages so far
+2025-02-26 19:28:57,253 - INFO - Received 1300 messages so far
+2025-02-26 19:28:57,253 - INFO - Received 1400 messages so far
+2025-02-26 19:28:57,254 - INFO - Received 1500 messages so far
+2025-02-26 19:28:57,254 - INFO - Received 1600 messages so far
+2025-02-26 19:28:57,254 - INFO - Received 1700 messages so far
+2025-02-26 19:28:57,254 - INFO - Received 1800 messages so far
+2025-02-26 19:28:57,254 - INFO - Received 1900 messages so far
+2025-02-26 19:28:57,255 - INFO - Received 2000 messages so far
+2025-02-26 19:28:57,255 - INFO - Received 2100 messages so far
+2025-02-26 19:28:57,255 - INFO - Received 2200 messages so far
+2025-02-26 19:28:57,255 - INFO - Received 2300 messages so far
+2025-02-26 19:28:57,255 - INFO - Received 2400 messages so far
+2025-02-26 19:28:57,256 - INFO - Received 2500 messages so far
+2025-02-26 19:28:57,256 - INFO - Received 2600 messages so far
+2025-02-26 19:28:57,256 - INFO - Received 2700 messages so far
+2025-02-26 19:28:57,256 - INFO - Received 2800 messages so far
+2025-02-26 19:28:57,256 - INFO - Received 2900 messages so far
+2025-02-26 19:28:57,257 - INFO - Received 3000 messages so far
+2025-02-26 19:28:57,257 - INFO - Received 3100 messages so far
+2025-02-26 19:28:57,257 - INFO - Received 3200 messages so far
+2025-02-26 19:28:57,257 - INFO - Received 3300 messages so far
+2025-02-26 19:28:57,257 - INFO - Received 3400 messages so far
+2025-02-26 19:28:57,258 - INFO - Received 3500 messages so far
+2025-02-26 19:28:57,258 - INFO - Received 3600 messages so far
+2025-02-26 19:28:57,258 - INFO - Received 3700 messages so far
+2025-02-26 19:28:57,258 - INFO - Received 3800 messages so far
+2025-02-26 19:28:57,258 - INFO - Received 3900 messages so far
+2025-02-26 19:28:57,258 - INFO - Received 4000 messages so far
+2025-02-26 19:28:57,259 - INFO - Received 4100 messages so far
+2025-02-26 19:28:57,318 - INFO - Received 4200 messages so far
+2025-02-26 19:28:57,318 - INFO - Received 4300 messages so far
+2025-02-26 19:28:57,318 - INFO - Received 4400 messages so far
+2025-02-26 19:28:57,319 - INFO - Received 4500 messages so far
+2025-02-26 19:28:57,319 - INFO - Received 4600 messages so far
+2025-02-26 19:28:57,319 - INFO - Received 4700 messages so far
+2025-02-26 19:28:57,319 - INFO - Received 4800 messages so far
+2025-02-26 19:28:57,320 - INFO - Received 4900 messages so far
+2025-02-26 19:28:57,320 - INFO - Received 5000 messages so far
+2025-02-26 19:28:57,320 - INFO - Received 5100 messages so far
+2025-02-26 19:28:57,320 - INFO - Received 5200 messages so far
+2025-02-26 19:28:57,320 - INFO - Received 5300 messages so far
+2025-02-26 19:28:57,321 - INFO - Received 5400 messages so far
+2025-02-26 19:28:57,321 - INFO - Received 5500 messages so far
+2025-02-26 19:28:57,321 - INFO - Received 5600 messages so far
+2025-02-26 19:28:57,321 - INFO - Received 5700 messages so far
+2025-02-26 19:28:57,321 - INFO - Received 5800 messages so far
+2025-02-26 19:28:57,322 - INFO - Received 5900 messages so far
+2025-02-26 19:28:57,322 - INFO - Received 6000 messages so far
+2025-02-26 19:28:57,322 - INFO - Received 6100 messages so far
+2025-02-26 19:28:57,322 - INFO - Received 6200 messages so far
+2025-02-26 19:28:57,322 - INFO - Received 6300 messages so far
+2025-02-26 19:28:57,322 - INFO - Received 6400 messages so far
+2025-02-26 19:28:57,323 - INFO - Received 6500 messages so far
+2025-02-26 19:28:57,323 - INFO - Received 6600 messages so far
+2025-02-26 19:28:57,323 - INFO - Received 6700 messages so far
+2025-02-26 19:28:57,323 - INFO - Received 6800 messages so far
+2025-02-26 19:28:57,323 - INFO - Received 6900 messages so far
+2025-02-26 19:28:57,324 - INFO - Received 7000 messages so far
+2025-02-26 19:28:57,324 - INFO - Received 7100 messages so far
+2025-02-26 19:28:57,324 - INFO - Received 7200 messages so far
+2025-02-26 19:28:57,324 - INFO - Received 7300 messages so far
+2025-02-26 19:28:57,324 - INFO - Received 7400 messages so far
+2025-02-26 19:28:57,325 - INFO - Received 7500 messages so far
+2025-02-26 19:28:57,325 - INFO - Received 7600 messages so far
+2025-02-26 19:28:57,325 - INFO - Received 7700 messages so far
+2025-02-26 19:28:57,325 - INFO - Received 7800 messages so far
+2025-02-26 19:28:57,325 - INFO - Received 7900 messages so far
+2025-02-26 19:28:57,326 - INFO - Received 8000 messages so far
+2025-02-26 19:28:57,326 - INFO - Received 8100 messages so far
+2025-02-26 19:28:57,326 - INFO - Received 8200 messages so far
+2025-02-26 19:28:57,326 - INFO - Received 8300 messages so far
+2025-02-26 19:28:57,326 - INFO - Received 8400 messages so far
+2025-02-26 19:28:57,326 - INFO - Received 8500 messages so far
+2025-02-26 19:28:57,327 - INFO - Received 8600 messages so far
+2025-02-26 19:28:57,327 - INFO - Received 8700 messages so far
+2025-02-26 19:28:57,425 - INFO - Received 8800 messages so far
+2025-02-26 19:28:57,425 - INFO - Received 8900 messages so far
+2025-02-26 19:28:57,425 - INFO - Received 9000 messages so far
+2025-02-26 19:28:57,426 - INFO - Received 9100 messages so far
+2025-02-26 19:28:57,426 - INFO - Received 9200 messages so far
+2025-02-26 19:28:57,426 - INFO - Received 9300 messages so far
+2025-02-26 19:28:57,427 - INFO - Received 9400 messages so far
+2025-02-26 19:28:57,427 - INFO - Received 9500 messages so far
+2025-02-26 19:28:57,427 - INFO - Received 9600 messages so far
+2025-02-26 19:28:57,427 - INFO - Received 9700 messages so far
+2025-02-26 19:28:57,427 - INFO - Received 9800 messages so far
+2025-02-26 19:28:57,428 - INFO - Received 9900 messages so far
+2025-02-26 19:28:57,428 - INFO - Received 10000 messages so far
+2025-02-26 19:28:57,428 - INFO - Total messages consumed: 10000
+2025-02-26 19:28:57,518 - INFO - Messages converted to DataFrame successfully!
+2025-02-26 19:28:57,522 - INFO - Initial DataFrame columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'peer', 'mem', 'pkts_proc', 'bytes_recv', 'pkts_dropped', 'pkts_link', 'pkt_lag', 'events_proc', 'events_queued', 'active_tcp_conns', 'active_udp_conns', 'active_icmp_conns', 'tcp_conns', 'udp_conns', 'icmp_conns', 'timers', 'active_timers', 'files', 'active_files', 'dns_requests', 'active_dns_requests', 'reassem_tcp_size', 'reassem_file_size', 'reassem_frag_size', 'reassem_unknown_size', 'host', 'port_num', 'port_proto', 'service', 'uid', 'id.orig_p', 'trans_id', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'uids', 'mac', 'host_name', 'requested_addr', 'msg_types', 'note', 'msg', 'actions', 'email_dest', 'suppress_for', 'ts_delta', 'gaps', 'acks', 'percent_lost', 'metric_type', 'name', 'labels', 'label_values', 'value', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'cert_chain_fps', 'client_cert_chain_fps', 'subject', 'issuer', 'sni_matches_cert', 'validation_status', 'fingerprint', 'certificate.version', 'certificate.serial', 'certificate.subject', 'certificate.issuer', 'certificate.not_valid_before', 'certificate.not_valid_after', 'certificate.key_alg', 'certificate.sig_alg', 'certificate.key_type', 'certificate.key_length', 'certificate.exponent', 'san.dns', 'basic_constraints.ca', 'host_cert', 'client_cert', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'client_addr', 'notice', 'source', 'mode', 'stratum', 'poll', 'precision', 'root_delay', 'root_disp', 'ref_id', 'ref_time', 'org_time', 'rec_time', 'xmt_time', 'num_exts', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate', 'fuid', 'depth', 'analyzers', 'mime_type', 'is_orig', 'seen_bytes', 'missing_bytes', 'overflow_bytes', 'timedout', 'md5', 'sha1', 'extracted', 'extracted_cutoff']
+2025-02-26 19:28:57,522 - INFO - Initial DataFrame shape: (10000, 162)
+2025-02-26 19:28:57,522 - INFO - Initial columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'peer', 'mem', 'pkts_proc', 'bytes_recv', 'pkts_dropped', 'pkts_link', 'pkt_lag', 'events_proc', 'events_queued', 'active_tcp_conns', 'active_udp_conns', 'active_icmp_conns', 'tcp_conns', 'udp_conns', 'icmp_conns', 'timers', 'active_timers', 'files', 'active_files', 'dns_requests', 'active_dns_requests', 'reassem_tcp_size', 'reassem_file_size', 'reassem_frag_size', 'reassem_unknown_size', 'host', 'port_num', 'port_proto', 'service', 'uid', 'id.orig_p', 'trans_id', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'uids', 'mac', 'host_name', 'requested_addr', 'msg_types', 'note', 'msg', 'actions', 'email_dest', 'suppress_for', 'ts_delta', 'gaps', 'acks', 'percent_lost', 'metric_type', 'name', 'labels', 'label_values', 'value', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'cert_chain_fps', 'client_cert_chain_fps', 'subject', 'issuer', 'sni_matches_cert', 'validation_status', 'fingerprint', 'certificate.version', 'certificate.serial', 'certificate.subject', 'certificate.issuer', 'certificate.not_valid_before', 'certificate.not_valid_after', 'certificate.key_alg', 'certificate.sig_alg', 'certificate.key_type', 'certificate.key_length', 'certificate.exponent', 'san.dns', 'basic_constraints.ca', 'host_cert', 'client_cert', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'client_addr', 'notice', 'source', 'mode', 'stratum', 'poll', 'precision', 'root_delay', 'root_disp', 'ref_id', 'ref_time', 'org_time', 'rec_time', 'xmt_time', 'num_exts', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate', 'fuid', 'depth', 'analyzers', 'mime_type', 'is_orig', 'seen_bytes', 'missing_bytes', 'overflow_bytes', 'timedout', 'md5', 'sha1', 'extracted', 'extracted_cutoff']
+2025-02-26 19:28:57,522 - INFO - Dropping 96 columns out of 126 specified
+2025-02-26 19:28:57,534 - INFO - DataFrame shape after cleaning: (10000, 66)
+2025-02-26 19:28:57,535 - INFO - DataFrame columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'pkt_lag', 'host', 'service', 'uid', 'id.orig_p', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate']
+2025-02-26 19:28:57,535 - INFO - Number of columns: 66
+2025-02-26 19:28:57,548 - INFO - DataFrame head:
+      id.resp_p    id.orig_h    id.resp_h proto  orig_bytes  resp_bytes            ts  pkt_lag host service                 uid  id.orig_p       rtt                               query  qclass qclass_name  qtype qtype_name  rcode rcode_name     AA     TC    RD    RA    Z                                                                                               answers                   TTLs rejected conn_state local_orig local_resp  missed_bytes history  orig_pkts  orig_ip_bytes  resp_pkts  resp_ip_bytes  ip_proto  duration version client_initial_dcid client_scid server_scid cipher curve server_name resumed established ssl_history next_protocol  trans_depth method  uri  request_body_len  response_body_len  status_code status_msg tags   id hashAlgorithm issuerNameHash issuerKeyHash serialNumber certStatus  thisUpdate  nextUpdate
+2258        NaN          NaN          NaN   NaN         NaN         NaN  1.740118e+09      NaN  NaN     NaN                 NaN        NaN       NaN                                 NaN     NaN         NaN    NaN        NaN    NaN        NaN    NaN    NaN   NaN   NaN  NaN                                                                                                   NaN                    NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+5914        NaN          NaN          NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN                 NaN        NaN       NaN                                 NaN     NaN         NaN    NaN        NaN    NaN        NaN    NaN    NaN   NaN   NaN  NaN                                                                                                   NaN                    NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+9915        NaN          NaN          NaN   NaN         NaN         NaN  1.740120e+09      NaN  NaN     NaN                 NaN        NaN       NaN                                 NaN     NaN         NaN    NaN        NaN    NaN        NaN    NaN    NaN   NaN   NaN  NaN                                                                                                   NaN                    NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+9707       53.0  192.168.1.3  192.168.1.1   udp        52.0       220.0  1.740120e+09      NaN  NaN     dns   C6FRWxHEz97jUiPZb    57668.0       NaN                                 NaN     NaN         NaN    NaN        NaN    NaN        NaN    NaN    NaN   NaN   NaN  NaN                                                                                                   NaN                    NaN      NaN         SF       True       True           0.0      Dd        1.0           80.0        1.0          248.0      17.0  0.001386     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+307        53.0  192.168.1.3  192.168.1.1   udp         NaN         NaN  1.740118e+09      NaN  NaN     NaN  CFmJND4WYa3ZYTfZL6    47879.0  0.001717  word-telemetry.officeapps.live.com     1.0  C_INTERNET    1.0          A    0.0    NOERROR  False  False  True  True  0.0  [word-telemetry.wac.trafficmanager.net, pgtus1-word-telemetry-vip.officeapps.live.com, 52.108.78.30]  [263.0, 263.0, 263.0]    False        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+2025-02-26 19:28:57,548 - INFO - DataFrame shape: (10000, 66)
+2025-02-26 19:28:57,579 - INFO - DataFrame numeric summary:
+          id.resp_p    orig_bytes     resp_bytes            ts   pkt_lag     id.orig_p         rtt  qclass       qtype       rcode      Z   missed_bytes    orig_pkts  orig_ip_bytes    resp_pkts  resp_ip_bytes     ip_proto     duration  trans_depth  request_body_len  response_body_len  status_code    thisUpdate    nextUpdate
+count   1606.000000  1.048000e+03    1048.000000  9.999000e+03  7.000000   1605.000000  243.000000   426.0  426.000000  409.000000  433.0    1079.000000  1079.000000   1.079000e+03  1079.000000    1079.000000  1079.000000  2022.000000          7.0               7.0                7.0          7.0  4.000000e+00  4.000000e+00
+mean    3633.608966  2.719185e+03    1388.354008  1.740119e+09  0.002835  46064.636137    0.007470     1.0   43.377934    0.007335    0.0     275.277108     3.065802   2.782652e+03     3.405931    1494.846154    11.202966     3.474712          1.0               0.0                0.0        204.0  1.739625e+09  1.740318e+09
+std     4365.460666  6.037924e+04   27411.985622  5.961216e+02  0.004274  12565.455755    0.018644     0.0   39.157545    0.148340    0.0    9042.339733    20.577883   6.043692e+04    30.110991   27527.392373     7.988196    28.756772          0.0               0.0                0.0          0.0  5.819691e+04  5.819691e+04
+min        0.000000  0.000000e+00       0.000000  1.740118e+09  0.000000     68.000000    0.000281     1.0    1.000000    0.000000    0.0       0.000000     0.000000   0.000000e+00     0.000000       0.000000     6.000000     0.000000          1.0               0.0                0.0        204.0  1.739575e+09  1.740267e+09
+25%       53.000000  0.000000e+00       0.000000  1.740118e+09  0.000867  40295.000000    0.001778     1.0    1.000000    0.000000    0.0       0.000000     1.000000   6.000000e+01     1.000000      40.000000     6.000000     0.000527          1.0               0.0                0.0        204.0  1.739575e+09  1.740267e+09
+50%      136.000000  0.000000e+00       0.000000  1.740119e+09  0.001849  50503.000000    0.002234     1.0   65.000000    0.000000    0.0       0.000000     1.000000   6.000000e+01     1.000000      40.000000     6.000000     0.005381          1.0               0.0                0.0        204.0  1.739625e+09  1.740318e+09
+75%     9092.000000  6.100000e+01     198.000000  1.740119e+09  0.001973  54430.000000    0.002860     1.0   65.000000    0.000000    0.0       0.000000     1.000000   9.000000e+01     1.000000     226.000000    17.000000     0.007678          1.0               0.0                0.0        204.0  1.739676e+09  1.740368e+09
+max    21116.000000  1.932996e+06  874506.000000  1.740120e+09  0.012315  60995.000000    0.119818     1.0  255.000000    3.000000    0.0  297024.000000   565.000000   1.962384e+06   873.000000  888638.000000    58.000000   448.102649          1.0               0.0                0.0        204.0  1.739676e+09  1.740368e+09
+2025-02-26 19:28:57,625 - INFO - DataFrame non-numeric summary:
+          id.orig_h    id.resp_h proto                            host service                 uid                    query qclass_name qtype_name rcode_name     AA     TC    RD    RA                                                                                                                              answers                                                                      TTLs rejected conn_state local_orig local_resp history version           client_initial_dcid client_scid                   server_scid                  cipher      curve                       server_name resumed established ssl_history next_protocol method uri  status_msg tags                  id hashAlgorithm                            issuerNameHash                             issuerKeyHash                            serialNumber certStatus
+count          1606         1606  1513                              10     439                1605                      433         426        426        409    433    433   433   433                                                                                                                                  254                                                                       254      433       1079       1083       1079    1081      86                            19          19                            17                      54         54                                39      56          56          56             5      7   7           7    7                   4             4                                         4                                         4                                       4          4
+unique           18           69     4                               4       8                1118                       66           1          6          2      2      1     2     2                                                                                                                                  117                                                                       213        1          7          2          2      28       5                            19           1                            17                       4          4                                17       2           2           6             1      1   1           1    1                   4             1                                         2                                         2                                       2          1
+top     192.168.1.3  192.168.1.1   udp  connectivity-check.ubuntu.com.     dns  CQW5gD448OyN1FH5bg  wac-0003.wac-msedge.net  C_INTERNET      HTTPS    NOERROR  False  False  True  True  [usc-word-edit-geo.wac.trafficmanager.net, usc-word-edit.wac.trafficmanager.net.wac-0003.wac-dc-msedge.net.wac-0003.wac-msedge.net]  [20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0]    False        REJ       True       True      Sr  TLSv13  53d430adb444f9c5ce75c07fa520              f3a21106ed00c9ab0a948d7162de  TLS_AES_256_GCM_SHA384  secp384r1  mobile.events.data.microsoft.com   False        True      CjiICs            h2    GET   /  No Content   []  F0lnXh4fEMRMxatKR2          sha1  E475019DC323E226741D6C40390795F90596462E  3B70D153E976259D60A8CA660FC69BAE6F54166A  3300E0D2F69F3A2BFEE266BDA4000000E0D2F6       good
+freq           1520          762   863                               7     382                   7                       74         426        248        408    416    433   392   238                                                                                                                                   34                                                                         6      433        585       1079        962     585      49                             1          19                             1                      30         27                                 6      48          39          23             5      7   7           7    7                   1             4                                         3                                         3                                       3          4
+2025-02-26 19:28:57,626 - INFO - Unique values in 'id.resp_p' before labeling: [   nan    53.   443.  9092.    80.  1900.  5353.     0.   123.   136.
+   133. 21115.    22.   134.   138.   135. 21116.   547.    67.]
+2025-02-26 19:28:57,631 - INFO - Label distribution: {}
+2025-02-26 19:28:57,632 - WARNING - No data left after filtering for valid labels
+2025-02-26 19:28:57,633 - INFO - Waiting 30 seconds before retrying...
+2025-02-26 19:29:27,663 - INFO - Starting data processing
+2025-02-26 19:29:27,663 - INFO - Attempting to connect to Kafka topic 'zeek' on ['192.168.1.3:9092']
+2025-02-26 19:29:27,664 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connecting> [IPv4 ('192.168.1.3', 9092)]>: connecting to 192.168.1.3:9092 [('192.168.1.3', 9092) IPv4]
+2025-02-26 19:29:27,665 - INFO - Probing node bootstrap-0 broker version
+2025-02-26 19:29:27,665 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connecting> [IPv4 ('192.168.1.3', 9092)]>: Connection complete.
+2025-02-26 19:29:27,767 - INFO - Broker version identified as 2.5.0
+2025-02-26 19:29:27,768 - INFO - Set configuration api_version=(2, 5, 0) to skip auto check_version requests on startup
+2025-02-26 19:29:27,768 - WARNING - group_id is None: disabling auto-commit.
+2025-02-26 19:29:27,768 - INFO - Updating subscribed topics to: ('zeek',)
+2025-02-26 19:29:27,768 - INFO - Connected to Kafka. Waiting for messages...
+2025-02-26 19:29:27,769 - INFO - Updated partition assignment: [TopicPartition(topic='zeek', partition=0)]
+2025-02-26 19:29:27,769 - INFO - <BrokerConnection node_id=0 host=Atlas:9092 <connecting> [IPv4 ('127.0.1.1', 9092)]>: connecting to Atlas:9092 [('127.0.1.1', 9092) IPv4]
+2025-02-26 19:29:27,770 - INFO - <BrokerConnection node_id=0 host=Atlas:9092 <connecting> [IPv4 ('127.0.1.1', 9092)]>: Connection complete.
+2025-02-26 19:29:27,770 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connected> [IPv4 ('192.168.1.3', 9092)]>: Closing connection. 
+2025-02-26 19:29:27,941 - INFO - Received 100 messages so far
+2025-02-26 19:29:27,941 - INFO - Received 200 messages so far
+2025-02-26 19:29:27,941 - INFO - Received 300 messages so far
+2025-02-26 19:29:27,941 - INFO - Received 400 messages so far
+2025-02-26 19:29:27,941 - INFO - Received 500 messages so far
+2025-02-26 19:29:27,942 - INFO - Received 600 messages so far
+2025-02-26 19:29:27,942 - INFO - Received 700 messages so far
+2025-02-26 19:29:27,942 - INFO - Received 800 messages so far
+2025-02-26 19:29:27,942 - INFO - Received 900 messages so far
+2025-02-26 19:29:27,943 - INFO - Received 1000 messages so far
+2025-02-26 19:29:27,943 - INFO - Received 1100 messages so far
+2025-02-26 19:29:27,944 - INFO - Received 1200 messages so far
+2025-02-26 19:29:27,944 - INFO - Received 1300 messages so far
+2025-02-26 19:29:27,944 - INFO - Received 1400 messages so far
+2025-02-26 19:29:27,945 - INFO - Received 1500 messages so far
+2025-02-26 19:29:27,945 - INFO - Received 1600 messages so far
+2025-02-26 19:29:27,945 - INFO - Received 1700 messages so far
+2025-02-26 19:29:27,945 - INFO - Received 1800 messages so far
+2025-02-26 19:29:27,946 - INFO - Received 1900 messages so far
+2025-02-26 19:29:27,946 - INFO - Received 2000 messages so far
+2025-02-26 19:29:27,946 - INFO - Received 2100 messages so far
+2025-02-26 19:29:27,946 - INFO - Received 2200 messages so far
+2025-02-26 19:29:27,946 - INFO - Received 2300 messages so far
+2025-02-26 19:29:27,947 - INFO - Received 2400 messages so far
+2025-02-26 19:29:27,947 - INFO - Received 2500 messages so far
+2025-02-26 19:29:27,947 - INFO - Received 2600 messages so far
+2025-02-26 19:29:27,947 - INFO - Received 2700 messages so far
+2025-02-26 19:29:27,947 - INFO - Received 2800 messages so far
+2025-02-26 19:29:27,948 - INFO - Received 2900 messages so far
+2025-02-26 19:29:27,948 - INFO - Received 3000 messages so far
+2025-02-26 19:29:27,948 - INFO - Received 3100 messages so far
+2025-02-26 19:29:27,948 - INFO - Received 3200 messages so far
+2025-02-26 19:29:27,948 - INFO - Received 3300 messages so far
+2025-02-26 19:29:27,949 - INFO - Received 3400 messages so far
+2025-02-26 19:29:27,949 - INFO - Received 3500 messages so far
+2025-02-26 19:29:27,949 - INFO - Received 3600 messages so far
+2025-02-26 19:29:27,949 - INFO - Received 3700 messages so far
+2025-02-26 19:29:27,949 - INFO - Received 3800 messages so far
+2025-02-26 19:29:27,950 - INFO - Received 3900 messages so far
+2025-02-26 19:29:27,950 - INFO - Received 4000 messages so far
+2025-02-26 19:29:27,950 - INFO - Received 4100 messages so far
+2025-02-26 19:29:28,008 - INFO - Received 4200 messages so far
+2025-02-26 19:29:28,008 - INFO - Received 4300 messages so far
+2025-02-26 19:29:28,009 - INFO - Received 4400 messages so far
+2025-02-26 19:29:28,009 - INFO - Received 4500 messages so far
+2025-02-26 19:29:28,009 - INFO - Received 4600 messages so far
+2025-02-26 19:29:28,009 - INFO - Received 4700 messages so far
+2025-02-26 19:29:28,009 - INFO - Received 4800 messages so far
+2025-02-26 19:29:28,010 - INFO - Received 4900 messages so far
+2025-02-26 19:29:28,010 - INFO - Received 5000 messages so far
+2025-02-26 19:29:28,010 - INFO - Received 5100 messages so far
+2025-02-26 19:29:28,010 - INFO - Received 5200 messages so far
+2025-02-26 19:29:28,011 - INFO - Received 5300 messages so far
+2025-02-26 19:29:28,011 - INFO - Received 5400 messages so far
+2025-02-26 19:29:28,011 - INFO - Received 5500 messages so far
+2025-02-26 19:29:28,011 - INFO - Received 5600 messages so far
+2025-02-26 19:29:28,011 - INFO - Received 5700 messages so far
+2025-02-26 19:29:28,012 - INFO - Received 5800 messages so far
+2025-02-26 19:29:28,012 - INFO - Received 5900 messages so far
+2025-02-26 19:29:28,012 - INFO - Received 6000 messages so far
+2025-02-26 19:29:28,012 - INFO - Received 6100 messages so far
+2025-02-26 19:29:28,012 - INFO - Received 6200 messages so far
+2025-02-26 19:29:28,013 - INFO - Received 6300 messages so far
+2025-02-26 19:29:28,013 - INFO - Received 6400 messages so far
+2025-02-26 19:29:28,013 - INFO - Received 6500 messages so far
+2025-02-26 19:29:28,013 - INFO - Received 6600 messages so far
+2025-02-26 19:29:28,013 - INFO - Received 6700 messages so far
+2025-02-26 19:29:28,014 - INFO - Received 6800 messages so far
+2025-02-26 19:29:28,014 - INFO - Received 6900 messages so far
+2025-02-26 19:29:28,014 - INFO - Received 7000 messages so far
+2025-02-26 19:29:28,014 - INFO - Received 7100 messages so far
+2025-02-26 19:29:28,014 - INFO - Received 7200 messages so far
+2025-02-26 19:29:28,015 - INFO - Received 7300 messages so far
+2025-02-26 19:29:28,015 - INFO - Received 7400 messages so far
+2025-02-26 19:29:28,015 - INFO - Received 7500 messages so far
+2025-02-26 19:29:28,015 - INFO - Received 7600 messages so far
+2025-02-26 19:29:28,015 - INFO - Received 7700 messages so far
+2025-02-26 19:29:28,016 - INFO - Received 7800 messages so far
+2025-02-26 19:29:28,016 - INFO - Received 7900 messages so far
+2025-02-26 19:29:28,016 - INFO - Received 8000 messages so far
+2025-02-26 19:29:28,016 - INFO - Received 8100 messages so far
+2025-02-26 19:29:28,016 - INFO - Received 8200 messages so far
+2025-02-26 19:29:28,017 - INFO - Received 8300 messages so far
+2025-02-26 19:29:28,017 - INFO - Received 8400 messages so far
+2025-02-26 19:29:28,017 - INFO - Received 8500 messages so far
+2025-02-26 19:29:28,017 - INFO - Received 8600 messages so far
+2025-02-26 19:29:28,018 - INFO - Received 8700 messages so far
+2025-02-26 19:29:28,079 - INFO - Received 8800 messages so far
+2025-02-26 19:29:28,080 - INFO - Received 8900 messages so far
+2025-02-26 19:29:28,080 - INFO - Received 9000 messages so far
+2025-02-26 19:29:28,080 - INFO - Received 9100 messages so far
+2025-02-26 19:29:28,080 - INFO - Received 9200 messages so far
+2025-02-26 19:29:28,080 - INFO - Received 9300 messages so far
+2025-02-26 19:29:28,081 - INFO - Received 9400 messages so far
+2025-02-26 19:29:28,081 - INFO - Received 9500 messages so far
+2025-02-26 19:29:28,081 - INFO - Received 9600 messages so far
+2025-02-26 19:29:28,081 - INFO - Received 9700 messages so far
+2025-02-26 19:29:28,082 - INFO - Received 9800 messages so far
+2025-02-26 19:29:28,082 - INFO - Received 9900 messages so far
+2025-02-26 19:29:28,082 - INFO - Received 10000 messages so far
+2025-02-26 19:29:28,082 - INFO - Total messages consumed: 10000
+2025-02-26 19:29:28,184 - INFO - Messages converted to DataFrame successfully!
+2025-02-26 19:29:28,187 - INFO - Initial DataFrame columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'peer', 'mem', 'pkts_proc', 'bytes_recv', 'pkts_dropped', 'pkts_link', 'pkt_lag', 'events_proc', 'events_queued', 'active_tcp_conns', 'active_udp_conns', 'active_icmp_conns', 'tcp_conns', 'udp_conns', 'icmp_conns', 'timers', 'active_timers', 'files', 'active_files', 'dns_requests', 'active_dns_requests', 'reassem_tcp_size', 'reassem_file_size', 'reassem_frag_size', 'reassem_unknown_size', 'host', 'port_num', 'port_proto', 'service', 'uid', 'id.orig_p', 'trans_id', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'uids', 'mac', 'host_name', 'requested_addr', 'msg_types', 'note', 'msg', 'actions', 'email_dest', 'suppress_for', 'ts_delta', 'gaps', 'acks', 'percent_lost', 'metric_type', 'name', 'labels', 'label_values', 'value', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'cert_chain_fps', 'client_cert_chain_fps', 'subject', 'issuer', 'sni_matches_cert', 'validation_status', 'fingerprint', 'certificate.version', 'certificate.serial', 'certificate.subject', 'certificate.issuer', 'certificate.not_valid_before', 'certificate.not_valid_after', 'certificate.key_alg', 'certificate.sig_alg', 'certificate.key_type', 'certificate.key_length', 'certificate.exponent', 'san.dns', 'basic_constraints.ca', 'host_cert', 'client_cert', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'client_addr', 'notice', 'source', 'mode', 'stratum', 'poll', 'precision', 'root_delay', 'root_disp', 'ref_id', 'ref_time', 'org_time', 'rec_time', 'xmt_time', 'num_exts', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate', 'fuid', 'depth', 'analyzers', 'mime_type', 'is_orig', 'seen_bytes', 'missing_bytes', 'overflow_bytes', 'timedout', 'md5', 'sha1', 'extracted', 'extracted_cutoff']
+2025-02-26 19:29:28,187 - INFO - Initial DataFrame shape: (10000, 162)
+2025-02-26 19:29:28,187 - INFO - Initial columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'peer', 'mem', 'pkts_proc', 'bytes_recv', 'pkts_dropped', 'pkts_link', 'pkt_lag', 'events_proc', 'events_queued', 'active_tcp_conns', 'active_udp_conns', 'active_icmp_conns', 'tcp_conns', 'udp_conns', 'icmp_conns', 'timers', 'active_timers', 'files', 'active_files', 'dns_requests', 'active_dns_requests', 'reassem_tcp_size', 'reassem_file_size', 'reassem_frag_size', 'reassem_unknown_size', 'host', 'port_num', 'port_proto', 'service', 'uid', 'id.orig_p', 'trans_id', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'uids', 'mac', 'host_name', 'requested_addr', 'msg_types', 'note', 'msg', 'actions', 'email_dest', 'suppress_for', 'ts_delta', 'gaps', 'acks', 'percent_lost', 'metric_type', 'name', 'labels', 'label_values', 'value', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'cert_chain_fps', 'client_cert_chain_fps', 'subject', 'issuer', 'sni_matches_cert', 'validation_status', 'fingerprint', 'certificate.version', 'certificate.serial', 'certificate.subject', 'certificate.issuer', 'certificate.not_valid_before', 'certificate.not_valid_after', 'certificate.key_alg', 'certificate.sig_alg', 'certificate.key_type', 'certificate.key_length', 'certificate.exponent', 'san.dns', 'basic_constraints.ca', 'host_cert', 'client_cert', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'client_addr', 'notice', 'source', 'mode', 'stratum', 'poll', 'precision', 'root_delay', 'root_disp', 'ref_id', 'ref_time', 'org_time', 'rec_time', 'xmt_time', 'num_exts', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate', 'fuid', 'depth', 'analyzers', 'mime_type', 'is_orig', 'seen_bytes', 'missing_bytes', 'overflow_bytes', 'timedout', 'md5', 'sha1', 'extracted', 'extracted_cutoff']
+2025-02-26 19:29:28,187 - INFO - Dropping 96 columns out of 126 specified
+2025-02-26 19:29:28,194 - INFO - DataFrame shape after cleaning: (10000, 66)
+2025-02-26 19:29:28,198 - INFO - DataFrame columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'pkt_lag', 'host', 'service', 'uid', 'id.orig_p', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate']
+2025-02-26 19:29:28,198 - INFO - Number of columns: 66
+2025-02-26 19:29:28,208 - INFO - DataFrame head:
+      id.resp_p id.orig_h id.resp_h proto  orig_bytes  resp_bytes            ts  pkt_lag host service  uid  id.orig_p  rtt query  qclass qclass_name  qtype qtype_name  rcode rcode_name   AA   TC   RD   RA   Z answers TTLs rejected conn_state local_orig local_resp  missed_bytes history  orig_pkts  orig_ip_bytes  resp_pkts  resp_ip_bytes  ip_proto  duration version client_initial_dcid client_scid server_scid cipher curve server_name resumed established ssl_history next_protocol  trans_depth method  uri  request_body_len  response_body_len  status_code status_msg tags   id hashAlgorithm issuerNameHash issuerKeyHash serialNumber certStatus  thisUpdate  nextUpdate
+2452        NaN       NaN       NaN   NaN         NaN         NaN  1.740118e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN  0.104254     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+3466        NaN       NaN       NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+162         NaN       NaN       NaN   NaN         NaN         NaN  1.740118e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+6230        NaN       NaN       NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+5231        NaN       NaN       NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+2025-02-26 19:29:28,208 - INFO - DataFrame shape: (10000, 66)
+2025-02-26 19:29:28,239 - INFO - DataFrame numeric summary:
+          id.resp_p    orig_bytes     resp_bytes            ts   pkt_lag     id.orig_p         rtt  qclass       qtype       rcode      Z   missed_bytes    orig_pkts  orig_ip_bytes    resp_pkts  resp_ip_bytes     ip_proto     duration  trans_depth  request_body_len  response_body_len  status_code    thisUpdate    nextUpdate
+count   1606.000000  1.048000e+03    1048.000000  9.999000e+03  7.000000   1605.000000  243.000000   426.0  426.000000  409.000000  433.0    1079.000000  1079.000000   1.079000e+03  1079.000000    1079.000000  1079.000000  2022.000000          7.0               7.0                7.0          7.0  4.000000e+00  4.000000e+00
+mean    3633.608966  2.719185e+03    1388.354008  1.740119e+09  0.002835  46064.636137    0.007470     1.0   43.377934    0.007335    0.0     275.277108     3.065802   2.782652e+03     3.405931    1494.846154    11.202966     3.474712          1.0               0.0                0.0        204.0  1.739625e+09  1.740318e+09
+std     4365.460666  6.037924e+04   27411.985622  5.961216e+02  0.004274  12565.455755    0.018644     0.0   39.157545    0.148340    0.0    9042.339733    20.577883   6.043692e+04    30.110991   27527.392373     7.988196    28.756772          0.0               0.0                0.0          0.0  5.819691e+04  5.819691e+04
+min        0.000000  0.000000e+00       0.000000  1.740118e+09  0.000000     68.000000    0.000281     1.0    1.000000    0.000000    0.0       0.000000     0.000000   0.000000e+00     0.000000       0.000000     6.000000     0.000000          1.0               0.0                0.0        204.0  1.739575e+09  1.740267e+09
+25%       53.000000  0.000000e+00       0.000000  1.740118e+09  0.000867  40295.000000    0.001778     1.0    1.000000    0.000000    0.0       0.000000     1.000000   6.000000e+01     1.000000      40.000000     6.000000     0.000527          1.0               0.0                0.0        204.0  1.739575e+09  1.740267e+09
+50%      136.000000  0.000000e+00       0.000000  1.740119e+09  0.001849  50503.000000    0.002234     1.0   65.000000    0.000000    0.0       0.000000     1.000000   6.000000e+01     1.000000      40.000000     6.000000     0.005381          1.0               0.0                0.0        204.0  1.739625e+09  1.740318e+09
+75%     9092.000000  6.100000e+01     198.000000  1.740119e+09  0.001973  54430.000000    0.002860     1.0   65.000000    0.000000    0.0       0.000000     1.000000   9.000000e+01     1.000000     226.000000    17.000000     0.007678          1.0               0.0                0.0        204.0  1.739676e+09  1.740368e+09
+max    21116.000000  1.932996e+06  874506.000000  1.740120e+09  0.012315  60995.000000    0.119818     1.0  255.000000    3.000000    0.0  297024.000000   565.000000   1.962384e+06   873.000000  888638.000000    58.000000   448.102649          1.0               0.0                0.0        204.0  1.739676e+09  1.740368e+09
+2025-02-26 19:29:28,285 - INFO - DataFrame non-numeric summary:
+          id.orig_h    id.resp_h proto                            host service                uid                    query qclass_name qtype_name rcode_name     AA     TC    RD    RA                                                                                                                              answers            TTLs rejected conn_state local_orig local_resp history version client_initial_dcid client_scid       server_scid                  cipher      curve                       server_name resumed established ssl_history next_protocol method uri  status_msg tags                  id hashAlgorithm                            issuerNameHash                             issuerKeyHash                            serialNumber certStatus
+count          1606         1606  1513                              10     439               1605                      433         426        426        409    433    433   433   433                                                                                                                                  254             254      433       1079       1083       1079    1081      86                  19          19                17                      54         54                                39      56          56          56             5      7   7           7    7                   4             4                                         4                                         4                                       4          4
+unique           18           69     4                               4       8               1118                       66           1          6          2      2      1     2     2                                                                                                                                  117             213        1          7          2          2      28       5                  19           1                17                       4          4                                17       2           2           6             1      1   1           1    1                   4             1                                         2                                         2                                       2          1
+top     192.168.1.3  192.168.1.1   udp  connectivity-check.ubuntu.com.     dns  CP9ROzzRvmMkxXEu7  wac-0003.wac-msedge.net  C_INTERNET      HTTPS    NOERROR  False  False  True  True  [usc-word-edit-geo.wac.trafficmanager.net, usc-word-edit.wac.trafficmanager.net.wac-0003.wac-dc-msedge.net.wac-0003.wac-msedge.net]  [120.0, 120.0]    False        REJ       True       True      Sr  TLSv13    6b77933b392d05f9              eb77933b392d05f9  TLS_AES_256_GCM_SHA384  secp384r1  mobile.events.data.microsoft.com   False        True      CjiICs            h2    GET   /  No Content   []  F003Tx4savkm8oAsl4          sha1  E475019DC323E226741D6C40390795F90596462E  3B70D153E976259D60A8CA660FC69BAE6F54166A  3300E0D2F69F3A2BFEE266BDA4000000E0D2F6       good
+freq           1520          762   863                               7     382                  7                       74         426        248        408    416    433   392   238                                                                                                                                   34               6      433        585       1079        962     585      49                   1          19                 1                      30         27                                 6      48          39          23             5      7   7           7    7                   1             4                                         3                                         3                                       3          4
+2025-02-26 19:29:28,286 - INFO - Unique values in 'id.resp_p' before labeling: [   nan  9092.    53.   443.  5353.  1900.   123.   136.   547. 21116.
+     0.    80.   133.   134.   138.    67.    22. 21115.   135.]
+2025-02-26 19:29:28,291 - INFO - Label distribution: {}
+2025-02-26 19:29:28,292 - WARNING - No data left after filtering for valid labels
+2025-02-26 19:29:28,293 - INFO - Waiting 30 seconds before retrying...
+2025-02-26 19:29:36,933 - INFO - Process interrupted by user.
+2025-02-26 19:31:16,239 - INFO - Starting livepreprocessing_socket.py
+2025-02-26 19:31:16,239 - INFO - Sending test message to socket server
+2025-02-26 19:31:16,239 - INFO - Attempting to send data to localhost:9000
+2025-02-26 19:31:16,239 - ERROR - Connection refused to localhost:9000. Is the receiving server running?
+2025-02-26 19:31:16,239 - ERROR - Failed to send test message
+2025-02-26 19:31:16,239 - WARNING - Socket communication test failed, but proceeding anyway
+2025-02-26 19:31:16,239 - INFO - Starting data processing
+2025-02-26 19:31:16,239 - INFO - Attempting to connect to Kafka topic 'zeek' on ['192.168.1.3:9092']
+2025-02-26 19:31:16,241 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connecting> [IPv4 ('192.168.1.3', 9092)]>: connecting to 192.168.1.3:9092 [('192.168.1.3', 9092) IPv4]
+2025-02-26 19:31:16,241 - INFO - Probing node bootstrap-0 broker version
+2025-02-26 19:31:16,241 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connecting> [IPv4 ('192.168.1.3', 9092)]>: Connection complete.
+2025-02-26 19:31:16,344 - INFO - Broker version identified as 2.5.0
+2025-02-26 19:31:16,344 - INFO - Set configuration api_version=(2, 5, 0) to skip auto check_version requests on startup
+2025-02-26 19:31:16,344 - WARNING - group_id is None: disabling auto-commit.
+2025-02-26 19:31:16,344 - INFO - Updating subscribed topics to: ('zeek',)
+2025-02-26 19:31:16,344 - INFO - Connected to Kafka. Waiting for messages...
+2025-02-26 19:31:16,345 - INFO - Updated partition assignment: [TopicPartition(topic='zeek', partition=0)]
+2025-02-26 19:31:16,346 - INFO - <BrokerConnection node_id=0 host=Atlas:9092 <connecting> [IPv4 ('127.0.1.1', 9092)]>: connecting to Atlas:9092 [('127.0.1.1', 9092) IPv4]
+2025-02-26 19:31:16,346 - INFO - <BrokerConnection node_id=0 host=Atlas:9092 <connecting> [IPv4 ('127.0.1.1', 9092)]>: Connection complete.
+2025-02-26 19:31:16,346 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connected> [IPv4 ('192.168.1.3', 9092)]>: Closing connection. 
+2025-02-26 19:31:16,503 - INFO - Received 100 messages so far
+2025-02-26 19:31:16,504 - INFO - Received 200 messages so far
+2025-02-26 19:31:16,504 - INFO - Received 300 messages so far
+2025-02-26 19:31:16,504 - INFO - Received 400 messages so far
+2025-02-26 19:31:16,504 - INFO - Received 500 messages so far
+2025-02-26 19:31:16,505 - INFO - Received 600 messages so far
+2025-02-26 19:31:16,505 - INFO - Received 700 messages so far
+2025-02-26 19:31:16,505 - INFO - Received 800 messages so far
+2025-02-26 19:31:16,505 - INFO - Received 900 messages so far
+2025-02-26 19:31:16,506 - INFO - Received 1000 messages so far
+2025-02-26 19:31:16,506 - INFO - Received 1100 messages so far
+2025-02-26 19:31:16,506 - INFO - Received 1200 messages so far
+2025-02-26 19:31:16,506 - INFO - Received 1300 messages so far
+2025-02-26 19:31:16,506 - INFO - Received 1400 messages so far
+2025-02-26 19:31:16,507 - INFO - Received 1500 messages so far
+2025-02-26 19:31:16,507 - INFO - Received 1600 messages so far
+2025-02-26 19:31:16,507 - INFO - Received 1700 messages so far
+2025-02-26 19:31:16,507 - INFO - Received 1800 messages so far
+2025-02-26 19:31:16,507 - INFO - Received 1900 messages so far
+2025-02-26 19:31:16,508 - INFO - Received 2000 messages so far
+2025-02-26 19:31:16,508 - INFO - Received 2100 messages so far
+2025-02-26 19:31:16,508 - INFO - Received 2200 messages so far
+2025-02-26 19:31:16,508 - INFO - Received 2300 messages so far
+2025-02-26 19:31:16,508 - INFO - Received 2400 messages so far
+2025-02-26 19:31:16,509 - INFO - Received 2500 messages so far
+2025-02-26 19:31:16,509 - INFO - Received 2600 messages so far
+2025-02-26 19:31:16,509 - INFO - Received 2700 messages so far
+2025-02-26 19:31:16,509 - INFO - Received 2800 messages so far
+2025-02-26 19:31:16,509 - INFO - Received 2900 messages so far
+2025-02-26 19:31:16,510 - INFO - Received 3000 messages so far
+2025-02-26 19:31:16,510 - INFO - Received 3100 messages so far
+2025-02-26 19:31:16,510 - INFO - Received 3200 messages so far
+2025-02-26 19:31:16,510 - INFO - Received 3300 messages so far
+2025-02-26 19:31:16,510 - INFO - Received 3400 messages so far
+2025-02-26 19:31:16,511 - INFO - Received 3500 messages so far
+2025-02-26 19:31:16,511 - INFO - Received 3600 messages so far
+2025-02-26 19:31:16,511 - INFO - Received 3700 messages so far
+2025-02-26 19:31:16,511 - INFO - Received 3800 messages so far
+2025-02-26 19:31:16,511 - INFO - Received 3900 messages so far
+2025-02-26 19:31:16,512 - INFO - Received 4000 messages so far
+2025-02-26 19:31:16,512 - INFO - Received 4100 messages so far
+2025-02-26 19:31:16,571 - INFO - Received 4200 messages so far
+2025-02-26 19:31:16,572 - INFO - Received 4300 messages so far
+2025-02-26 19:31:16,572 - INFO - Received 4400 messages so far
+2025-02-26 19:31:16,572 - INFO - Received 4500 messages so far
+2025-02-26 19:31:16,572 - INFO - Received 4600 messages so far
+2025-02-26 19:31:16,573 - INFO - Received 4700 messages so far
+2025-02-26 19:31:16,573 - INFO - Received 4800 messages so far
+2025-02-26 19:31:16,573 - INFO - Received 4900 messages so far
+2025-02-26 19:31:16,573 - INFO - Received 5000 messages so far
+2025-02-26 19:31:16,574 - INFO - Received 5100 messages so far
+2025-02-26 19:31:16,574 - INFO - Received 5200 messages so far
+2025-02-26 19:31:16,574 - INFO - Received 5300 messages so far
+2025-02-26 19:31:16,574 - INFO - Received 5400 messages so far
+2025-02-26 19:31:16,574 - INFO - Received 5500 messages so far
+2025-02-26 19:31:16,575 - INFO - Received 5600 messages so far
+2025-02-26 19:31:16,575 - INFO - Received 5700 messages so far
+2025-02-26 19:31:16,575 - INFO - Received 5800 messages so far
+2025-02-26 19:31:16,575 - INFO - Received 5900 messages so far
+2025-02-26 19:31:16,575 - INFO - Received 6000 messages so far
+2025-02-26 19:31:16,576 - INFO - Received 6100 messages so far
+2025-02-26 19:31:16,576 - INFO - Received 6200 messages so far
+2025-02-26 19:31:16,576 - INFO - Received 6300 messages so far
+2025-02-26 19:31:16,576 - INFO - Received 6400 messages so far
+2025-02-26 19:31:16,576 - INFO - Received 6500 messages so far
+2025-02-26 19:31:16,576 - INFO - Received 6600 messages so far
+2025-02-26 19:31:16,577 - INFO - Received 6700 messages so far
+2025-02-26 19:31:16,577 - INFO - Received 6800 messages so far
+2025-02-26 19:31:16,577 - INFO - Received 6900 messages so far
+2025-02-26 19:31:16,577 - INFO - Received 7000 messages so far
+2025-02-26 19:31:16,577 - INFO - Received 7100 messages so far
+2025-02-26 19:31:16,578 - INFO - Received 7200 messages so far
+2025-02-26 19:31:16,578 - INFO - Received 7300 messages so far
+2025-02-26 19:31:16,578 - INFO - Received 7400 messages so far
+2025-02-26 19:31:16,578 - INFO - Received 7500 messages so far
+2025-02-26 19:31:16,578 - INFO - Received 7600 messages so far
+2025-02-26 19:31:16,579 - INFO - Received 7700 messages so far
+2025-02-26 19:31:16,579 - INFO - Received 7800 messages so far
+2025-02-26 19:31:16,579 - INFO - Received 7900 messages so far
+2025-02-26 19:31:16,579 - INFO - Received 8000 messages so far
+2025-02-26 19:31:16,579 - INFO - Received 8100 messages so far
+2025-02-26 19:31:16,580 - INFO - Received 8200 messages so far
+2025-02-26 19:31:16,580 - INFO - Received 8300 messages so far
+2025-02-26 19:31:16,580 - INFO - Received 8400 messages so far
+2025-02-26 19:31:16,580 - INFO - Received 8500 messages so far
+2025-02-26 19:31:16,580 - INFO - Received 8600 messages so far
+2025-02-26 19:31:16,581 - INFO - Received 8700 messages so far
+2025-02-26 19:31:16,682 - INFO - Received 8800 messages so far
+2025-02-26 19:31:16,682 - INFO - Received 8900 messages so far
+2025-02-26 19:31:16,682 - INFO - Received 9000 messages so far
+2025-02-26 19:31:16,683 - INFO - Received 9100 messages so far
+2025-02-26 19:31:16,683 - INFO - Received 9200 messages so far
+2025-02-26 19:31:16,683 - INFO - Received 9300 messages so far
+2025-02-26 19:31:16,684 - INFO - Received 9400 messages so far
+2025-02-26 19:31:16,684 - INFO - Received 9500 messages so far
+2025-02-26 19:31:16,684 - INFO - Received 9600 messages so far
+2025-02-26 19:31:16,684 - INFO - Received 9700 messages so far
+2025-02-26 19:31:16,684 - INFO - Received 9800 messages so far
+2025-02-26 19:31:16,685 - INFO - Received 9900 messages so far
+2025-02-26 19:31:16,685 - INFO - Received 10000 messages so far
+2025-02-26 19:31:16,685 - INFO - Total messages consumed: 10000
+2025-02-26 19:31:16,775 - INFO - Messages converted to DataFrame successfully!
+2025-02-26 19:31:16,779 - INFO - Initial DataFrame columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'peer', 'mem', 'pkts_proc', 'bytes_recv', 'pkts_dropped', 'pkts_link', 'pkt_lag', 'events_proc', 'events_queued', 'active_tcp_conns', 'active_udp_conns', 'active_icmp_conns', 'tcp_conns', 'udp_conns', 'icmp_conns', 'timers', 'active_timers', 'files', 'active_files', 'dns_requests', 'active_dns_requests', 'reassem_tcp_size', 'reassem_file_size', 'reassem_frag_size', 'reassem_unknown_size', 'host', 'port_num', 'port_proto', 'service', 'uid', 'id.orig_p', 'trans_id', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'uids', 'mac', 'host_name', 'requested_addr', 'msg_types', 'note', 'msg', 'actions', 'email_dest', 'suppress_for', 'ts_delta', 'gaps', 'acks', 'percent_lost', 'metric_type', 'name', 'labels', 'label_values', 'value', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'cert_chain_fps', 'client_cert_chain_fps', 'subject', 'issuer', 'sni_matches_cert', 'validation_status', 'fingerprint', 'certificate.version', 'certificate.serial', 'certificate.subject', 'certificate.issuer', 'certificate.not_valid_before', 'certificate.not_valid_after', 'certificate.key_alg', 'certificate.sig_alg', 'certificate.key_type', 'certificate.key_length', 'certificate.exponent', 'san.dns', 'basic_constraints.ca', 'host_cert', 'client_cert', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'client_addr', 'notice', 'source', 'mode', 'stratum', 'poll', 'precision', 'root_delay', 'root_disp', 'ref_id', 'ref_time', 'org_time', 'rec_time', 'xmt_time', 'num_exts', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate', 'fuid', 'depth', 'analyzers', 'mime_type', 'is_orig', 'seen_bytes', 'missing_bytes', 'overflow_bytes', 'timedout', 'md5', 'sha1', 'extracted', 'extracted_cutoff']
+2025-02-26 19:31:16,779 - INFO - Initial DataFrame shape: (10000, 162)
+2025-02-26 19:31:16,779 - INFO - Initial columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'peer', 'mem', 'pkts_proc', 'bytes_recv', 'pkts_dropped', 'pkts_link', 'pkt_lag', 'events_proc', 'events_queued', 'active_tcp_conns', 'active_udp_conns', 'active_icmp_conns', 'tcp_conns', 'udp_conns', 'icmp_conns', 'timers', 'active_timers', 'files', 'active_files', 'dns_requests', 'active_dns_requests', 'reassem_tcp_size', 'reassem_file_size', 'reassem_frag_size', 'reassem_unknown_size', 'host', 'port_num', 'port_proto', 'service', 'uid', 'id.orig_p', 'trans_id', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'uids', 'mac', 'host_name', 'requested_addr', 'msg_types', 'note', 'msg', 'actions', 'email_dest', 'suppress_for', 'ts_delta', 'gaps', 'acks', 'percent_lost', 'metric_type', 'name', 'labels', 'label_values', 'value', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'cert_chain_fps', 'client_cert_chain_fps', 'subject', 'issuer', 'sni_matches_cert', 'validation_status', 'fingerprint', 'certificate.version', 'certificate.serial', 'certificate.subject', 'certificate.issuer', 'certificate.not_valid_before', 'certificate.not_valid_after', 'certificate.key_alg', 'certificate.sig_alg', 'certificate.key_type', 'certificate.key_length', 'certificate.exponent', 'san.dns', 'basic_constraints.ca', 'host_cert', 'client_cert', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'client_addr', 'notice', 'source', 'mode', 'stratum', 'poll', 'precision', 'root_delay', 'root_disp', 'ref_id', 'ref_time', 'org_time', 'rec_time', 'xmt_time', 'num_exts', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate', 'fuid', 'depth', 'analyzers', 'mime_type', 'is_orig', 'seen_bytes', 'missing_bytes', 'overflow_bytes', 'timedout', 'md5', 'sha1', 'extracted', 'extracted_cutoff']
+2025-02-26 19:31:16,779 - INFO - Dropping 96 columns out of 126 specified
+2025-02-26 19:31:16,790 - INFO - DataFrame shape after cleaning: (10000, 66)
+2025-02-26 19:31:16,790 - INFO - DataFrame columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'pkt_lag', 'host', 'service', 'uid', 'id.orig_p', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate']
+2025-02-26 19:31:16,790 - INFO - Number of columns: 66
+2025-02-26 19:31:16,801 - INFO - DataFrame head:
+      id.resp_p id.orig_h id.resp_h proto  orig_bytes  resp_bytes            ts  pkt_lag host service  uid  id.orig_p  rtt query  qclass qclass_name  qtype qtype_name  rcode rcode_name   AA   TC   RD   RA   Z answers TTLs rejected conn_state local_orig local_resp  missed_bytes history  orig_pkts  orig_ip_bytes  resp_pkts  resp_ip_bytes  ip_proto  duration version client_initial_dcid client_scid server_scid cipher curve server_name resumed established ssl_history next_protocol  trans_depth method  uri  request_body_len  response_body_len  status_code status_msg tags   id hashAlgorithm issuerNameHash issuerKeyHash serialNumber certStatus  thisUpdate  nextUpdate
+4479        NaN       NaN       NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN  0.005286     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+6005        NaN       NaN       NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+2661        NaN       NaN       NaN   NaN         NaN         NaN  1.740118e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+6391        NaN       NaN       NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN  0.007185     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+6155        NaN       NaN       NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+2025-02-26 19:31:16,801 - INFO - DataFrame shape: (10000, 66)
+2025-02-26 19:31:16,833 - INFO - DataFrame numeric summary:
+          id.resp_p    orig_bytes     resp_bytes            ts   pkt_lag     id.orig_p         rtt  qclass       qtype       rcode      Z   missed_bytes    orig_pkts  orig_ip_bytes    resp_pkts  resp_ip_bytes     ip_proto     duration  trans_depth  request_body_len  response_body_len  status_code    thisUpdate    nextUpdate
+count   1606.000000  1.048000e+03    1048.000000  9.999000e+03  7.000000   1605.000000  243.000000   426.0  426.000000  409.000000  433.0    1079.000000  1079.000000   1.079000e+03  1079.000000    1079.000000  1079.000000  2022.000000          7.0               7.0                7.0          7.0  4.000000e+00  4.000000e+00
+mean    3633.608966  2.719185e+03    1388.354008  1.740119e+09  0.002835  46064.636137    0.007470     1.0   43.377934    0.007335    0.0     275.277108     3.065802   2.782652e+03     3.405931    1494.846154    11.202966     3.474712          1.0               0.0                0.0        204.0  1.739625e+09  1.740318e+09
+std     4365.460666  6.037924e+04   27411.985622  5.961216e+02  0.004274  12565.455755    0.018644     0.0   39.157545    0.148340    0.0    9042.339733    20.577883   6.043692e+04    30.110991   27527.392373     7.988196    28.756772          0.0               0.0                0.0          0.0  5.819691e+04  5.819691e+04
+min        0.000000  0.000000e+00       0.000000  1.740118e+09  0.000000     68.000000    0.000281     1.0    1.000000    0.000000    0.0       0.000000     0.000000   0.000000e+00     0.000000       0.000000     6.000000     0.000000          1.0               0.0                0.0        204.0  1.739575e+09  1.740267e+09
+25%       53.000000  0.000000e+00       0.000000  1.740118e+09  0.000867  40295.000000    0.001778     1.0    1.000000    0.000000    0.0       0.000000     1.000000   6.000000e+01     1.000000      40.000000     6.000000     0.000527          1.0               0.0                0.0        204.0  1.739575e+09  1.740267e+09
+50%      136.000000  0.000000e+00       0.000000  1.740119e+09  0.001849  50503.000000    0.002234     1.0   65.000000    0.000000    0.0       0.000000     1.000000   6.000000e+01     1.000000      40.000000     6.000000     0.005381          1.0               0.0                0.0        204.0  1.739625e+09  1.740318e+09
+75%     9092.000000  6.100000e+01     198.000000  1.740119e+09  0.001973  54430.000000    0.002860     1.0   65.000000    0.000000    0.0       0.000000     1.000000   9.000000e+01     1.000000     226.000000    17.000000     0.007678          1.0               0.0                0.0        204.0  1.739676e+09  1.740368e+09
+max    21116.000000  1.932996e+06  874506.000000  1.740120e+09  0.012315  60995.000000    0.119818     1.0  255.000000    3.000000    0.0  297024.000000   565.000000   1.962384e+06   873.000000  888638.000000    58.000000   448.102649          1.0               0.0                0.0        204.0  1.739676e+09  1.740368e+09
+2025-02-26 19:31:16,878 - INFO - DataFrame non-numeric summary:
+          id.orig_h    id.resp_h proto                            host service                 uid                    query qclass_name qtype_name rcode_name     AA     TC    RD    RA                                                                                                                              answers            TTLs rejected conn_state local_orig local_resp history version client_initial_dcid client_scid       server_scid                  cipher      curve                       server_name resumed established ssl_history next_protocol method uri  status_msg tags                  id hashAlgorithm                            issuerNameHash                             issuerKeyHash                            serialNumber certStatus
+count          1606         1606  1513                              10     439                1605                      433         426        426        409    433    433   433   433                                                                                                                                  254             254      433       1079       1083       1079    1081      86                  19          19                17                      54         54                                39      56          56          56             5      7   7           7    7                   4             4                                         4                                         4                                       4          4
+unique           18           69     4                               4       8                1118                       66           1          6          2      2      1     2     2                                                                                                                                  117             213        1          7          2          2      28       5                  19           1                17                       4          4                                17       2           2           6             1      1   1           1    1                   4             1                                         2                                         2                                       2          1
+top     192.168.1.3  192.168.1.1   udp  connectivity-check.ubuntu.com.     dns  CQW5gD448OyN1FH5bg  wac-0003.wac-msedge.net  C_INTERNET      HTTPS    NOERROR  False  False  True  True  [usc-word-edit-geo.wac.trafficmanager.net, usc-word-edit.wac.trafficmanager.net.wac-0003.wac-dc-msedge.net.wac-0003.wac-msedge.net]  [120.0, 120.0]    False        REJ       True       True      Sr  TLSv13    2fe788e3cc713726              efe788e3cc713726  TLS_AES_256_GCM_SHA384  secp384r1  mobile.events.data.microsoft.com   False        True      CjiICs            h2    GET   /  No Content   []  F003Tx4savkm8oAsl4          sha1  E475019DC323E226741D6C40390795F90596462E  3B70D153E976259D60A8CA660FC69BAE6F54166A  3300E0D2F69F3A2BFEE266BDA4000000E0D2F6       good
+freq           1520          762   863                               7     382                   7                       74         426        248        408    416    433   392   238                                                                                                                                   34               6      433        585       1079        962     585      49                   1          19                 1                      30         27                                 6      48          39          23             5      7   7           7    7                   1             4                                         3                                         3                                       3          4
+2025-02-26 19:31:16,879 - INFO - Unique values in 'id.resp_p' before labeling: [   nan  9092.  1900.    53.   443.   134.  5353.   136.   138.   123.
+    80.     0.   133.    67.    22. 21116.   135.   547. 21115.]
+2025-02-26 19:31:16,884 - INFO - Label distribution: {}
+2025-02-26 19:31:16,885 - WARNING - No data left after filtering for valid labels
+2025-02-26 19:31:16,886 - INFO - Waiting 30 seconds before retrying...
+2025-02-26 19:31:46,916 - INFO - Starting data processing
+2025-02-26 19:31:46,916 - INFO - Attempting to connect to Kafka topic 'zeek' on ['192.168.1.3:9092']
+2025-02-26 19:31:46,917 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connecting> [IPv4 ('192.168.1.3', 9092)]>: connecting to 192.168.1.3:9092 [('192.168.1.3', 9092) IPv4]
+2025-02-26 19:31:46,918 - INFO - Probing node bootstrap-0 broker version
+2025-02-26 19:31:46,918 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connecting> [IPv4 ('192.168.1.3', 9092)]>: Connection complete.
+2025-02-26 19:31:47,020 - INFO - Broker version identified as 2.5.0
+2025-02-26 19:31:47,020 - INFO - Set configuration api_version=(2, 5, 0) to skip auto check_version requests on startup
+2025-02-26 19:31:47,020 - WARNING - group_id is None: disabling auto-commit.
+2025-02-26 19:31:47,020 - INFO - Updating subscribed topics to: ('zeek',)
+2025-02-26 19:31:47,021 - INFO - Connected to Kafka. Waiting for messages...
+2025-02-26 19:31:47,022 - INFO - Updated partition assignment: [TopicPartition(topic='zeek', partition=0)]
+2025-02-26 19:31:47,022 - INFO - <BrokerConnection node_id=0 host=Atlas:9092 <connecting> [IPv4 ('127.0.1.1', 9092)]>: connecting to Atlas:9092 [('127.0.1.1', 9092) IPv4]
+2025-02-26 19:31:47,022 - INFO - <BrokerConnection node_id=0 host=Atlas:9092 <connecting> [IPv4 ('127.0.1.1', 9092)]>: Connection complete.
+2025-02-26 19:31:47,022 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connected> [IPv4 ('192.168.1.3', 9092)]>: Closing connection. 
+2025-02-26 19:31:47,191 - INFO - Received 100 messages so far
+2025-02-26 19:31:47,191 - INFO - Received 200 messages so far
+2025-02-26 19:31:47,191 - INFO - Received 300 messages so far
+2025-02-26 19:31:47,192 - INFO - Received 400 messages so far
+2025-02-26 19:31:47,192 - INFO - Received 500 messages so far
+2025-02-26 19:31:47,192 - INFO - Received 600 messages so far
+2025-02-26 19:31:47,192 - INFO - Received 700 messages so far
+2025-02-26 19:31:47,192 - INFO - Received 800 messages so far
+2025-02-26 19:31:47,193 - INFO - Received 900 messages so far
+2025-02-26 19:31:47,193 - INFO - Received 1000 messages so far
+2025-02-26 19:31:47,193 - INFO - Received 1100 messages so far
+2025-02-26 19:31:47,193 - INFO - Received 1200 messages so far
+2025-02-26 19:31:47,193 - INFO - Received 1300 messages so far
+2025-02-26 19:31:47,194 - INFO - Received 1400 messages so far
+2025-02-26 19:31:47,194 - INFO - Received 1500 messages so far
+2025-02-26 19:31:47,194 - INFO - Received 1600 messages so far
+2025-02-26 19:31:47,194 - INFO - Received 1700 messages so far
+2025-02-26 19:31:47,194 - INFO - Received 1800 messages so far
+2025-02-26 19:31:47,194 - INFO - Received 1900 messages so far
+2025-02-26 19:31:47,195 - INFO - Received 2000 messages so far
+2025-02-26 19:31:47,195 - INFO - Received 2100 messages so far
+2025-02-26 19:31:47,195 - INFO - Received 2200 messages so far
+2025-02-26 19:31:47,195 - INFO - Received 2300 messages so far
+2025-02-26 19:31:47,195 - INFO - Received 2400 messages so far
+2025-02-26 19:31:47,196 - INFO - Received 2500 messages so far
+2025-02-26 19:31:47,196 - INFO - Received 2600 messages so far
+2025-02-26 19:31:47,196 - INFO - Received 2700 messages so far
+2025-02-26 19:31:47,196 - INFO - Received 2800 messages so far
+2025-02-26 19:31:47,196 - INFO - Received 2900 messages so far
+2025-02-26 19:31:47,197 - INFO - Received 3000 messages so far
+2025-02-26 19:31:47,197 - INFO - Received 3100 messages so far
+2025-02-26 19:31:47,197 - INFO - Received 3200 messages so far
+2025-02-26 19:31:47,197 - INFO - Received 3300 messages so far
+2025-02-26 19:31:47,197 - INFO - Received 3400 messages so far
+2025-02-26 19:31:47,198 - INFO - Received 3500 messages so far
+2025-02-26 19:31:47,198 - INFO - Received 3600 messages so far
+2025-02-26 19:31:47,198 - INFO - Received 3700 messages so far
+2025-02-26 19:31:47,198 - INFO - Received 3800 messages so far
+2025-02-26 19:31:47,198 - INFO - Received 3900 messages so far
+2025-02-26 19:31:47,199 - INFO - Received 4000 messages so far
+2025-02-26 19:31:47,199 - INFO - Received 4100 messages so far
+2025-02-26 19:31:47,254 - INFO - Received 4200 messages so far
+2025-02-26 19:31:47,255 - INFO - Received 4300 messages so far
+2025-02-26 19:31:47,255 - INFO - Received 4400 messages so far
+2025-02-26 19:31:47,255 - INFO - Received 4500 messages so far
+2025-02-26 19:31:47,255 - INFO - Received 4600 messages so far
+2025-02-26 19:31:47,255 - INFO - Received 4700 messages so far
+2025-02-26 19:31:47,256 - INFO - Received 4800 messages so far
+2025-02-26 19:31:47,256 - INFO - Received 4900 messages so far
+2025-02-26 19:31:47,256 - INFO - Received 5000 messages so far
+2025-02-26 19:31:47,256 - INFO - Received 5100 messages so far
+2025-02-26 19:31:47,256 - INFO - Received 5200 messages so far
+2025-02-26 19:31:47,257 - INFO - Received 5300 messages so far
+2025-02-26 19:31:47,257 - INFO - Received 5400 messages so far
+2025-02-26 19:31:47,257 - INFO - Received 5500 messages so far
+2025-02-26 19:31:47,257 - INFO - Received 5600 messages so far
+2025-02-26 19:31:47,257 - INFO - Received 5700 messages so far
+2025-02-26 19:31:47,258 - INFO - Received 5800 messages so far
+2025-02-26 19:31:47,258 - INFO - Received 5900 messages so far
+2025-02-26 19:31:47,258 - INFO - Received 6000 messages so far
+2025-02-26 19:31:47,258 - INFO - Received 6100 messages so far
+2025-02-26 19:31:47,258 - INFO - Received 6200 messages so far
+2025-02-26 19:31:47,259 - INFO - Received 6300 messages so far
+2025-02-26 19:31:47,259 - INFO - Received 6400 messages so far
+2025-02-26 19:31:47,259 - INFO - Received 6500 messages so far
+2025-02-26 19:31:47,259 - INFO - Received 6600 messages so far
+2025-02-26 19:31:47,259 - INFO - Received 6700 messages so far
+2025-02-26 19:31:47,260 - INFO - Received 6800 messages so far
+2025-02-26 19:31:47,260 - INFO - Received 6900 messages so far
+2025-02-26 19:31:47,260 - INFO - Received 7000 messages so far
+2025-02-26 19:31:47,260 - INFO - Received 7100 messages so far
+2025-02-26 19:31:47,260 - INFO - Received 7200 messages so far
+2025-02-26 19:31:47,261 - INFO - Received 7300 messages so far
+2025-02-26 19:31:47,261 - INFO - Received 7400 messages so far
+2025-02-26 19:31:47,261 - INFO - Received 7500 messages so far
+2025-02-26 19:31:47,261 - INFO - Received 7600 messages so far
+2025-02-26 19:31:47,261 - INFO - Received 7700 messages so far
+2025-02-26 19:31:47,262 - INFO - Received 7800 messages so far
+2025-02-26 19:31:47,262 - INFO - Received 7900 messages so far
+2025-02-26 19:31:47,262 - INFO - Received 8000 messages so far
+2025-02-26 19:31:47,262 - INFO - Received 8100 messages so far
+2025-02-26 19:31:47,262 - INFO - Received 8200 messages so far
+2025-02-26 19:31:47,263 - INFO - Received 8300 messages so far
+2025-02-26 19:31:47,263 - INFO - Received 8400 messages so far
+2025-02-26 19:31:47,263 - INFO - Received 8500 messages so far
+2025-02-26 19:31:47,263 - INFO - Received 8600 messages so far
+2025-02-26 19:31:47,264 - INFO - Received 8700 messages so far
+2025-02-26 19:31:47,323 - INFO - Received 8800 messages so far
+2025-02-26 19:31:47,324 - INFO - Received 8900 messages so far
+2025-02-26 19:31:47,324 - INFO - Received 9000 messages so far
+2025-02-26 19:31:47,324 - INFO - Received 9100 messages so far
+2025-02-26 19:31:47,324 - INFO - Received 9200 messages so far
+2025-02-26 19:31:47,325 - INFO - Received 9300 messages so far
+2025-02-26 19:31:47,325 - INFO - Received 9400 messages so far
+2025-02-26 19:31:47,325 - INFO - Received 9500 messages so far
+2025-02-26 19:31:47,325 - INFO - Received 9600 messages so far
+2025-02-26 19:31:47,325 - INFO - Received 9700 messages so far
+2025-02-26 19:31:47,326 - INFO - Received 9800 messages so far
+2025-02-26 19:31:47,326 - INFO - Received 9900 messages so far
+2025-02-26 19:31:47,326 - INFO - Received 10000 messages so far
+2025-02-26 19:31:47,326 - INFO - Total messages consumed: 10000
+2025-02-26 19:31:47,416 - INFO - Messages converted to DataFrame successfully!
+2025-02-26 19:31:47,420 - INFO - Initial DataFrame columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'peer', 'mem', 'pkts_proc', 'bytes_recv', 'pkts_dropped', 'pkts_link', 'pkt_lag', 'events_proc', 'events_queued', 'active_tcp_conns', 'active_udp_conns', 'active_icmp_conns', 'tcp_conns', 'udp_conns', 'icmp_conns', 'timers', 'active_timers', 'files', 'active_files', 'dns_requests', 'active_dns_requests', 'reassem_tcp_size', 'reassem_file_size', 'reassem_frag_size', 'reassem_unknown_size', 'host', 'port_num', 'port_proto', 'service', 'uid', 'id.orig_p', 'trans_id', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'uids', 'mac', 'host_name', 'requested_addr', 'msg_types', 'note', 'msg', 'actions', 'email_dest', 'suppress_for', 'ts_delta', 'gaps', 'acks', 'percent_lost', 'metric_type', 'name', 'labels', 'label_values', 'value', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'cert_chain_fps', 'client_cert_chain_fps', 'subject', 'issuer', 'sni_matches_cert', 'validation_status', 'fingerprint', 'certificate.version', 'certificate.serial', 'certificate.subject', 'certificate.issuer', 'certificate.not_valid_before', 'certificate.not_valid_after', 'certificate.key_alg', 'certificate.sig_alg', 'certificate.key_type', 'certificate.key_length', 'certificate.exponent', 'san.dns', 'basic_constraints.ca', 'host_cert', 'client_cert', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'client_addr', 'notice', 'source', 'mode', 'stratum', 'poll', 'precision', 'root_delay', 'root_disp', 'ref_id', 'ref_time', 'org_time', 'rec_time', 'xmt_time', 'num_exts', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate', 'fuid', 'depth', 'analyzers', 'mime_type', 'is_orig', 'seen_bytes', 'missing_bytes', 'overflow_bytes', 'timedout', 'md5', 'sha1', 'extracted', 'extracted_cutoff']
+2025-02-26 19:31:47,420 - INFO - Initial DataFrame shape: (10000, 162)
+2025-02-26 19:31:47,420 - INFO - Initial columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'peer', 'mem', 'pkts_proc', 'bytes_recv', 'pkts_dropped', 'pkts_link', 'pkt_lag', 'events_proc', 'events_queued', 'active_tcp_conns', 'active_udp_conns', 'active_icmp_conns', 'tcp_conns', 'udp_conns', 'icmp_conns', 'timers', 'active_timers', 'files', 'active_files', 'dns_requests', 'active_dns_requests', 'reassem_tcp_size', 'reassem_file_size', 'reassem_frag_size', 'reassem_unknown_size', 'host', 'port_num', 'port_proto', 'service', 'uid', 'id.orig_p', 'trans_id', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'uids', 'mac', 'host_name', 'requested_addr', 'msg_types', 'note', 'msg', 'actions', 'email_dest', 'suppress_for', 'ts_delta', 'gaps', 'acks', 'percent_lost', 'metric_type', 'name', 'labels', 'label_values', 'value', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'cert_chain_fps', 'client_cert_chain_fps', 'subject', 'issuer', 'sni_matches_cert', 'validation_status', 'fingerprint', 'certificate.version', 'certificate.serial', 'certificate.subject', 'certificate.issuer', 'certificate.not_valid_before', 'certificate.not_valid_after', 'certificate.key_alg', 'certificate.sig_alg', 'certificate.key_type', 'certificate.key_length', 'certificate.exponent', 'san.dns', 'basic_constraints.ca', 'host_cert', 'client_cert', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'client_addr', 'notice', 'source', 'mode', 'stratum', 'poll', 'precision', 'root_delay', 'root_disp', 'ref_id', 'ref_time', 'org_time', 'rec_time', 'xmt_time', 'num_exts', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate', 'fuid', 'depth', 'analyzers', 'mime_type', 'is_orig', 'seen_bytes', 'missing_bytes', 'overflow_bytes', 'timedout', 'md5', 'sha1', 'extracted', 'extracted_cutoff']
+2025-02-26 19:31:47,420 - INFO - Dropping 96 columns out of 126 specified
+2025-02-26 19:31:47,427 - INFO - DataFrame shape after cleaning: (10000, 66)
+2025-02-26 19:31:47,431 - INFO - DataFrame columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'pkt_lag', 'host', 'service', 'uid', 'id.orig_p', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate']
+2025-02-26 19:31:47,431 - INFO - Number of columns: 66
+2025-02-26 19:31:47,442 - INFO - DataFrame head:
+      id.resp_p    id.orig_h    id.resp_h proto  orig_bytes  resp_bytes            ts  pkt_lag host service                 uid  id.orig_p  rtt query  qclass qclass_name  qtype qtype_name  rcode rcode_name   AA   TC   RD   RA   Z answers TTLs rejected conn_state local_orig local_resp  missed_bytes history  orig_pkts  orig_ip_bytes  resp_pkts  resp_ip_bytes  ip_proto  duration version client_initial_dcid client_scid server_scid cipher curve server_name resumed established ssl_history next_protocol  trans_depth method  uri  request_body_len  response_body_len  status_code status_msg tags   id hashAlgorithm issuerNameHash issuerKeyHash serialNumber certStatus  thisUpdate  nextUpdate
+8463     9092.0  192.168.1.3  192.168.1.4   tcp         0.0         0.0  1.740120e+09      NaN  NaN     NaN  CwxOA24TO3SxEJoHTe    36324.0  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        REJ       True       True           0.0      Sr        1.0           60.0        1.0           40.0       6.0  0.000571     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+5755        NaN          NaN          NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN                 NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+5237        NaN          NaN          NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN                 NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+8643        NaN          NaN          NaN   NaN         NaN         NaN  1.740120e+09      NaN  NaN     NaN                 NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN  0.005622     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+7746        NaN          NaN          NaN   NaN         NaN         NaN  1.740120e+09      NaN  NaN     NaN                 NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+2025-02-26 19:31:47,442 - INFO - DataFrame shape: (10000, 66)
+2025-02-26 19:31:47,473 - INFO - DataFrame numeric summary:
+          id.resp_p    orig_bytes     resp_bytes            ts   pkt_lag     id.orig_p         rtt  qclass       qtype       rcode      Z   missed_bytes    orig_pkts  orig_ip_bytes    resp_pkts  resp_ip_bytes     ip_proto     duration  trans_depth  request_body_len  response_body_len  status_code    thisUpdate    nextUpdate
+count   1606.000000  1.048000e+03    1048.000000  9.999000e+03  7.000000   1605.000000  243.000000   426.0  426.000000  409.000000  433.0    1079.000000  1079.000000   1.079000e+03  1079.000000    1079.000000  1079.000000  2022.000000          7.0               7.0                7.0          7.0  4.000000e+00  4.000000e+00
+mean    3633.608966  2.719185e+03    1388.354008  1.740119e+09  0.002835  46064.636137    0.007470     1.0   43.377934    0.007335    0.0     275.277108     3.065802   2.782652e+03     3.405931    1494.846154    11.202966     3.474712          1.0               0.0                0.0        204.0  1.739625e+09  1.740318e+09
+std     4365.460666  6.037924e+04   27411.985622  5.961216e+02  0.004274  12565.455755    0.018644     0.0   39.157545    0.148340    0.0    9042.339733    20.577883   6.043692e+04    30.110991   27527.392373     7.988196    28.756772          0.0               0.0                0.0          0.0  5.819691e+04  5.819691e+04
+min        0.000000  0.000000e+00       0.000000  1.740118e+09  0.000000     68.000000    0.000281     1.0    1.000000    0.000000    0.0       0.000000     0.000000   0.000000e+00     0.000000       0.000000     6.000000     0.000000          1.0               0.0                0.0        204.0  1.739575e+09  1.740267e+09
+25%       53.000000  0.000000e+00       0.000000  1.740118e+09  0.000867  40295.000000    0.001778     1.0    1.000000    0.000000    0.0       0.000000     1.000000   6.000000e+01     1.000000      40.000000     6.000000     0.000527          1.0               0.0                0.0        204.0  1.739575e+09  1.740267e+09
+50%      136.000000  0.000000e+00       0.000000  1.740119e+09  0.001849  50503.000000    0.002234     1.0   65.000000    0.000000    0.0       0.000000     1.000000   6.000000e+01     1.000000      40.000000     6.000000     0.005381          1.0               0.0                0.0        204.0  1.739625e+09  1.740318e+09
+75%     9092.000000  6.100000e+01     198.000000  1.740119e+09  0.001973  54430.000000    0.002860     1.0   65.000000    0.000000    0.0       0.000000     1.000000   9.000000e+01     1.000000     226.000000    17.000000     0.007678          1.0               0.0                0.0        204.0  1.739676e+09  1.740368e+09
+max    21116.000000  1.932996e+06  874506.000000  1.740120e+09  0.012315  60995.000000    0.119818     1.0  255.000000    3.000000    0.0  297024.000000   565.000000   1.962384e+06   873.000000  888638.000000    58.000000   448.102649          1.0               0.0                0.0        204.0  1.739676e+09  1.740368e+09
+2025-02-26 19:31:47,519 - INFO - DataFrame non-numeric summary:
+          id.orig_h    id.resp_h proto                            host service                 uid                    query qclass_name qtype_name rcode_name     AA     TC    RD    RA                                                                                                                              answers            TTLs rejected conn_state local_orig local_resp history version client_initial_dcid client_scid       server_scid                  cipher      curve                       server_name resumed established ssl_history next_protocol method uri  status_msg tags                  id hashAlgorithm                            issuerNameHash                             issuerKeyHash                            serialNumber certStatus
+count          1606         1606  1513                              10     439                1605                      433         426        426        409    433    433   433   433                                                                                                                                  254             254      433       1079       1083       1079    1081      86                  19          19                17                      54         54                                39      56          56          56             5      7   7           7    7                   4             4                                         4                                         4                                       4          4
+unique           18           69     4                               4       8                1118                       66           1          6          2      2      1     2     2                                                                                                                                  117             213        1          7          2          2      28       5                  19           1                17                       4          4                                17       2           2           6             1      1   1           1    1                   4             1                                         2                                         2                                       2          1
+top     192.168.1.3  192.168.1.1   udp  connectivity-check.ubuntu.com.     dns  CQW5gD448OyN1FH5bg  wac-0003.wac-msedge.net  C_INTERNET      HTTPS    NOERROR  False  False  True  True  [usc-word-edit-geo.wac.trafficmanager.net, usc-word-edit.wac.trafficmanager.net.wac-0003.wac-dc-msedge.net.wac-0003.wac-msedge.net]  [120.0, 120.0]    False        REJ       True       True      Sr  TLSv13    5b67465ea3a9f950              20e4136c52007c23  TLS_AES_256_GCM_SHA384  secp384r1  mobile.events.data.microsoft.com   False        True      CjiICs            h2    GET   /  No Content   []  FHO0IR29JmFhZFoUuc          sha1  E475019DC323E226741D6C40390795F90596462E  3B70D153E976259D60A8CA660FC69BAE6F54166A  3300E0D2F69F3A2BFEE266BDA4000000E0D2F6       good
+freq           1520          762   863                               7     382                   7                       74         426        248        408    416    433   392   238                                                                                                                                   34               6      433        585       1079        962     585      49                   1          19                 1                      30         27                                 6      48          39          23             5      7   7           7    7                   1             4                                         3                                         3                                       3          4
+2025-02-26 19:31:47,520 - INFO - Unique values in 'id.resp_p' before labeling: [ 9092.    nan    53.  5353.  1900.   123.   443. 21115.   134.    80.
+ 21116.   133.   136.     0.   135.   138.   547.    67.    22.]
+2025-02-26 19:31:47,529 - INFO - Label distribution: {}
+2025-02-26 19:31:47,530 - WARNING - No data left after filtering for valid labels
+2025-02-26 19:31:47,531 - INFO - Waiting 30 seconds before retrying...
+2025-02-26 19:32:17,561 - INFO - Starting data processing
+2025-02-26 19:32:17,562 - INFO - Attempting to connect to Kafka topic 'zeek' on ['192.168.1.3:9092']
+2025-02-26 19:32:17,562 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connecting> [IPv4 ('192.168.1.3', 9092)]>: connecting to 192.168.1.3:9092 [('192.168.1.3', 9092) IPv4]
+2025-02-26 19:32:17,563 - INFO - Probing node bootstrap-0 broker version
+2025-02-26 19:32:17,563 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connecting> [IPv4 ('192.168.1.3', 9092)]>: Connection complete.
+2025-02-26 19:32:17,665 - INFO - Broker version identified as 2.5.0
+2025-02-26 19:32:17,665 - INFO - Set configuration api_version=(2, 5, 0) to skip auto check_version requests on startup
+2025-02-26 19:32:17,665 - WARNING - group_id is None: disabling auto-commit.
+2025-02-26 19:32:17,666 - INFO - Updating subscribed topics to: ('zeek',)
+2025-02-26 19:32:17,666 - INFO - Connected to Kafka. Waiting for messages...
+2025-02-26 19:32:17,667 - INFO - Updated partition assignment: [TopicPartition(topic='zeek', partition=0)]
+2025-02-26 19:32:17,667 - INFO - <BrokerConnection node_id=0 host=Atlas:9092 <connecting> [IPv4 ('127.0.1.1', 9092)]>: connecting to Atlas:9092 [('127.0.1.1', 9092) IPv4]
+2025-02-26 19:32:17,667 - INFO - <BrokerConnection node_id=0 host=Atlas:9092 <connecting> [IPv4 ('127.0.1.1', 9092)]>: Connection complete.
+2025-02-26 19:32:17,667 - INFO - <BrokerConnection node_id=bootstrap-0 host=192.168.1.3:9092 <connected> [IPv4 ('192.168.1.3', 9092)]>: Closing connection. 
+2025-02-26 19:32:17,833 - INFO - Received 100 messages so far
+2025-02-26 19:32:17,834 - INFO - Received 200 messages so far
+2025-02-26 19:32:17,834 - INFO - Received 300 messages so far
+2025-02-26 19:32:17,834 - INFO - Received 400 messages so far
+2025-02-26 19:32:17,834 - INFO - Received 500 messages so far
+2025-02-26 19:32:17,835 - INFO - Received 600 messages so far
+2025-02-26 19:32:17,835 - INFO - Received 700 messages so far
+2025-02-26 19:32:17,835 - INFO - Received 800 messages so far
+2025-02-26 19:32:17,835 - INFO - Received 900 messages so far
+2025-02-26 19:32:17,835 - INFO - Received 1000 messages so far
+2025-02-26 19:32:17,836 - INFO - Received 1100 messages so far
+2025-02-26 19:32:17,836 - INFO - Received 1200 messages so far
+2025-02-26 19:32:17,836 - INFO - Received 1300 messages so far
+2025-02-26 19:32:17,836 - INFO - Received 1400 messages so far
+2025-02-26 19:32:17,836 - INFO - Received 1500 messages so far
+2025-02-26 19:32:17,837 - INFO - Received 1600 messages so far
+2025-02-26 19:32:17,837 - INFO - Received 1700 messages so far
+2025-02-26 19:32:17,837 - INFO - Received 1800 messages so far
+2025-02-26 19:32:17,837 - INFO - Received 1900 messages so far
+2025-02-26 19:32:17,837 - INFO - Received 2000 messages so far
+2025-02-26 19:32:17,838 - INFO - Received 2100 messages so far
+2025-02-26 19:32:17,838 - INFO - Received 2200 messages so far
+2025-02-26 19:32:17,838 - INFO - Received 2300 messages so far
+2025-02-26 19:32:17,838 - INFO - Received 2400 messages so far
+2025-02-26 19:32:17,838 - INFO - Received 2500 messages so far
+2025-02-26 19:32:17,838 - INFO - Received 2600 messages so far
+2025-02-26 19:32:17,839 - INFO - Received 2700 messages so far
+2025-02-26 19:32:17,839 - INFO - Received 2800 messages so far
+2025-02-26 19:32:17,839 - INFO - Received 2900 messages so far
+2025-02-26 19:32:17,839 - INFO - Received 3000 messages so far
+2025-02-26 19:32:17,839 - INFO - Received 3100 messages so far
+2025-02-26 19:32:17,840 - INFO - Received 3200 messages so far
+2025-02-26 19:32:17,840 - INFO - Received 3300 messages so far
+2025-02-26 19:32:17,840 - INFO - Received 3400 messages so far
+2025-02-26 19:32:17,840 - INFO - Received 3500 messages so far
+2025-02-26 19:32:17,840 - INFO - Received 3600 messages so far
+2025-02-26 19:32:17,841 - INFO - Received 3700 messages so far
+2025-02-26 19:32:17,841 - INFO - Received 3800 messages so far
+2025-02-26 19:32:17,841 - INFO - Received 3900 messages so far
+2025-02-26 19:32:17,841 - INFO - Received 4000 messages so far
+2025-02-26 19:32:17,842 - INFO - Received 4100 messages so far
+2025-02-26 19:32:17,952 - INFO - Received 4200 messages so far
+2025-02-26 19:32:17,953 - INFO - Received 4300 messages so far
+2025-02-26 19:32:17,953 - INFO - Received 4400 messages so far
+2025-02-26 19:32:17,953 - INFO - Received 4500 messages so far
+2025-02-26 19:32:17,953 - INFO - Received 4600 messages so far
+2025-02-26 19:32:17,953 - INFO - Received 4700 messages so far
+2025-02-26 19:32:17,953 - INFO - Received 4800 messages so far
+2025-02-26 19:32:17,954 - INFO - Received 4900 messages so far
+2025-02-26 19:32:17,954 - INFO - Received 5000 messages so far
+2025-02-26 19:32:17,954 - INFO - Received 5100 messages so far
+2025-02-26 19:32:17,954 - INFO - Received 5200 messages so far
+2025-02-26 19:32:17,954 - INFO - Received 5300 messages so far
+2025-02-26 19:32:17,955 - INFO - Received 5400 messages so far
+2025-02-26 19:32:17,955 - INFO - Received 5500 messages so far
+2025-02-26 19:32:17,955 - INFO - Received 5600 messages so far
+2025-02-26 19:32:17,955 - INFO - Received 5700 messages so far
+2025-02-26 19:32:17,955 - INFO - Received 5800 messages so far
+2025-02-26 19:32:17,956 - INFO - Received 5900 messages so far
+2025-02-26 19:32:17,956 - INFO - Received 6000 messages so far
+2025-02-26 19:32:17,956 - INFO - Received 6100 messages so far
+2025-02-26 19:32:17,956 - INFO - Received 6200 messages so far
+2025-02-26 19:32:17,956 - INFO - Received 6300 messages so far
+2025-02-26 19:32:17,957 - INFO - Received 6400 messages so far
+2025-02-26 19:32:17,957 - INFO - Received 6500 messages so far
+2025-02-26 19:32:17,957 - INFO - Received 6600 messages so far
+2025-02-26 19:32:17,957 - INFO - Received 6700 messages so far
+2025-02-26 19:32:17,957 - INFO - Received 6800 messages so far
+2025-02-26 19:32:17,958 - INFO - Received 6900 messages so far
+2025-02-26 19:32:17,958 - INFO - Received 7000 messages so far
+2025-02-26 19:32:17,958 - INFO - Received 7100 messages so far
+2025-02-26 19:32:17,958 - INFO - Received 7200 messages so far
+2025-02-26 19:32:17,958 - INFO - Received 7300 messages so far
+2025-02-26 19:32:17,958 - INFO - Received 7400 messages so far
+2025-02-26 19:32:17,959 - INFO - Received 7500 messages so far
+2025-02-26 19:32:17,959 - INFO - Received 7600 messages so far
+2025-02-26 19:32:17,959 - INFO - Received 7700 messages so far
+2025-02-26 19:32:17,959 - INFO - Received 7800 messages so far
+2025-02-26 19:32:17,959 - INFO - Received 7900 messages so far
+2025-02-26 19:32:17,960 - INFO - Received 8000 messages so far
+2025-02-26 19:32:17,960 - INFO - Received 8100 messages so far
+2025-02-26 19:32:17,960 - INFO - Received 8200 messages so far
+2025-02-26 19:32:17,960 - INFO - Received 8300 messages so far
+2025-02-26 19:32:17,960 - INFO - Received 8400 messages so far
+2025-02-26 19:32:17,960 - INFO - Received 8500 messages so far
+2025-02-26 19:32:17,961 - INFO - Received 8600 messages so far
+2025-02-26 19:32:17,961 - INFO - Received 8700 messages so far
+2025-02-26 19:32:18,018 - INFO - Received 8800 messages so far
+2025-02-26 19:32:18,019 - INFO - Received 8900 messages so far
+2025-02-26 19:32:18,019 - INFO - Received 9000 messages so far
+2025-02-26 19:32:18,019 - INFO - Received 9100 messages so far
+2025-02-26 19:32:18,019 - INFO - Received 9200 messages so far
+2025-02-26 19:32:18,020 - INFO - Received 9300 messages so far
+2025-02-26 19:32:18,020 - INFO - Received 9400 messages so far
+2025-02-26 19:32:18,020 - INFO - Received 9500 messages so far
+2025-02-26 19:32:18,020 - INFO - Received 9600 messages so far
+2025-02-26 19:32:18,020 - INFO - Received 9700 messages so far
+2025-02-26 19:32:18,021 - INFO - Received 9800 messages so far
+2025-02-26 19:32:18,021 - INFO - Received 9900 messages so far
+2025-02-26 19:32:18,021 - INFO - Received 10000 messages so far
+2025-02-26 19:32:18,021 - INFO - Total messages consumed: 10000
+2025-02-26 19:32:18,116 - INFO - Messages converted to DataFrame successfully!
+2025-02-26 19:32:18,119 - INFO - Initial DataFrame columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'peer', 'mem', 'pkts_proc', 'bytes_recv', 'pkts_dropped', 'pkts_link', 'pkt_lag', 'events_proc', 'events_queued', 'active_tcp_conns', 'active_udp_conns', 'active_icmp_conns', 'tcp_conns', 'udp_conns', 'icmp_conns', 'timers', 'active_timers', 'files', 'active_files', 'dns_requests', 'active_dns_requests', 'reassem_tcp_size', 'reassem_file_size', 'reassem_frag_size', 'reassem_unknown_size', 'host', 'port_num', 'port_proto', 'service', 'uid', 'id.orig_p', 'trans_id', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'uids', 'mac', 'host_name', 'requested_addr', 'msg_types', 'note', 'msg', 'actions', 'email_dest', 'suppress_for', 'ts_delta', 'gaps', 'acks', 'percent_lost', 'metric_type', 'name', 'labels', 'label_values', 'value', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'cert_chain_fps', 'client_cert_chain_fps', 'subject', 'issuer', 'sni_matches_cert', 'validation_status', 'fingerprint', 'certificate.version', 'certificate.serial', 'certificate.subject', 'certificate.issuer', 'certificate.not_valid_before', 'certificate.not_valid_after', 'certificate.key_alg', 'certificate.sig_alg', 'certificate.key_type', 'certificate.key_length', 'certificate.exponent', 'san.dns', 'basic_constraints.ca', 'host_cert', 'client_cert', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'client_addr', 'notice', 'source', 'mode', 'stratum', 'poll', 'precision', 'root_delay', 'root_disp', 'ref_id', 'ref_time', 'org_time', 'rec_time', 'xmt_time', 'num_exts', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate', 'fuid', 'depth', 'analyzers', 'mime_type', 'is_orig', 'seen_bytes', 'missing_bytes', 'overflow_bytes', 'timedout', 'md5', 'sha1', 'extracted', 'extracted_cutoff']
+2025-02-26 19:32:18,119 - INFO - Initial DataFrame shape: (10000, 162)
+2025-02-26 19:32:18,119 - INFO - Initial columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'peer', 'mem', 'pkts_proc', 'bytes_recv', 'pkts_dropped', 'pkts_link', 'pkt_lag', 'events_proc', 'events_queued', 'active_tcp_conns', 'active_udp_conns', 'active_icmp_conns', 'tcp_conns', 'udp_conns', 'icmp_conns', 'timers', 'active_timers', 'files', 'active_files', 'dns_requests', 'active_dns_requests', 'reassem_tcp_size', 'reassem_file_size', 'reassem_frag_size', 'reassem_unknown_size', 'host', 'port_num', 'port_proto', 'service', 'uid', 'id.orig_p', 'trans_id', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'uids', 'mac', 'host_name', 'requested_addr', 'msg_types', 'note', 'msg', 'actions', 'email_dest', 'suppress_for', 'ts_delta', 'gaps', 'acks', 'percent_lost', 'metric_type', 'name', 'labels', 'label_values', 'value', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'cert_chain_fps', 'client_cert_chain_fps', 'subject', 'issuer', 'sni_matches_cert', 'validation_status', 'fingerprint', 'certificate.version', 'certificate.serial', 'certificate.subject', 'certificate.issuer', 'certificate.not_valid_before', 'certificate.not_valid_after', 'certificate.key_alg', 'certificate.sig_alg', 'certificate.key_type', 'certificate.key_length', 'certificate.exponent', 'san.dns', 'basic_constraints.ca', 'host_cert', 'client_cert', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'client_addr', 'notice', 'source', 'mode', 'stratum', 'poll', 'precision', 'root_delay', 'root_disp', 'ref_id', 'ref_time', 'org_time', 'rec_time', 'xmt_time', 'num_exts', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate', 'fuid', 'depth', 'analyzers', 'mime_type', 'is_orig', 'seen_bytes', 'missing_bytes', 'overflow_bytes', 'timedout', 'md5', 'sha1', 'extracted', 'extracted_cutoff']
+2025-02-26 19:32:18,120 - INFO - Dropping 96 columns out of 126 specified
+2025-02-26 19:32:18,127 - INFO - DataFrame shape after cleaning: (10000, 66)
+2025-02-26 19:32:18,130 - INFO - DataFrame columns: ['id.resp_p', 'id.orig_h', 'id.resp_h', 'proto', 'orig_bytes', 'resp_bytes', 'ts', 'pkt_lag', 'host', 'service', 'uid', 'id.orig_p', 'rtt', 'query', 'qclass', 'qclass_name', 'qtype', 'qtype_name', 'rcode', 'rcode_name', 'AA', 'TC', 'RD', 'RA', 'Z', 'answers', 'TTLs', 'rejected', 'conn_state', 'local_orig', 'local_resp', 'missed_bytes', 'history', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ip_proto', 'duration', 'version', 'client_initial_dcid', 'client_scid', 'server_scid', 'cipher', 'curve', 'server_name', 'resumed', 'established', 'ssl_history', 'next_protocol', 'trans_depth', 'method', 'uri', 'request_body_len', 'response_body_len', 'status_code', 'status_msg', 'tags', 'id', 'hashAlgorithm', 'issuerNameHash', 'issuerKeyHash', 'serialNumber', 'certStatus', 'thisUpdate', 'nextUpdate']
+2025-02-26 19:32:18,130 - INFO - Number of columns: 66
+2025-02-26 19:32:18,141 - INFO - DataFrame head:
+      id.resp_p id.orig_h id.resp_h proto  orig_bytes  resp_bytes            ts  pkt_lag host service  uid  id.orig_p  rtt query  qclass qclass_name  qtype qtype_name  rcode rcode_name   AA   TC   RD   RA   Z answers TTLs rejected conn_state local_orig local_resp  missed_bytes history  orig_pkts  orig_ip_bytes  resp_pkts  resp_ip_bytes  ip_proto  duration version client_initial_dcid client_scid server_scid cipher curve server_name resumed established ssl_history next_protocol  trans_depth method  uri  request_body_len  response_body_len  status_code status_msg tags   id hashAlgorithm issuerNameHash issuerKeyHash serialNumber certStatus  thisUpdate  nextUpdate
+4875        NaN       NaN       NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+7881        NaN       NaN       NaN   NaN         NaN         NaN  1.740120e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN  0.011322     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+5458        NaN       NaN       NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+3637        NaN       NaN       NaN   NaN         NaN         NaN  1.740119e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN       NaN     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+2184        NaN       NaN       NaN   NaN         NaN         NaN  1.740118e+09      NaN  NaN     NaN  NaN        NaN  NaN   NaN     NaN         NaN    NaN        NaN    NaN        NaN  NaN  NaN  NaN  NaN NaN     NaN  NaN      NaN        NaN        NaN        NaN           NaN     NaN        NaN            NaN        NaN            NaN       NaN  0.007000     NaN                 NaN         NaN         NaN    NaN   NaN         NaN     NaN         NaN         NaN           NaN          NaN    NaN  NaN               NaN                NaN          NaN        NaN  NaN  NaN           NaN            NaN           NaN          NaN        NaN         NaN         NaN
+2025-02-26 19:32:18,141 - INFO - DataFrame shape: (10000, 66)
+2025-02-26 19:32:18,172 - INFO - DataFrame numeric summary:
+          id.resp_p    orig_bytes     resp_bytes            ts   pkt_lag     id.orig_p         rtt  qclass       qtype       rcode      Z   missed_bytes    orig_pkts  orig_ip_bytes    resp_pkts  resp_ip_bytes     ip_proto     duration  trans_depth  request_body_len  response_body_len  status_code    thisUpdate    nextUpdate
+count   1606.000000  1.048000e+03    1048.000000  9.999000e+03  7.000000   1605.000000  243.000000   426.0  426.000000  409.000000  433.0    1079.000000  1079.000000   1.079000e+03  1079.000000    1079.000000  1079.000000  2022.000000          7.0               7.0                7.0          7.0  4.000000e+00  4.000000e+00
+mean    3633.608966  2.719185e+03    1388.354008  1.740119e+09  0.002835  46064.636137    0.007470     1.0   43.377934    0.007335    0.0     275.277108     3.065802   2.782652e+03     3.405931    1494.846154    11.202966     3.474712          1.0               0.0                0.0        204.0  1.739625e+09  1.740318e+09
+std     4365.460666  6.037924e+04   27411.985622  5.961216e+02  0.004274  12565.455755    0.018644     0.0   39.157545    0.148340    0.0    9042.339733    20.577883   6.043692e+04    30.110991   27527.392373     7.988196    28.756772          0.0               0.0                0.0          0.0  5.819691e+04  5.819691e+04
+min        0.000000  0.000000e+00       0.000000  1.740118e+09  0.000000     68.000000    0.000281     1.0    1.000000    0.000000    0.0       0.000000     0.000000   0.000000e+00     0.000000       0.000000     6.000000     0.000000          1.0               0.0                0.0        204.0  1.739575e+09  1.740267e+09
+25%       53.000000  0.000000e+00       0.000000  1.740118e+09  0.000867  40295.000000    0.001778     1.0    1.000000    0.000000    0.0       0.000000     1.000000   6.000000e+01     1.000000      40.000000     6.000000     0.000527          1.0               0.0                0.0        204.0  1.739575e+09  1.740267e+09
+50%      136.000000  0.000000e+00       0.000000  1.740119e+09  0.001849  50503.000000    0.002234     1.0   65.000000    0.000000    0.0       0.000000     1.000000   6.000000e+01     1.000000      40.000000     6.000000     0.005381          1.0               0.0                0.0        204.0  1.739625e+09  1.740318e+09
+75%     9092.000000  6.100000e+01     198.000000  1.740119e+09  0.001973  54430.000000    0.002860     1.0   65.000000    0.000000    0.0       0.000000     1.000000   9.000000e+01     1.000000     226.000000    17.000000     0.007678          1.0               0.0                0.0        204.0  1.739676e+09  1.740368e+09
+max    21116.000000  1.932996e+06  874506.000000  1.740120e+09  0.012315  60995.000000    0.119818     1.0  255.000000    3.000000    0.0  297024.000000   565.000000   1.962384e+06   873.000000  888638.000000    58.000000   448.102649          1.0               0.0                0.0        204.0  1.739676e+09  1.740368e+09
+2025-02-26 19:32:18,219 - INFO - DataFrame non-numeric summary:
+          id.orig_h    id.resp_h proto                            host service                uid                    query qclass_name qtype_name rcode_name     AA     TC    RD    RA                                                                                                                              answers                                                                      TTLs rejected conn_state local_orig local_resp history version client_initial_dcid client_scid       server_scid                  cipher      curve                       server_name resumed established ssl_history next_protocol method uri  status_msg tags                  id hashAlgorithm                            issuerNameHash                             issuerKeyHash                            serialNumber certStatus
+count          1606         1606  1513                              10     439               1605                      433         426        426        409    433    433   433   433                                                                                                                                  254                                                                       254      433       1079       1083       1079    1081      86                  19          19                17                      54         54                                39      56          56          56             5      7   7           7    7                   4             4                                         4                                         4                                       4          4
+unique           18           69     4                               4       8               1118                       66           1          6          2      2      1     2     2                                                                                                                                  117                                                                       213        1          7          2          2      28       5                  19           1                17                       4          4                                17       2           2           6             1      1   1           1    1                   4             1                                         2                                         2                                       2          1
+top     192.168.1.3  192.168.1.1   udp  connectivity-check.ubuntu.com.     dns  CP9ROzzRvmMkxXEu7  wac-0003.wac-msedge.net  C_INTERNET      HTTPS    NOERROR  False  False  True  True  [usc-word-edit-geo.wac.trafficmanager.net, usc-word-edit.wac.trafficmanager.net.wac-0003.wac-dc-msedge.net.wac-0003.wac-msedge.net]  [20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0]    False        REJ       True       True      Sr  TLSv13    b90b0ae34b0b9725              f90b0ae34b0b9725  TLS_AES_256_GCM_SHA384  secp384r1  mobile.events.data.microsoft.com   False        True      CjiICs            h2    GET   /  No Content   []  F0lnXh4fEMRMxatKR2          sha1  E475019DC323E226741D6C40390795F90596462E  3B70D153E976259D60A8CA660FC69BAE6F54166A  3300E0D2F69F3A2BFEE266BDA4000000E0D2F6       good
+freq           1520          762   863                               7     382                  7                       74         426        248        408    416    433   392   238                                                                                                                                   34                                                                         6      433        585       1079        962     585      49                   1          19                 1                      30         27                                 6      48          39          23             5      7   7           7    7                   1             4                                         3                                         3                                       3          4
+2025-02-26 19:32:18,219 - INFO - Unique values in 'id.resp_p' before labeling: [   nan  9092.    53.   133.  1900.  5353.   443. 21116.   136.   123.
+    80.   134.   138.   135.     0.   547.    22.    67. 21115.]
+2025-02-26 19:32:18,225 - INFO - Label distribution: {}
+2025-02-26 19:32:18,226 - WARNING - No data left after filtering for valid labels
+2025-02-26 19:32:18,227 - INFO - Waiting 30 seconds before retrying...
+2025-02-26 19:32:43,099 - INFO - Process interrupted by user.
