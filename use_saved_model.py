@@ -186,8 +186,27 @@ def main():
             # Check if data has expected features
             log(INFO, "Data columns: %s", data.columns.tolist())
             
-            # Convert to DMatrix (without label)
-            dmatrix = xgb.DMatrix(data)
+            # Handle Timestamp column if present
+            if 'Timestamp' in data.columns:
+                log(INFO, "Dropping Timestamp column as it's not needed for prediction")
+                data = data.drop(columns=['Timestamp'])
+            
+            # Handle categorical columns
+            categorical_cols = []
+            for col in data.columns:
+                if data[col].dtype == 'object' or data[col].dtype.name == 'category':
+                    if col not in ['Label', 'Timestamp']:  # Skip label and timestamp
+                        categorical_cols.append(col)
+                        data[col] = data[col].astype('category').cat.codes
+            
+            if categorical_cols:
+                log(INFO, "Converted categorical columns to codes: %s", categorical_cols)
+            
+            # Convert to DMatrix with enable_categorical=True if there are categorical features
+            if categorical_cols:
+                dmatrix = xgb.DMatrix(data, enable_categorical=True)
+            else:
+                dmatrix = xgb.DMatrix(data)
             
             # Make predictions
             predictions = predict_with_saved_model(args.model_path, dmatrix, args.output_path)
