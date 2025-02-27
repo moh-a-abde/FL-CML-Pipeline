@@ -44,6 +44,7 @@ jobs:
           pip install -r requirements.txt
           #python sim.py
           ./run_bagging.sh
+          python use_saved_model.py --model_path outputs/2025-02-27/04-38-36/final_model.json --data_path data/static_data.csv --output_path predictions_pretrained_model.csv --has_labels
 
       - name: Commit results file
         run: |
@@ -51,7 +52,7 @@ jobs:
           git config --local user.name "moh-a-abde"
           
           # Add aggegrated results files
-          git add results/eval_results_round_aggregated.json
+          git add results/
           
           # Add new files in outputs directory
           git add outputs/
