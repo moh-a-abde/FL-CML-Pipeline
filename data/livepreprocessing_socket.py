@@ -261,62 +261,6 @@ def process_data():
             
         logging.info(f"DataFrame shape after NA dropping: {data.shape}")
         
-        # Check if required features exist
-        categorical_features = ['id.orig_h', 'id.resp_h', 'proto', 'history', 'uid', 'conn_state']
-        numerical_features = ['id.orig_p', 'orig_pkts', 'orig_ip_bytes', 'resp_pkts', 'missed_bytes', 'local_resp',
-                              'local_orig', 'resp_bytes', 'orig_bytes', 'duration', 'id.resp_p']
-        
-        missing_cat = [col for col in categorical_features if col not in data.columns]
-        missing_num = [col for col in numerical_features if col not in data.columns]
-        
-        if missing_cat or missing_num:
-            logging.error(f"Missing categorical features: {missing_cat}")
-            logging.error(f"Missing numerical features: {missing_num}")
-            # Use only available features
-            categorical_features = [col for col in categorical_features if col in data.columns]
-            numerical_features = [col for col in numerical_features if col in data.columns]
-            
-        if not categorical_features or not numerical_features:
-            logging.error("No features available for model training")
-            return False
-            
-        logging.info(f"Using categorical features: {categorical_features}")
-        logging.info(f"Using numerical features: {numerical_features}")
-        
-        preprocessor = ColumnTransformer(
-            transformers=[
-                ('num', StandardScaler(), numerical_features),
-                ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
-            ]
-        )
-        
-        model = Pipeline(steps=[
-            ('preprocessor', preprocessor),
-            ('classifier', RandomForestClassifier())
-        ])
-        
-        # Check if 'ts' exists
-        drop_cols_for_X = ['label']
-        if 'ts' in data.columns:
-            drop_cols_for_X.append('ts')
-            
-        X = data.drop(columns=drop_cols_for_X)
-        y = data['label']
-        
-        logging.info(f"X shape: {X.shape}, y shape: {y.shape}")
-        logging.info(f"Label distribution in training data: {y.value_counts().to_dict()}")
-        
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        
-        logging.info("Training model...")
-        model.fit(X_train, y_train)
-        
-        logging.info("Predicting on test data...")
-        y_pred = model.predict(X_test).astype(str)
-        
-        report = classification_report(y_test, y_pred, output_dict=True)
-        logging.info(f"Classification report:\n{json.dumps(report, indent=2)}")
-
         # Add processed data to our collection
         all_processed_data.append(data)
         
