@@ -273,6 +273,74 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     
     return output_path
 
+def load_saved_model(model_path):
+    """
+    Load a saved XGBoost model from disk.
+    
+    Args:
+        model_path (str): Path to the saved model file (.json or .bin)
+        
+    Returns:
+        xgb.Booster: Loaded XGBoost model
+    """
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+    
+    log(INFO, "Loading model from: %s", model_path)
+    bst = xgb.Booster()
+    bst.load_model(model_path)
+    return bst
+
+def predict_with_saved_model(model_path, data, output_path=None):
+    """
+    Make predictions using a saved model.
+    
+    Args:
+        model_path (str): Path to the saved model file
+        data: DMatrix or data that can be converted to DMatrix
+        output_path (str, optional): Path to save predictions. If None, predictions are not saved.
+        
+    Returns:
+        numpy.ndarray: Predictions
+    """
+    # Load the model
+    bst = load_saved_model(model_path)
+    
+    # Convert data to DMatrix if it's not already
+    if not isinstance(data, xgb.DMatrix):
+        try:
+            data = xgb.DMatrix(data)
+        except Exception as e:
+            log(INFO, "Error converting data to DMatrix: %s", str(e))
+            raise
+    
+    # Make predictions
+    log(INFO, "Making predictions with loaded model")
+    predictions = bst.predict(data)
+    
+    # Save predictions if output_path is provided
+    if output_path is not None:
+        # Convert predictions to binary labels (0 or 1)
+        pred_labels = predictions.astype(int)
+        
+        # Get directory and filename
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        
+        # Create DataFrame with predictions
+        df = pd.DataFrame({
+            'predicted_label': pred_labels,
+            'prediction_type': ['malicious' if p == 1 else 'benign' for p in pred_labels],
+            'prediction_score': predictions
+        })
+        
+        # Save to CSV
+        df.to_csv(output_path, index=False)
+        log(INFO, "Predictions saved to: %s", output_path)
+    
+    return predictions
+
 def get_evaluate_fn(test_data):
     """Return a function for centralised evaluation."""
 

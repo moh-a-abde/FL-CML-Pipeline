@@ -1,11 +1,13 @@
 import warnings
 from logging import INFO
+import os
 
 import flwr as fl
 from flwr.common.logger import log
 from flwr.server.strategy import FedXgbBagging, FedXgbCyclic
+import xgboost as xgb
 
-from utils import server_args_parser
+from utils import server_args_parser, BST_PARAMS
 from server_utils import (
     eval_config,
     fit_config,
@@ -227,6 +229,43 @@ else:
 
 # Save the results
 save_results_pickle(results, output_dir)
+
+# Save the final trained model
+log(INFO, "Saving the final trained model...")
+if hasattr(strategy, 'global_model') and strategy.global_model is not None:
+    # If the strategy has a global_model attribute, save it directly
+    model_path = os.path.join(output_dir, "final_model.json")
+    strategy.global_model.save_model(model_path)
+    log(INFO, "Final model saved to: %s", model_path)
+elif hasattr(history, 'parameters_aggregated') and history.parameters_aggregated:
+    # If the strategy doesn't have a global_model attribute but history has parameters
+    try:
+        # Get the final parameters
+        final_parameters = history.parameters_aggregated[-1]
+        
+        # Create a booster with the same parameters used in training
+        bst = xgb.Booster(params=BST_PARAMS)
+        
+        # Load the parameters into the booster
+        para_b = bytearray()
+        for para in final_parameters.tensors:
+            para_b.extend(para)
+        
+        bst.load_model(para_b)
+        
+        # Save the model to a file
+        model_path = os.path.join(output_dir, "final_model.json")
+        bst.save_model(model_path)
+        
+        # Also save in binary format for better compatibility
+        bin_model_path = os.path.join(output_dir, "final_model.bin")
+        bst.save_model(bin_model_path)
+        
+        log(INFO, "Final model saved to: %s and %s", model_path, bin_model_path)
+    except Exception as e:
+        log(INFO, "Error saving final model: %s", str(e))
+else:
+    log(INFO, "No final model parameters available to save")
 
 # Also save the final evaluation results
 if hasattr(history, 'metrics_distributed') and history.metrics_distributed:
