@@ -66,19 +66,19 @@ if train_method == "bagging":
     # Add a monkey patch to log the loss value before it's returned
     original_aggregate_evaluate = strategy.aggregate_evaluate
     
-    def patched_aggregate_evaluate(server_round, results, failures):
+    def patched_aggregate_evaluate(server_round, eval_results, failures):
         log(INFO, "Aggregating evaluation results for round %s", server_round)
-        aggregated_result = original_aggregate_evaluate(server_round, results, failures)
+        aggregated_result = original_aggregate_evaluate(server_round, eval_results, failures)
         
-        # Extract the actual loss from the metrics
-        metrics = aggregated_result[1]
-        actual_loss = metrics.get("loss", 0.0)
+        # The aggregated_result is already in the correct format (loss, metrics)
+        # No need to extract loss from metrics as evaluate_metrics_aggregation now returns it directly
+        loss, metrics = aggregated_result
         
-        log(INFO, "Original aggregated loss for round %s: %s", server_round, aggregated_result[0])
-        log(INFO, "Actual loss from metrics for round %s: %s", server_round, actual_loss)
+        log(INFO, "Aggregated loss for round %s: %s", server_round, loss)
+        log(INFO, "Metrics for round %s: %s", server_round, metrics.keys())
         
-        # Return the corrected result with the actual loss value
-        return (actual_loss, aggregated_result[1])
+        # Return the result as is
+        return aggregated_result
     
     strategy.aggregate_evaluate = patched_aggregate_evaluate
 else:
