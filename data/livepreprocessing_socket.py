@@ -186,7 +186,7 @@ def process_data():
         ]
         
         # Check which columns actually exist before dropping
-        existing_columns = [col for col in drop_columns if col in data.columns]
+        existing_columns = [col for col in drop_columns if col in df.columns]
         logging.info(f"Dropping {len(existing_columns)} columns out of {len(drop_columns)} specified in second drop")
         
         data = data.drop(columns=existing_columns, errors='ignore')
