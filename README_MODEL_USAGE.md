@@ -39,8 +39,17 @@ python use_saved_model.py --model_path <path_to_model> --data_path <path_to_data
 - `--data_path`: Path to the data file (.csv)
 - `--output_path`: Path to save the predictions (default: predictions.csv)
 - `--has_labels`: Flag to indicate if the data file contains labels (for evaluation)
+- `--info_only`: Display model information without making predictions
 
 ### Examples
+
+#### Viewing model information:
+
+```bash
+python use_saved_model.py --model_path outputs/2023-05-01/12-34-56/final_model.json --info_only
+```
+
+This will display information about the model such as the number of trees, feature importance, and model parameters.
 
 #### Making predictions on unlabeled data:
 
@@ -83,8 +92,16 @@ binary_predictions = predictions.astype(int)
 ### Model File Not Found
 Make sure the path to the model file is correct. The model files are saved in the output directory created for each training run.
 
+### Model Loading Issues
+If you encounter issues loading the model, the system will try multiple approaches:
+1. Direct loading using `load_model`
+2. Reading the file as bytes and loading into a Booster
+3. Creating a new Booster with parameters and then loading the model
+
 ### Data Format Issues
 The data should be in a format that can be converted to an XGBoost DMatrix. If you're having issues, check that your data has the same features that were used during training.
+
+If you use the `--has_labels` flag but the system can't process the data as labeled, it will automatically fall back to processing it as unlabeled data.
 
 ### Memory Issues
 If you're working with large datasets, you might encounter memory issues. Consider processing the data in batches or using a machine with more memory.

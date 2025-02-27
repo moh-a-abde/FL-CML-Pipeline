@@ -38,7 +38,7 @@ def parse_args():
     parser.add_argument(
         "--data_path",
         type=str,
-        required=True,
+        default=None,
         help="Path to the data file (.csv)",
     )
     
@@ -55,7 +55,47 @@ def parse_args():
         help="Specify if the data file contains labels (for evaluation)",
     )
     
+    parser.add_argument(
+        "--info_only",
+        action="store_true",
+        help="Only display model information without making predictions",
+    )
+    
     return parser.parse_args()
+
+
+def display_model_info(model):
+    """Display information about the loaded model."""
+    log(INFO, "Model Information:")
+    
+    # Get number of trees
+    num_trees = len(model.get_dump())
+    log(INFO, "Number of trees: %d", num_trees)
+    
+    # Get feature names if available
+    try:
+        feature_names = model.feature_names
+        if feature_names:
+            log(INFO, "Feature names: %s", feature_names)
+    except AttributeError:
+        log(INFO, "Feature names not available in the model")
+    
+    # Get feature importance if available
+    try:
+        importance = model.get_score(importance_type='weight')
+        log(INFO, "Feature importance (top 10):")
+        sorted_importance = sorted(importance.items(), key=lambda x: x[1], reverse=True)[:10]
+        for feature, score in sorted_importance:
+            log(INFO, "  %s: %.4f", feature, score)
+    except Exception as e:
+        log(INFO, "Could not get feature importance: %s", str(e))
+    
+    # Get model parameters
+    try:
+        params = model.get_params()
+        log(INFO, "Model parameters: %s", params)
+    except Exception as e:
+        log(INFO, "Could not get model parameters: %s", str(e))
 
 
 def main():
@@ -67,46 +107,78 @@ def main():
         log(INFO, "Error: Model file not found: %s", args.model_path)
         return
     
-    # Check if data file exists
-    if not os.path.exists(args.data_path):
-        log(INFO, "Error: Data file not found: %s", args.data_path)
-        return
-    
     try:
+        # Load the model
+        log(INFO, "Loading model from: %s", args.model_path)
+        model = load_saved_model(args.model_path)
+        
+        # Display model information
+        display_model_info(model)
+        
+        # If info_only flag is set, exit after displaying model info
+        if args.info_only:
+            log(INFO, "Info only mode - exiting without making predictions")
+            return
+        
+        # Check if data path is provided
+        if args.data_path is None:
+            log(INFO, "No data path provided. Use --data_path to specify data for predictions.")
+            return
+            
+        # Check if data file exists
+        if not os.path.exists(args.data_path):
+            log(INFO, "Error: Data file not found: %s", args.data_path)
+            return
+        
         log(INFO, "Loading data from: %s", args.data_path)
         
         # Load data
         if args.has_labels:
-            # Use the dataset loading function if data has labels
-            dataset = load_csv_data(args.data_path)["test"]
-            dataset.set_format("pandas")
-            data = dataset.to_pandas()
-            
-            # Convert to DMatrix
-            dmatrix = transform_dataset_to_dmatrix(dataset)
-            
-            # Get true labels for evaluation
-            y_true = dmatrix.get_label()
-            
-            # Make predictions
-            predictions = predict_with_saved_model(args.model_path, dmatrix, args.output_path)
-            
-            # Evaluate if data has labels
-            y_pred_labels = predictions.astype(int)
-            
-            # Calculate accuracy
-            accuracy = np.mean(y_pred_labels == y_true)
-            log(INFO, "Accuracy: %.4f", accuracy)
-            
-            # Print confusion matrix
-            from sklearn.metrics import confusion_matrix, classification_report
-            cm = confusion_matrix(y_true, y_pred_labels)
-            log(INFO, "Confusion Matrix:\n%s", cm)
-            
-            # Print classification report
-            report = classification_report(y_true, y_pred_labels)
-            log(INFO, "Classification Report:\n%s", report)
-            
+            try:
+                # Use the dataset loading function if data has labels
+                dataset = load_csv_data(args.data_path)["test"]
+                dataset.set_format("pandas")
+                data = dataset.to_pandas()
+                
+                # Convert to DMatrix
+                dmatrix = transform_dataset_to_dmatrix(dataset)
+                
+                # Get true labels for evaluation
+                y_true = dmatrix.get_label()
+                
+                # Make predictions
+                predictions = predict_with_saved_model(args.model_path, dmatrix, args.output_path)
+                
+                # Evaluate if data has labels
+                y_pred_labels = predictions.astype(int)
+                
+                # Calculate accuracy
+                accuracy = np.mean(y_pred_labels == y_true)
+                log(INFO, "Accuracy: %.4f", accuracy)
+                
+                # Print confusion matrix
+                from sklearn.metrics import confusion_matrix, classification_report
+                cm = confusion_matrix(y_true, y_pred_labels)
+                log(INFO, "Confusion Matrix:\n%s", cm)
+                
+                # Print classification report
+                report = classification_report(y_true, y_pred_labels)
+                log(INFO, "Classification Report:\n%s", report)
+                
+            except Exception as e:
+                log(INFO, "Error processing labeled data: %s", str(e))
+                log(INFO, "Falling back to unlabeled data processing")
+                
+                # Fall back to unlabeled data processing
+                data = pd.read_csv(args.data_path)
+                log(INFO, "Data columns: %s", data.columns.tolist())
+                
+                # Convert to DMatrix (without label)
+                dmatrix = xgb.DMatrix(data)
+                
+                # Make predictions
+                predictions = predict_with_saved_model(args.model_path, dmatrix, args.output_path)
+                
         else:
             # If data doesn't have labels, load as pandas DataFrame
             data = pd.read_csv(args.data_path)

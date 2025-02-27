@@ -233,10 +233,30 @@ save_results_pickle(results, output_dir)
 # Save the final trained model
 log(INFO, "Saving the final trained model...")
 if hasattr(strategy, 'global_model') and strategy.global_model is not None:
-    # If the strategy has a global_model attribute, save it directly
-    model_path = os.path.join(output_dir, "final_model.json")
-    strategy.global_model.save_model(model_path)
-    log(INFO, "Final model saved to: %s", model_path)
+    # If the strategy has a global_model attribute, convert it to a Booster and save it
+    try:
+        # Create a booster with the same parameters used in training
+        bst = xgb.Booster(params=BST_PARAMS)
+        
+        # Check if global_model is bytes or bytearray
+        if isinstance(strategy.global_model, (bytes, bytearray)):
+            # Load the bytes into the booster
+            bst.load_model(bytearray(strategy.global_model))
+        else:
+            # If it's already a Booster, use it directly
+            bst = strategy.global_model
+            
+        # Save the model to a file
+        model_path = os.path.join(output_dir, "final_model.json")
+        bst.save_model(model_path)
+        
+        # Also save in binary format for better compatibility
+        bin_model_path = os.path.join(output_dir, "final_model.bin")
+        bst.save_model(bin_model_path)
+        
+        log(INFO, "Final model saved to: %s and %s", model_path, bin_model_path)
+    except Exception as e:
+        log(INFO, "Error saving global model: %s", str(e))
 elif hasattr(history, 'parameters_aggregated') and history.parameters_aggregated:
     # If the strategy doesn't have a global_model attribute but history has parameters
     try:

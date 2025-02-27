@@ -287,9 +287,41 @@ def load_saved_model(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path}")
     
     log(INFO, "Loading model from: %s", model_path)
-    bst = xgb.Booster()
-    bst.load_model(model_path)
-    return bst
+    
+    try:
+        # Create a new booster
+        bst = xgb.Booster()
+        
+        # Try to load the model directly
+        bst.load_model(model_path)
+        log(INFO, "Model loaded successfully")
+        return bst
+    except Exception as e:
+        log(INFO, "Error loading model directly: %s", str(e))
+        
+        # If direct loading fails, try alternative approaches
+        try:
+            # Try reading the file as bytes and loading
+            with open(model_path, 'rb') as f:
+                model_data = f.read()
+            
+            bst = xgb.Booster()
+            bst.load_model(bytearray(model_data))
+            log(INFO, "Model loaded successfully using bytearray")
+            return bst
+        except Exception as e2:
+            log(INFO, "Error loading model using bytearray: %s", str(e2))
+            
+            # If that fails too, try with params
+            try:
+                from utils import BST_PARAMS
+                bst = xgb.Booster(params=BST_PARAMS)
+                bst.load_model(model_path)
+                log(INFO, "Model loaded successfully with params")
+                return bst
+            except Exception as e3:
+                log(INFO, "All loading attempts failed")
+                raise ValueError(f"Failed to load model: {str(e)}, {str(e2)}, {str(e3)}")
 
 def predict_with_saved_model(model_path, data, output_path=None):
     """
