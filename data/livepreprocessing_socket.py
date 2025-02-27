@@ -328,7 +328,6 @@ def process_data():
             logging.info(f"Total processed data shape: {final_data.shape}")
             
             # Save all processed data to a single file for this run
-            os.makedirs('received', exist_ok=True)
             final_data.to_csv(output_file_path, index=False)
             logging.info(f"Saved all processed data to {output_file_path}")
             
@@ -353,9 +352,6 @@ def process_data():
 if __name__ == "__main__":
     try:
         logging.info("Starting livepreprocessing_socket.py")
-        
-        # Make sure the received directory exists
-        os.makedirs('received', exist_ok=True)
         
         # First, test socket communication
         if send_test_message():

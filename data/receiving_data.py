@@ -92,9 +92,6 @@ def start_server(host='192.168.1.3', port=9000):
                     df = pd.read_json(io.StringIO(data_str), orient='records')
                     logging.info(f"JSON parsed successfully. DataFrame shape: {df.shape}")
                     
-                    # Create received directory if it doesn't exist
-                    os.makedirs('received', exist_ok=True)
-                    
                     # Save to a file with timestamp
                     output_file_path = f'received/received_data_{timestamp}.csv'
                     df.to_csv(output_file_path, index=False)
@@ -109,7 +106,6 @@ def start_server(host='192.168.1.3', port=9000):
                 except ValueError as e:
                     logging.error(f"Failed to parse JSON: {e}", exc_info=True)
                     # Save the raw data for debugging
-                    os.makedirs('received', exist_ok=True)
                     with open(f'received/invalid_json_{timestamp}.txt', 'w', encoding='utf-8') as f:
                         f.write(data_str)
                     logging.info(f"Invalid JSON saved to received/invalid_json_{timestamp}.txt")
