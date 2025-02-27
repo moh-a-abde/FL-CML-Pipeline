@@ -98,6 +98,39 @@ def display_model_info(model):
         log(INFO, "Could not get model parameters: %s", str(e))
 
 
+def clean_data_for_xgboost(df):
+    """
+    Clean data for XGBoost by handling infinity values and extremely large numbers.
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame
+        
+    Returns:
+        pd.DataFrame: Cleaned DataFrame
+    """
+    # Create a copy to avoid modifying the original
+    cleaned_df = df.copy()
+    
+    # Replace infinity values with NaN
+    cleaned_df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    
+    # Cap extremely large values (adjust threshold as needed)
+    numeric_cols = cleaned_df.select_dtypes(include=['float64', 'int64']).columns
+    for col in numeric_cols:
+        # Get the 99th percentile as a reference
+        threshold = cleaned_df[col].quantile(0.99) * 10
+        # If threshold is too small, use a default large value
+        if threshold < 1e6:
+            threshold = 1e6
+        # Cap values and log the changes
+        mask = cleaned_df[col] > threshold
+        if mask.sum() > 0:
+            log(INFO, "Capping %d extreme values in column '%s'", mask.sum(), col)
+            cleaned_df.loc[mask, col] = np.nan
+    
+    return cleaned_df
+
+
 def main():
     """Main function to load model and make predictions."""
     args = parse_args()
@@ -173,8 +206,11 @@ def main():
                 data = pd.read_csv(args.data_path)
                 log(INFO, "Data columns: %s", data.columns.tolist())
                 
+                # Clean data for XGBoost
+                data = clean_data_for_xgboost(data)
+                
                 # Convert to DMatrix (without label)
-                dmatrix = xgb.DMatrix(data)
+                dmatrix = xgb.DMatrix(data, missing=np.nan)
                 
                 # Make predictions
                 predictions = predict_with_saved_model(args.model_path, dmatrix, args.output_path)
@@ -191,6 +227,9 @@ def main():
                 log(INFO, "Dropping Timestamp column as it's not needed for prediction")
                 data = data.drop(columns=['Timestamp'])
             
+            # Clean data for XGBoost
+            data = clean_data_for_xgboost(data)
+            
             # Handle categorical columns
             categorical_cols = []
             for col in data.columns:
@@ -204,9 +243,9 @@ def main():
             
             # Convert to DMatrix with enable_categorical=True if there are categorical features
             if categorical_cols:
-                dmatrix = xgb.DMatrix(data, enable_categorical=True)
+                dmatrix = xgb.DMatrix(data, enable_categorical=True, missing=np.nan)
             else:
-                dmatrix = xgb.DMatrix(data)
+                dmatrix = xgb.DMatrix(data, missing=np.nan)
             
             # Make predictions
             predictions = predict_with_saved_model(args.model_path, dmatrix, args.output_path)
