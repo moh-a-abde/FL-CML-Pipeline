@@ -75,8 +75,12 @@ def eval_config(rnd: int, output_dir: str = None) -> Dict[str, str]:
     Returns:
         Dict[str, str]: Configuration dictionary
     """
+    # Set prediction_mode to false for rounds 1-10 and true for rounds 11-20
+    prediction_mode = "false" if rnd <= 10 else "true"
+    
     config = {
         "global_round": str(rnd),
+        "prediction_mode": prediction_mode,
     }
     
     # Add output directory if provided
@@ -135,10 +139,7 @@ def evaluate_metrics_aggregation(eval_metrics):
     
     # Check if we're in prediction mode or evaluation mode
     first_metrics = eval_metrics[0][1]
-    is_prediction_mode = (
-        "total_predictions" in first_metrics or 
-        "num_predictions" in first_metrics
-    )
+    is_prediction_mode = first_metrics.get("prediction_mode", False)
     
     if is_prediction_mode:
         # Aggregate prediction statistics
@@ -148,59 +149,68 @@ def evaluate_metrics_aggregation(eval_metrics):
         
         # Calculate loss if available
         if all("loss" in metrics for _, metrics in eval_metrics):
-            loss_aggregated = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
-            log(INFO, f"Aggregated loss: {loss_aggregated}")
+            loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
         else:
-            log(INFO, "Loss not available in all client metrics")
-            loss_aggregated = 0
+            loss = 0.0
         
-        metrics_aggregated = {
+        # Create aggregated metrics dictionary
+        aggregated_metrics = {
             "total_predictions": total_predictions,
             "malicious_predictions": malicious_predictions,
             "benign_predictions": benign_predictions,
-            "prediction_mode": True,
-            "loss": loss_aggregated  # Add aggregated loss
+            "prediction_mode": is_prediction_mode,
+            "loss": loss
         }
+        
+        log(INFO, f"Aggregated prediction metrics: {aggregated_metrics}")
     else:
         # Aggregate evaluation metrics
-        precision_aggregated = sum([metrics["precision"] * num for num, metrics in eval_metrics]) / total_num
-        recall_aggregated = sum([metrics["recall"] * num for num, metrics in eval_metrics]) / total_num
-        f1_aggregated = sum([metrics["f1"] * num for num, metrics in eval_metrics]) / total_num
-        
-        # Aggregate loss if available
-        if all("loss" in metrics for _, metrics in eval_metrics):
-            loss_aggregated = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
-            log(INFO, f"Aggregated loss: {loss_aggregated}")
+        if all("precision" in metrics for _, metrics in eval_metrics):
+            precision = sum([metrics["precision"] * num for num, metrics in eval_metrics]) / total_num
         else:
-            log(INFO, "Loss not available in all client metrics")
-            loss_aggregated = 0
+            precision = 0.0
+            
+        if all("recall" in metrics for _, metrics in eval_metrics):
+            recall = sum([metrics["recall"] * num for num, metrics in eval_metrics]) / total_num
+        else:
+            recall = 0.0
+            
+        if all("f1" in metrics for _, metrics in eval_metrics):
+            f1 = sum([metrics["f1"] * num for num, metrics in eval_metrics]) / total_num
+        else:
+            f1 = 0.0
+            
+        if all("loss" in metrics for _, metrics in eval_metrics):
+            loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
+        else:
+            loss = 0.0
+            
+        # Aggregate confusion matrix elements
+        tn = sum([metrics.get("true_negatives", 0) for _, metrics in eval_metrics])
+        fp = sum([metrics.get("false_positives", 0) for _, metrics in eval_metrics])
+        fn = sum([metrics.get("false_negatives", 0) for _, metrics in eval_metrics])
+        tp = sum([metrics.get("true_positives", 0) for _, metrics in eval_metrics])
         
-        # Aggregate confusion matrix metrics
-        tn_aggregated = sum([metrics["true_negatives"] * num for num, metrics in eval_metrics]) / total_num
-        fp_aggregated = sum([metrics["false_positives"] * num for num, metrics in eval_metrics]) / total_num
-        fn_aggregated = sum([metrics["false_negatives"] * num for num, metrics in eval_metrics]) / total_num
-        tp_aggregated = sum([metrics["true_positives"] * num for num, metrics in eval_metrics]) / total_num
-        
-        metrics_aggregated = {
-            "precision": precision_aggregated,
-            "recall": recall_aggregated,
-            "f1": f1_aggregated,
-            "loss": loss_aggregated,  # Add aggregated loss
-            "true_negatives": tn_aggregated,
-            "false_positives": fp_aggregated,
-            "false_negatives": fn_aggregated,
-            "true_positives": tp_aggregated,
-            "prediction_mode": False
+        # Create aggregated metrics dictionary
+        aggregated_metrics = {
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+            "true_negatives": tn,
+            "false_positives": fp,
+            "false_negatives": fn,
+            "true_positives": tp,
+            "prediction_mode": is_prediction_mode,
+            "loss": loss
         }
-
-    # Log the aggregated metrics
-    log(INFO, f"Aggregated metrics: {metrics_aggregated}")
-
+        
+        log(INFO, f"Aggregated evaluation metrics: {aggregated_metrics}")
+    
     # Save aggregated results
-    save_evaluation_results(metrics_aggregated, "aggregated")
+    save_evaluation_results(aggregated_metrics, "aggregated")
     
-    return metrics_aggregated
-    
+    return loss, aggregated_metrics
+
 def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None, true_labels=None):
     """
     Save dataset with predictions to CSV in the specified directory.

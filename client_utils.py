@@ -271,8 +271,12 @@ class XgbClient(fl.client.Client):
             "num_predictions": self.num_val
         }
         
-        # Add unlabeled predictions if available
-        if self.unlabeled_dmatrix is not None:
+        # Check if prediction mode is enabled
+        prediction_mode = ins.config.get("prediction_mode", "true").lower() == "true"
+        log(INFO, f"Prediction mode is {'enabled' if prediction_mode else 'disabled'} for this round")
+        
+        # Add unlabeled predictions if available and prediction mode is enabled
+        if self.unlabeled_dmatrix is not None and prediction_mode:
             # Get predictions
             unlabeled_pred_proba = bst.predict(self.unlabeled_dmatrix)
             
@@ -324,6 +328,9 @@ class XgbClient(fl.client.Client):
                 "benign_predictions": int(np.sum(unlabeled_pred_labels == 0)),
                 "predictions_file": output_path
             })
+        
+        # Always include prediction_mode in metrics
+        metrics["prediction_mode"] = prediction_mode
 
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
