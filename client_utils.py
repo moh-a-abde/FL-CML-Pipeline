@@ -248,7 +248,22 @@ class XgbClient(fl.client.Client):
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
-        loss = -np.mean(y_true * np.log(y_pred_proba + 1e-10) + (1 - y_true) * np.log(1 - y_pred_proba + 1e-10))
+        
+        # Calculate and log detailed loss information
+        log(INFO, "LOSS CALCULATION DETAILS:")
+        log(INFO, f"y_true shape: {y_true.shape}, y_pred_proba shape: {y_pred_proba.shape}")
+        log(INFO, f"y_true min/max: {y_true.min()}/{y_true.max()}, y_pred_proba min/max: {y_pred_proba.min():.4f}/{y_pred_proba.max():.4f}")
+        
+        # Calculate binary cross-entropy loss
+        epsilon = 1e-10  # To avoid log(0)
+        loss_terms = y_true * np.log(y_pred_proba + epsilon) + (1 - y_true) * np.log(1 - y_pred_proba + epsilon)
+        loss = -np.mean(loss_terms)
+        
+        # Log loss calculation components
+        log(INFO, f"Loss calculation - epsilon: {epsilon}")
+        log(INFO, f"Loss calculation - first 5 loss terms: {loss_terms[:5]}")
+        log(INFO, f"Loss calculation - mean of loss terms: {np.mean(loss_terms)}")
+        log(INFO, f"Loss calculation - final loss value: {loss}")
         
         # Log detailed metrics
         log(INFO, f"Evaluation metrics - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}, Loss: {loss:.4f}")
@@ -292,6 +307,30 @@ class XgbClient(fl.client.Client):
             benign_count = unlabeled_counts[0] if len(unlabeled_counts) > 0 else 0
             malicious_count = unlabeled_counts[1] if len(unlabeled_counts) > 1 else 0
             log(INFO, f"Unlabeled predictions with threshold {THRESHOLD}: Benign={benign_count}, Malicious={malicious_count}")
+            
+            # Check if unlabeled data affects loss calculation
+            log(INFO, "CHECKING IF UNLABELED DATA AFFECTS LOSS:")
+            if hasattr(self.unlabeled_dmatrix, 'get_label'):
+                try:
+                    unlabeled_true_labels = self.unlabeled_dmatrix.get_label()
+                    if len(unlabeled_true_labels) > 0:
+                        log(INFO, f"Unlabeled data has labels, shape: {unlabeled_true_labels.shape}")
+                        
+                        # Calculate potential loss including unlabeled data
+                        unlabeled_loss_terms = unlabeled_true_labels * np.log(unlabeled_pred_proba + epsilon) + (1 - unlabeled_true_labels) * np.log(1 - unlabeled_pred_proba + epsilon)
+                        unlabeled_loss = -np.mean(unlabeled_loss_terms)
+                        log(INFO, f"Potential unlabeled loss: {unlabeled_loss:.4f}")
+                        
+                        # Calculate combined loss
+                        combined_loss_terms = np.concatenate([loss_terms, unlabeled_loss_terms])
+                        combined_loss = -np.mean(combined_loss_terms)
+                        log(INFO, f"Potential combined loss: {combined_loss:.4f}")
+                    else:
+                        log(INFO, "Unlabeled data has empty labels array")
+                except Exception as e:
+                    log(INFO, f"Error getting labels for unlabeled data: {str(e)}")
+            else:
+                log(INFO, "Unlabeled data has no labels attribute")
             
             # Save predictions using the server_utils function
             round_num = ins.config.get("global_round", "final")

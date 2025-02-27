@@ -100,28 +100,28 @@ if train_method == "bagging":
             
             # Return the result in the correct format
             return loss, metrics
+        
+        # The result is not in the expected format
+        log(INFO, "Unexpected format from original_aggregate_evaluate: %s", type(aggregated_result))
+        
+        # Try to extract loss and metrics
+        if isinstance(aggregated_result, (int, float)):
+            # Only loss was returned
+            loss = aggregated_result
+            metrics = {}
+        elif isinstance(aggregated_result, dict):
+            # Only metrics were returned
+            loss = aggregated_result.get("loss", 0.0)
+            metrics = aggregated_result
         else:
-            # The result is not in the expected format
-            log(INFO, "Unexpected format from original_aggregate_evaluate: %s", type(aggregated_result))
-            
-            # Try to extract loss and metrics
-            if isinstance(aggregated_result, (int, float)):
-                # Only loss was returned
-                loss = aggregated_result
-                metrics = {}
-            elif isinstance(aggregated_result, dict):
-                # Only metrics were returned
-                loss = aggregated_result.get("loss", 0.0)
-                metrics = aggregated_result
-            else:
-                # Unknown format, use defaults
-                loss = 0.0
-                metrics = {}
-            
-            log(INFO, "Extracted loss: %s, metrics: %s", loss, metrics)
-            
-            # Return in the correct format
-            return loss, metrics
+            # Unknown format, use defaults
+            loss = 0.0
+            metrics = {}
+        
+        log(INFO, "Extracted loss: %s, metrics: %s", loss, metrics)
+        
+        # Return in the correct format
+        return loss, metrics
     
     strategy.aggregate_evaluate = patched_aggregate_evaluate
 else:
@@ -172,28 +172,28 @@ else:
             
             # Return the result in the correct format
             return loss, metrics
+        
+        # The result is not in the expected format
+        log(INFO, "Unexpected format from original_aggregate_evaluate_cyclic: %s", type(aggregated_result))
+        
+        # Try to extract loss and metrics
+        if isinstance(aggregated_result, (int, float)):
+            # Only loss was returned
+            loss = aggregated_result
+            metrics = {}
+        elif isinstance(aggregated_result, dict):
+            # Only metrics were returned
+            loss = aggregated_result.get("loss", 0.0)
+            metrics = aggregated_result
         else:
-            # The result is not in the expected format
-            log(INFO, "Unexpected format from original_aggregate_evaluate_cyclic: %s", type(aggregated_result))
-            
-            # Try to extract loss and metrics
-            if isinstance(aggregated_result, (int, float)):
-                # Only loss was returned
-                loss = aggregated_result
-                metrics = {}
-            elif isinstance(aggregated_result, dict):
-                # Only metrics were returned
-                loss = aggregated_result.get("loss", 0.0)
-                metrics = aggregated_result
-            else:
-                # Unknown format, use defaults
-                loss = 0.0
-                metrics = {}
-            
-            log(INFO, "Extracted loss: %s, metrics: %s", loss, metrics)
-            
-            # Return in the correct format
-            return loss, metrics
+            # Unknown format, use defaults
+            loss = 0.0
+            metrics = {}
+        
+        log(INFO, "Extracted loss: %s, metrics: %s", loss, metrics)
+        
+        # Return in the correct format
+        return loss, metrics
     
     strategy.aggregate_evaluate = patched_aggregate_evaluate_cyclic
 

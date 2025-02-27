@@ -141,6 +141,13 @@ def evaluate_metrics_aggregation(eval_metrics):
     first_metrics = eval_metrics[0][1]
     is_prediction_mode = first_metrics.get("prediction_mode", False)
     
+    # Add detailed logging about prediction mode
+    log(INFO, f"PREDICTION MODE STATUS: {'ENABLED' if is_prediction_mode else 'DISABLED'}")
+    
+    # Log individual client prediction mode status
+    prediction_modes = [metrics.get("prediction_mode", False) for _, metrics in eval_metrics]
+    log(INFO, f"Client prediction modes: {prediction_modes}")
+    
     if is_prediction_mode:
         # Aggregate prediction statistics
         total_predictions = sum([metrics.get("total_predictions", 0)for num, metrics in eval_metrics])
@@ -149,9 +156,15 @@ def evaluate_metrics_aggregation(eval_metrics):
         
         # Calculate loss if available
         if all("loss" in metrics for _, metrics in eval_metrics):
+            # Log individual client losses for analysis
+            client_losses = [metrics["loss"] for _, metrics in eval_metrics]
+            log(INFO, f"Individual client losses: {client_losses}")
+            
             loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
+            log(INFO, f"PREDICTION MODE - Aggregated loss calculation: sum(loss*num)={sum([metrics['loss'] * num for num, metrics in eval_metrics])}, total_num={total_num}, result={loss}")
         else:
             loss = 0.0
+            log(INFO, "PREDICTION MODE - Loss not available in all client metrics")
         
         # Create aggregated metrics dictionary
         aggregated_metrics = {
@@ -181,9 +194,15 @@ def evaluate_metrics_aggregation(eval_metrics):
             f1 = 0.0
             
         if all("loss" in metrics for _, metrics in eval_metrics):
+            # Log individual client losses for analysis
+            client_losses = [metrics["loss"] for _, metrics in eval_metrics]
+            log(INFO, f"Individual client losses: {client_losses}")
+            
             loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
+            log(INFO, f"EVALUATION MODE - Aggregated loss calculation: sum(loss*num)={sum([metrics['loss'] * num for num, metrics in eval_metrics])}, total_num={total_num}, result={loss}")
         else:
             loss = 0.0
+            log(INFO, "EVALUATION MODE - Loss not available in all client metrics")
             
         # Aggregate confusion matrix elements
         tn = sum([metrics.get("true_negatives", 0) for _, metrics in eval_metrics])
