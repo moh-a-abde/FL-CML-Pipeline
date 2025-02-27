@@ -122,24 +122,6 @@ def summary(dfLocal):
     except Exception as e:
         logging.error(f"Error in summary function: {e}", exc_info=True)
 
-port_label_mapping = {
-    53: 'DNS',
-    22: 'SSH',
-    80: 'HTTP',
-    443: 'HTTPS',
-    21: 'FTP'
-}
-
-def get_label(port):
-    try:
-        # Convert float to int if needed
-        if isinstance(port, float):
-            port = int(port)
-        return port_label_mapping.get(port, None)
-    except Exception as e:
-        logging.error(f"Error in get_label function with port {port} (type: {type(port)}): {e}", exc_info=True)
-        return None
-
 def send_data_to_port(data, port=9000):
     try:
         logging.info(f"Attempting to send data to 192.168.1.3:{port}")
@@ -187,37 +169,6 @@ def process_data():
         logging.info(f"Initial DataFrame columns: {df.columns.tolist()}")
         df = clean(df)
         summary(df)
-        
-        # Check if 'id.resp_p' exists
-        if 'id.resp_p' not in df.columns:
-            logging.error("Column 'id.resp_p' not found in DataFrame")
-            return False
-            
-        # Add logging for label creation
-        logging.info(f"Unique values in 'id.resp_p' before labeling: {df['id.resp_p'].unique()}")
-        logging.info(f"Data types in 'id.resp_p': {df['id.resp_p'].apply(type).unique()}")
-        
-        # Apply labels more safely
-        df['label'] = df['id.resp_p'].apply(
-            lambda x: get_label(x) if pd.notna(x) else None
-        )
-        
-        logging.info(f"Label distribution: {df['label'].value_counts().to_dict()}")
-        
-        # Filter rows with valid labels
-        data = df.dropna(subset=['label'])
-        
-        if data.empty:
-            logging.warning("No data left after filtering for valid labels")
-            # Instead of returning False, let's use all data and assign a default label
-            logging.info("Using all data with a default 'UNKNOWN' label for ports not in mapping")
-            df['label'] = df['id.resp_p'].apply(
-                lambda x: get_label(x) if pd.notna(x) and get_label(x) is not None else 'UNKNOWN'
-            )
-            data = df
-            logging.info(f"New label distribution: {data['label'].value_counts().to_dict()}")
-        
-        logging.info(f"DataFrame shape after label filtering: {data.shape}")
         
         drop_columns = [
             "version", "auth_attempts", "curve", "server_name", "resumed", "established", "ssl_history",
