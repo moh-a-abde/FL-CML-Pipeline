@@ -51,6 +51,8 @@ def read_kafka_topic(topic, bootstrap_servers):
             if message_count % 100 == 0:
                 logging.info(f"Received {message_count} messages so far")
             messages.append(message.value)
+            if len(messages) >= 992200:  # You can adjust the number of messages to consume
+                break
             
         if not messages:
             logging.warning("No messages received from Kafka topic")
@@ -156,21 +158,6 @@ def send_data_to_port(data, port=9000):
         return False
     except Exception as e:
         logging.error(f"Failed to send data: {e}", exc_info=True)
-        return False
-
-def send_test_message():
-    """Send a test message to verify socket communication."""
-    try:
-        logging.info("Sending test message to socket server")
-        test_data = json.dumps([{"test": "message", "timestamp": datetime.now().isoformat()}])
-        success = send_data_to_port(test_data)
-        if success:
-            logging.info("Test message sent successfully")
-        else:
-            logging.error("Failed to send test message")
-        return success
-    except Exception as e:
-        logging.error(f"Error sending test message: {e}", exc_info=True)
         return False
 
 def process_data():
@@ -294,13 +281,7 @@ def process_data():
 if __name__ == "__main__":
     try:
         logging.info("Starting livepreprocessing_socket.py")
-        
-        # First, test socket communication
-        if send_test_message():
-            logging.info("Socket communication test successful, proceeding with data processing")
-        else:
-            logging.warning("Socket communication test failed, but proceeding anyway")
-        
+     
         # Run process_data only once instead of in a loop
         success = process_data()
         if success:
