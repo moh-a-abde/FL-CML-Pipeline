@@ -32,8 +32,8 @@ def start_server(host='192.168.1.3', port=9000):
         server_socket.listen(5)
         logging.info(f"Server listening on {host}:{port}")
         
-        # Create data directory if it doesn't exist
-        os.makedirs('data', exist_ok=True)
+        # Create received directory if it doesn't exist
+        os.makedirs('received', exist_ok=True)
         
         while True:
             try:
@@ -92,26 +92,27 @@ def start_server(host='192.168.1.3', port=9000):
                     df = pd.read_json(io.StringIO(data_str), orient='records')
                     logging.info(f"JSON parsed successfully. DataFrame shape: {df.shape}")
                     
-                    # Create output directory if it doesn't exist
-                    os.makedirs('data', exist_ok=True)
+                    # Create received directory if it doesn't exist
+                    os.makedirs('received', exist_ok=True)
                     
-                    output_file_path = f'data/received_data_{timestamp}.csv'
+                    # Save to a file with timestamp
+                    output_file_path = f'received/received_data_{timestamp}.csv'
                     df.to_csv(output_file_path, index=False)
                     logging.info(f"Data saved to {output_file_path}")
                     
                     # Also save a sample of the raw JSON for debugging
-                    with open(f'data/raw_sample_{timestamp}.json', 'w', encoding='utf-8') as f:
+                    with open(f'received/raw_sample_{timestamp}.json', 'w', encoding='utf-8') as f:
                         # Save just the first 1000 characters as a sample
                         f.write(data_str[:min(1000, len(data_str))])
-                    logging.info(f"Raw sample saved to data/raw_sample_{timestamp}.json")
+                    logging.info(f"Raw sample saved to received/raw_sample_{timestamp}.json")
                     
                 except ValueError as e:
                     logging.error(f"Failed to parse JSON: {e}", exc_info=True)
                     # Save the raw data for debugging
-                    os.makedirs('data', exist_ok=True)
-                    with open(f'data/invalid_json_{timestamp}.txt', 'w', encoding='utf-8') as f:
+                    os.makedirs('received', exist_ok=True)
+                    with open(f'received/invalid_json_{timestamp}.txt', 'w', encoding='utf-8') as f:
                         f.write(data_str)
-                    logging.info(f"Invalid JSON saved to data/invalid_json_{timestamp}.txt")
+                    logging.info(f"Invalid JSON saved to received/invalid_json_{timestamp}.txt")
                 except Exception as e:
                     logging.error(f"Failed to save data: {e}", exc_info=True)
             
