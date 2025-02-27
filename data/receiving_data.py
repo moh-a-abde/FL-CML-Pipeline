@@ -3,7 +3,9 @@ import pandas as pd
 import json
 import logging
 import sys
+import os
 from datetime import datetime
+import io
 
 # Configure logging
 logging.basicConfig(
@@ -30,6 +32,9 @@ def start_server(host='192.168.1.3', port=9000):
         server_socket.listen(5)
         logging.info(f"Server listening on {host}:{port}")
         
+        # Create data directory if it doesn't exist
+        os.makedirs('data', exist_ok=True)
+        
         while True:
             try:
                 # Establish a connection
@@ -38,13 +43,16 @@ def start_server(host='192.168.1.3', port=9000):
                 logging.info(f"Got a connection from {addr}")
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 
+                # Set a longer timeout for receiving data
+                client_socket.settimeout(30)  # 30 seconds timeout
+                
                 # Receive the data in chunks
                 data = b""
                 chunks_received = 0
                 
                 while True:
                     try:
-                        chunk = client_socket.recv(4096)
+                        chunk = client_socket.recv(8192)  # Increased buffer size
                         if not chunk:
                             break
                         chunks_received += 1
@@ -70,6 +78,9 @@ def start_server(host='192.168.1.3', port=9000):
                 try:
                     data_str = data.decode('utf-8')
                     logging.info(f"Data decoded successfully, length: {len(data_str)}")
+                    
+                    # Log the first 100 characters of the data for debugging
+                    logging.info(f"First 100 chars of data: {data_str[:100]}")
                 except UnicodeDecodeError as e:
                     logging.error(f"Failed to decode data: {e}", exc_info=True)
                     continue
@@ -77,15 +88,19 @@ def start_server(host='192.168.1.3', port=9000):
                 # Convert the JSON string to a Pandas DataFrame
                 try:
                     logging.info("Attempting to parse JSON data")
-                    df = pd.read_json(data_str, orient='records')
+                    # Use StringIO to avoid FutureWarning
+                    df = pd.read_json(io.StringIO(data_str), orient='records')
                     logging.info(f"JSON parsed successfully. DataFrame shape: {df.shape}")
+                    
+                    # Create output directory if it doesn't exist
+                    os.makedirs('data', exist_ok=True)
                     
                     output_file_path = f'data/received_data_{timestamp}.csv'
                     df.to_csv(output_file_path, index=False)
                     logging.info(f"Data saved to {output_file_path}")
                     
                     # Also save a sample of the raw JSON for debugging
-                    with open(f'data/raw_sample_{timestamp}.json', 'w') as f:
+                    with open(f'data/raw_sample_{timestamp}.json', 'w', encoding='utf-8') as f:
                         # Save just the first 1000 characters as a sample
                         f.write(data_str[:min(1000, len(data_str))])
                     logging.info(f"Raw sample saved to data/raw_sample_{timestamp}.json")
@@ -93,7 +108,8 @@ def start_server(host='192.168.1.3', port=9000):
                 except ValueError as e:
                     logging.error(f"Failed to parse JSON: {e}", exc_info=True)
                     # Save the raw data for debugging
-                    with open(f'data/invalid_json_{timestamp}.txt', 'w') as f:
+                    os.makedirs('data', exist_ok=True)
+                    with open(f'data/invalid_json_{timestamp}.txt', 'w', encoding='utf-8') as f:
                         f.write(data_str)
                     logging.info(f"Invalid JSON saved to data/invalid_json_{timestamp}.txt")
                 except Exception as e:

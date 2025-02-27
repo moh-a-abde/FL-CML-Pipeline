@@ -128,26 +128,29 @@ port_label_mapping = {
 
 def get_label(port):
     try:
+        # Convert float to int if needed
+        if isinstance(port, float):
+            port = int(port)
         return port_label_mapping.get(port, None)
     except Exception as e:
-        logging.error(f"Error in get_label function with port {port}: {e}", exc_info=True)
+        logging.error(f"Error in get_label function with port {port} (type: {type(port)}): {e}", exc_info=True)
         return None
 
 def send_data_to_port(data, port=9000):
     try:
-        logging.info(f"Attempting to send data to localhost:{port}")
+        logging.info(f"Attempting to send data to 192.168.1.3:{port}")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(5)  # 5 second timeout
-        sock.connect(('localhost', port))
+        sock.connect(('192.168.1.3', port))
         sock.sendall(data.encode('utf-8'))
         sock.close()
         logging.info("Data sent successfully!")
         return True
     except ConnectionRefusedError:
-        logging.error(f"Connection refused to localhost:{port}. Is the receiving server running?")
+        logging.error(f"Connection refused to 192.168.1.3:{port}. Is the receiving server running?")
         return False
     except socket.timeout:
-        logging.error(f"Connection to localhost:{port} timed out")
+        logging.error(f"Connection to 192.168.1.3:{port} timed out")
         return False
     except Exception as e:
         logging.error(f"Failed to send data: {e}", exc_info=True)
@@ -194,10 +197,11 @@ def process_data():
             
         # Add logging for label creation
         logging.info(f"Unique values in 'id.resp_p' before labeling: {df['id.resp_p'].unique()}")
+        logging.info(f"Data types in 'id.resp_p': {df['id.resp_p'].apply(type).unique()}")
         
         # Apply labels more safely
         df['label'] = df['id.resp_p'].apply(
-            lambda x: get_label(int(x)) if pd.notna(x) and str(x).isdigit() else None
+            lambda x: get_label(x) if pd.notna(x) else None
         )
         
         logging.info(f"Label distribution: {df['label'].value_counts().to_dict()}")
@@ -207,8 +211,14 @@ def process_data():
         
         if data.empty:
             logging.warning("No data left after filtering for valid labels")
-            return False
-            
+            # Instead of returning False, let's use all data and assign a default label
+            logging.info("Using all data with a default 'UNKNOWN' label for ports not in mapping")
+            df['label'] = df['id.resp_p'].apply(
+                lambda x: get_label(x) if pd.notna(x) and get_label(x) is not None else 'UNKNOWN'
+            )
+            data = df
+            logging.info(f"New label distribution: {data['label'].value_counts().to_dict()}")
+        
         logging.info(f"DataFrame shape after label filtering: {data.shape}")
         
         drop_columns = [
