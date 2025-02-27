@@ -44,7 +44,7 @@ jobs:
           pip install -r requirements.txt
           #python sim.py
           ./run_bagging.sh
-          python use_saved_model.py --model_path outputs/2025-02-27/04-38-36/final_model.json --data_path data/static_data.csv --output_path predictions_pretrained_model.csv --has_labels
+          python use_saved_model.py --model_path outputs/2025-02-27/04-38-36/final_model.json --data_path data/testing_data.csv --output_path outputs/2025-02-27/04-38-36/predictions_pretrained_model.csv
 
       - name: Commit results file
         run: |
