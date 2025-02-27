@@ -323,53 +323,38 @@ def load_saved_model(model_path):
                 log(INFO, "All loading attempts failed")
                 raise ValueError(f"Failed to load model: {str(e)}, {str(e2)}, {str(e3)}")
 
-def predict_with_saved_model(model_path, data, output_path=None):
-    """
-    Make predictions using a saved model.
-    
-    Args:
-        model_path (str): Path to the saved model file
-        data: DMatrix or data that can be converted to DMatrix
-        output_path (str, optional): Path to save predictions. If None, predictions are not saved.
-        
-    Returns:
-        numpy.ndarray: Predictions
-    """
+def predict_with_saved_model(model_path, dmatrix, output_path):
     # Load the model
-    bst = load_saved_model(model_path)
-    
-    # Convert data to DMatrix if it's not already
-    if not isinstance(data, xgb.DMatrix):
-        try:
-            data = xgb.DMatrix(data)
-        except Exception as e:
-            log(INFO, "Error converting data to DMatrix: %s", str(e))
-            raise
+    model = load_saved_model(model_path)
     
     # Make predictions
-    log(INFO, "Making predictions with loaded model")
-    predictions = bst.predict(data)
+    raw_predictions = model.predict(dmatrix)
     
-    # Save predictions if output_path is provided
-    if output_path is not None:
-        # Convert predictions to binary labels (0 or 1)
-        pred_labels = predictions.astype(int)
-        
-        # Get directory and filename
-        output_dir = os.path.dirname(output_path)
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-        
-        # Create DataFrame with predictions
-        df = pd.DataFrame({
-            'predicted_label': pred_labels,
-            'prediction_type': ['malicious' if p == 1 else 'benign' for p in pred_labels],
-            'prediction_score': predictions
-        })
-        
-        # Save to CSV
-        df.to_csv(output_path, index=False)
-        log(INFO, "Predictions saved to: %s", output_path)
+    # Log raw predictions
+    log(INFO, "Raw predictions: %s", raw_predictions)
+    
+    # Log distribution of scores
+    log(INFO, "Prediction score distribution - Min: %.4f, Max: %.4f, Mean: %.4f", 
+        np.min(raw_predictions), np.max(raw_predictions), np.mean(raw_predictions))
+    
+    # Convert raw predictions to probabilities if necessary
+    # (Assuming a binary classification with a threshold of 0.5)
+    probabilities = 1 / (1 + np.exp(-raw_predictions))  # Example for sigmoid transformation
+    predicted_labels = (probabilities >= 0.5).astype(int)
+    
+    # Log predicted class distribution
+    unique, counts = np.unique(predicted_labels, return_counts=True)
+    log(INFO, "Predicted class distribution: %s", dict(zip(unique, counts)))
+    
+    # Save predictions to CSV
+    predictions_df = pd.DataFrame({
+        'predicted_label': predicted_labels,
+        'prediction_type': ['benign' if label == 0 else 'malicious' for label in predicted_labels],
+        'prediction_score': probabilities
+    })
+    
+    predictions_df.to_csv(output_path, index=False)
+    log(INFO, "Predictions saved to: %s", output_path)
     
     return predictions
 
