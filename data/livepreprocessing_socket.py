@@ -17,6 +17,9 @@ from datetime import datetime
 import json
 import os
 
+# Create received directory if it doesn't exist
+os.makedirs('received', exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

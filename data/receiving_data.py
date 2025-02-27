@@ -7,6 +7,9 @@ import os
 from datetime import datetime
 import io
 
+# Create received directory if it doesn't exist
+os.makedirs('received', exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -31,9 +34,6 @@ def start_server(host='192.168.1.3', port=9000):
         # Listen for incoming connections
         server_socket.listen(5)
         logging.info(f"Server listening on {host}:{port}")
-        
-        # Create received directory if it doesn't exist
-        os.makedirs('received', exist_ok=True)
         
         while True:
             try:
@@ -131,9 +131,6 @@ def start_server(host='192.168.1.3', port=9000):
 
 if __name__ == "__main__":
     try:
-        # Create received directory if it doesn't exist
-        os.makedirs('received', exist_ok=True)
-        
         logging.info("Starting receiving server...")
         start_server()
     except KeyboardInterrupt:
