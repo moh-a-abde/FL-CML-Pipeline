@@ -153,11 +153,26 @@ def send_data_to_port(data, port=9000):
         logging.error(f"Failed to send data: {e}", exc_info=True)
         return False
 
+def send_test_message():
+    """Send a test message to verify socket communication."""
+    try:
+        logging.info("Sending test message to socket server")
+        test_data = json.dumps([{"test": "message", "timestamp": datetime.now().isoformat()}])
+        success = send_data_to_port(test_data)
+        if success:
+            logging.info("Test message sent successfully")
+        else:
+            logging.error("Failed to send test message")
+        return success
+    except Exception as e:
+        logging.error(f"Error sending test message: {e}", exc_info=True)
+        return False
+
 def process_data():
     try:
         logging.info("Starting data processing")
         topic = "zeek"
-        bootstrap_servers = ["192.168.1.3:9000"]
+        bootstrap_servers = ["192.168.1.3:9092"]
         df = read_kafka_topic(topic, bootstrap_servers)
         
         if df is None:
@@ -305,6 +320,13 @@ def process_data():
 if __name__ == "__main__":
     try:
         logging.info("Starting livepreprocessing_socket.py")
+        
+        # First, test socket communication
+        if send_test_message():
+            logging.info("Socket communication test successful, proceeding with data processing")
+        else:
+            logging.warning("Socket communication test failed, but proceeding anyway")
+        
         while True:
             success = process_data()
             if not success:
