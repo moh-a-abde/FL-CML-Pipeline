@@ -56,6 +56,8 @@ jobs:
           
           # Add new files in outputs directory
           git add outputs/
+
+          git add predictions_pretrained_model.csv
           
           # Commit all changes
           git commit -m "workflow in action🚀"
