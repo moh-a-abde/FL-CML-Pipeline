@@ -131,6 +131,67 @@ def clean_data_for_xgboost(df):
     return cleaned_df
 
 
+def save_detailed_predictions(predictions, output_path, threshold=0.5):
+    """
+    Save detailed prediction information to CSV.
+    
+    Args:
+        predictions (np.ndarray): Raw prediction scores from the model
+        output_path (str): Path to save the predictions
+        threshold (float): Threshold for binary classification (default: 0.5)
+    """
+    # Create a DataFrame to store predictions
+    results_df = pd.DataFrame()
+    
+    # Check if predictions are probabilities (between 0 and 1)
+    is_probability = np.all((predictions >= 0) & (predictions <= 1))
+    
+    if is_probability:
+        # For binary classification with probability outputs
+        results_df['raw_score'] = predictions
+        results_df['predicted_label'] = (predictions >= threshold).astype(int)
+        
+        # Add prediction type
+        results_df['prediction_type'] = np.where(
+            results_df['predicted_label'] == 0, 'benign', 'malicious'
+        )
+        
+        # Add prediction score (probability of the predicted class)
+        results_df['prediction_score'] = np.where(
+            results_df['predicted_label'] == 0, 
+            1 - predictions,  # Probability of class 0 (benign)
+            predictions       # Probability of class 1 (malicious)
+        )
+    else:
+        # For regression or multi-class outputs
+        results_df['predicted_value'] = predictions
+        
+        # For binary classification with non-probability outputs
+        if np.all(np.isin(np.unique(predictions.astype(int)), [0, 1])):
+            results_df['predicted_label'] = predictions.astype(int)
+            results_df['prediction_type'] = np.where(
+                results_df['predicted_label'] == 0, 'benign', 'malicious'
+            )
+            results_df['prediction_score'] = 1.0  # Default confidence
+    
+    # Save to CSV
+    results_df.to_csv(output_path, index=False)
+    log(INFO, "Saved %d predictions to %s", len(results_df), output_path)
+    
+    # Log prediction statistics
+    if 'predicted_label' in results_df.columns:
+        label_counts = results_df['predicted_label'].value_counts()
+        log(INFO, "Prediction counts: %s", dict(label_counts))
+        
+        if 'prediction_score' in results_df.columns:
+            log(INFO, "Score statistics: min=%.6f, max=%.6f, mean=%.6f", 
+                results_df['prediction_score'].min(),
+                results_df['prediction_score'].max(),
+                results_df['prediction_score'].mean())
+    
+    return results_df
+
+
 def main():
     """Main function to load model and make predictions."""
     args = parse_args()
@@ -180,10 +241,13 @@ def main():
                 y_true = dmatrix.get_label()
                 
                 # Make predictions
-                predictions = predict_with_saved_model(args.model_path, dmatrix, args.output_path)
+                raw_predictions = model.predict(dmatrix)
+                
+                # Save detailed predictions
+                save_detailed_predictions(raw_predictions, args.output_path)
                 
                 # Evaluate if data has labels
-                y_pred_labels = predictions.astype(int)
+                y_pred_labels = (raw_predictions >= 0.5).astype(int)
                 
                 # Calculate accuracy
                 accuracy = np.mean(y_pred_labels == y_true)
@@ -212,8 +276,11 @@ def main():
                 # Convert to DMatrix (without label)
                 dmatrix = xgb.DMatrix(data, missing=np.nan)
                 
-                # Make predictions
-                predictions = predict_with_saved_model(args.model_path, dmatrix, args.output_path)
+                # Make predictions directly with the model
+                raw_predictions = model.predict(dmatrix)
+                
+                # Save detailed predictions
+                save_detailed_predictions(raw_predictions, args.output_path)
                 
         else:
             # If data doesn't have labels, load as pandas DataFrame
@@ -247,8 +314,11 @@ def main():
             else:
                 dmatrix = xgb.DMatrix(data, missing=np.nan)
             
-            # Make predictions
-            predictions = predict_with_saved_model(args.model_path, dmatrix, args.output_path)
+            # Make predictions directly with the model
+            raw_predictions = model.predict(dmatrix)
+            
+            # Save detailed predictions
+            save_detailed_predictions(raw_predictions, args.output_path)
             
         log(INFO, "Predictions saved to: %s", args.output_path)
         
