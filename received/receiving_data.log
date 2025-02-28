@@ -34,3 +34,24 @@ OSError: [Errno 98] Address already in use
 2025-02-27 23:09:18,917 - INFO - JSON parsed successfully. DataFrame shape: (1580, 55)
 2025-02-27 23:09:18,938 - INFO - Data saved to received/received_data_20250227_230918.csv
 2025-02-27 23:09:18,938 - INFO - Waiting for connection...
+2025-02-27 23:33:00,174 - INFO - Starting receiving server...
+2025-02-27 23:33:00,174 - INFO - Socket receive buffer size set to: 0.41 MB
+2025-02-27 23:33:00,174 - ERROR - Server error: [Errno 98] Address already in use
+Traceback (most recent call last):
+  File "/home/mohamed/Desktop/workstation/FL-CML-Pipeline/data/receiving_data.py", line 34, in start_server
+    server_socket.bind((host, port))
+OSError: [Errno 98] Address already in use
+2025-02-27 23:33:00,174 - INFO - Server socket closed
+2025-02-27 23:33:01,278 - INFO - Got a connection from ('192.168.1.3', 51878)
+2025-02-27 23:33:01,278 - INFO - Received 0.06MB in 1 chunks. Transfer rate: 428.07MB/s
+2025-02-27 23:33:01,278 - INFO - Received 0.34MB in 2 chunks. Transfer rate: 1054.42MB/s
+2025-02-27 23:33:01,278 - INFO - Received 0.37MB in 3 chunks. Transfer rate: 914.61MB/s
+2025-02-27 23:33:01,278 - INFO - Received 0.44MB in 4 chunks. Transfer rate: 758.12MB/s
+2025-02-27 23:33:01,279 - INFO - Received 0.62MB in 5 chunks. Transfer rate: 876.28MB/s
+2025-02-27 23:33:01,279 - INFO - Received 0.87MB in 6 chunks. Transfer rate: 1011.08MB/s
+2025-02-27 23:33:01,281 - INFO - Connection closed. Received 6.76MB in 40 chunks. Average speed: 2394.67MB/s
+2025-02-27 23:33:01,282 - INFO - Data decoded successfully, length: 7086029
+2025-02-27 23:33:01,283 - INFO - Attempting to parse JSON data
+2025-02-27 23:33:01,419 - INFO - JSON parsed successfully. DataFrame shape: (6029, 56)
+2025-02-27 23:33:01,487 - INFO - Data saved to received/received_data_20250227_233301.csv
+2025-02-27 23:33:01,487 - INFO - Waiting for connection...
