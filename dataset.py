@@ -118,7 +118,7 @@ def preprocess_data(data):
         # For unlabeled data
         return df, None
         
-def preprocess_data_stebn2(data):
+def preprocess_data_deprec2(data):
     """/
     Preprocess the data by encoding categorical features and separating features and labels.
     
@@ -157,7 +157,7 @@ def preprocess_data_stebn2(data):
         # For unlabeled data
         return df, None
 
-def preprocess_data_stebn(data):
+def preprocess_data_deprec(data):
     """
     Preprocess the static_data.csv dataset by:
       - Dropping the 'Timestamp' column.
