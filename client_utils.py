@@ -206,7 +206,7 @@ class XgbClient(fl.client.Client):
         
         # Log ground truth distribution
         true_counts = np.bincount(y_true.astype(int))
-        log(INFO, f"Ground truth distribution: Benign={true_counts[0]}, Malicious={true_counts[1]}")
+        #log(INFO, f"Ground truth distribution: Benign={true_counts[0]}, Malicious={true_counts[1]}")
         
         # Try different thresholds
         thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
