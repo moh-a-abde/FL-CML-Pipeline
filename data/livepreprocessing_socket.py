@@ -119,22 +119,50 @@ def summary(dfLocal):
 
 def send_data_to_port(data, port=9000):
     try:
-        logging.info("Attempting to send data to 192.168.1.3:%d", port)
+        data_size_mb = len(data) / (1024 * 1024)
+        logging.info(f"Preparing to send {data_size_mb:.2f} MB of data to 192.168.1.3:{port}")
+        
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(5)  # 5 second timeout
+        # Increase socket buffer size
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 8388608)  # 8MB buffer
+        current_buffer_size = sock.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
+        logging.info(f"Socket send buffer size set to: {current_buffer_size / (1024*1024):.2f} MB")
+        
+        # Increase timeout for large data
+        timeout_seconds = max(30, int(data_size_mb * 0.5))  # 0.5 seconds per MB, minimum 30 seconds
+        sock.settimeout(timeout_seconds)
+        logging.info(f"Socket timeout set to {timeout_seconds} seconds")
+        
         sock.connect(('192.168.1.3', port))
-        sock.sendall(data.encode('utf-8'))
+        logging.info("Connected successfully, starting data transmission")
+        
+        # Send in chunks
+        chunk_size = 1048576  # 1MB chunks
+        total_sent = 0
+        data_encoded = data.encode('utf-8')
+        total_size = len(data_encoded)
+        
+        while total_sent < total_size:
+            chunk = data_encoded[total_sent:total_sent + chunk_size]
+            sent = sock.send(chunk)
+            if sent == 0:
+                raise RuntimeError("Socket connection broken")
+            total_sent += sent
+            if total_sent % (50 * 1048576) == 0:  # Log every 50MB
+                logging.info(f"Progress: {(total_sent/total_size)*100:.2f}% ({total_sent/(1024*1024):.2f}MB / {total_size/(1024*1024):.2f}MB)")
+        
+        logging.info(f"Data transmission completed. Total sent: {total_sent/(1024*1024):.2f}MB")
         sock.close()
-        logging.info("Data sent successfully!")
         return True
     except ConnectionRefusedError:
         logging.error("Connection refused to 192.168.1.3:%d. Is the receiving server running?", port)
         return False
     except socket.timeout:
-        logging.error("Connection to 192.168.1.3:%d timed out", port)
+        logging.error(f"Connection/transmission to 192.168.1.3:{port} timed out after {timeout_seconds} seconds")
+        logging.error(f"Only sent {total_sent/(1024*1024):.2f}MB out of {total_size/(1024*1024):.2f}MB")
         return False
     except Exception as exc:
-        logging.error("Failed to send data: %s", exc, exc_info=True)
+        logging.error(f"Failed to send data: {exc}", exc_info=True)
         return False
 
 def process_data():
