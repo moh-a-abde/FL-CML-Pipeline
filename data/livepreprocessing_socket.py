@@ -162,6 +162,10 @@ def send_data_to_port(data, port=9000):
         logging.error(f"Failed to send data: {exc}", exc_info=True)
         return False
 
+import pandas as pd
+import logging
+from datetime import datetime
+
 def process_data():
     try:
         logging.info("Starting data processing")
@@ -233,6 +237,10 @@ def process_data():
         final_data = pd.concat(all_processed_data, ignore_index=True)
         logging.info("Total processed data shape: %s", final_data.shape)
         
+        # **Add Labels for Classification**
+        final_data["label"] = 0  # Default label as 0
+        final_data.loc[final_data.index[-10:], "label"] = 1  # Set last 10 rows to 1
+        
         # Save all processed data to a single file for this run
         final_data.to_csv(output_file_path, index=False)
         logging.info("Saved all processed data to %s", output_file_path)
@@ -252,6 +260,7 @@ def process_data():
     except Exception as exc:
         logging.error("Error in process_data function: %s", exc, exc_info=True)
         return False
+
 
 if __name__ == "__main__":
     try:
