@@ -51,18 +51,18 @@ if __name__ == "__main__":
     # Parse command line arguments for experimental settings
     args = client_args_parser()
 
-    #data_directory = "data/received"
-    #latest_csv_path = get_latest_csv(data_directory)
-    #labeled_dataset = load_csv_data(latest_csv_path)
-    #unlabeled_dataset = load_csv_data(latest_csv_path)
+    data_directory = "data/received"
+    latest_csv_path = get_latest_csv(data_directory)
+    labeled_dataset = load_csv_data(latest_csv_path)
+    unlabeled_dataset = load_csv_data(latest_csv_path)
     
     # Load labeled data for training
-    labeled_csv_path = "data/received/network_traffic_20250227_194147.csv"
-    labeled_dataset = load_csv_data(labeled_csv_path)
+    #labeled_csv_path = "data/received/network_traffic_20250227_194147.csv"
+    #labeled_dataset = load_csv_data(labeled_csv_path)
     
     # Load unlabeled data for prediction
-    unlabeled_csv_path = "data/received/network_traffic_20250227_194147.csv"
-    unlabeled_dataset = load_csv_data(unlabeled_csv_path)
+    #unlabeled_csv_path = "data/received/network_traffic_20250227_194147.csv"
+    #unlabeled_dataset = load_csv_data(unlabeled_csv_path)
     
     # Initialize data partitioner based on specified strategy
     partitioner = instantiate_partitioner(
