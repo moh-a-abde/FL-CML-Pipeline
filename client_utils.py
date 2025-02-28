@@ -145,7 +145,9 @@ class XgbClient(fl.client.Client):
         """
         y_train = self.train_dmatrix.get_label()
         class_counts = np.bincount(y_train.astype(int))
-        log(INFO, f"Training data class distribution: Benign={class_counts[0]}, Malicious={class_counts[1]}")
+        benign_count = class_counts[0] if len(class_counts) > 0 else 0
+        malicious_count = class_counts[1] if len(class_counts) > 1 else 0
+        log(INFO, f"Training data class distribution: Benign={benign_count}, Malicious={malicious_count}")
         
         global_round = int(ins.config["global_round"])
         
