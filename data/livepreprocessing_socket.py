@@ -86,7 +86,7 @@ def clean(dfLocal):
             "resp_fuids", "resp_mime_types", "cert_chain_fps", "client_cert_chain_fps",
             "subject", "issuer", "sni_matches_cert", "client_addr", "version.minor2", "host_p",
             "note", "msg", "sub", "src", "actions", "email_dest", "suppress_for", "direction", "level",
-            "message", "location", "assigned_addr", "lease_time"
+            "message", "location", "assigned_addr", "lease_time", "host_name", "md5", "sha1", "extracted"
         ]
         
         
@@ -207,7 +207,7 @@ def process_data():
             "cert_count", "dst", "p", "tunnel_type", "status", "request.host",
             "request_p", "bound.host", "bound_p", "client_scid", "failure_data", "san.ip", "resp_filenames"
         ]
-        
+
         # Check which columns actually exist before dropping
         existing_columns = [col for col in drop_columns if col in data.columns]
         logging.info("Dropping %d columns out of %d specified in second drop", len(existing_columns), len(drop_columns))
