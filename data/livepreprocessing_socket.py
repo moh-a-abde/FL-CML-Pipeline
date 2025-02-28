@@ -44,7 +44,7 @@ def read_kafka_topic(topic, bootstrap_servers):
             if message_count % 100 == 0:
                 logging.info("Received %d messages so far", message_count)
             messages.append(message.value)
-            if len(messages) >= 992200:  # You can adjust the number of messages to consume
+            if len(messages) >= 1000:  # You can adjust the number of messages to consume
                 break
             
         if not messages:
