@@ -215,18 +215,30 @@ class XgbClient(fl.client.Client):
         best_threshold = 0.5
         best_balance = float('inf')
         
+        # Get true class distribution
+        true_benign = true_counts[0] if len(true_counts) > 0 else 0
+        true_malicious = true_counts[1] if len(true_counts) > 1 else 0
+        true_ratio = true_malicious / true_benign if true_benign > 0 else float('inf')
+        
         for threshold in thresholds:
             temp_labels = (y_pred_proba > threshold).astype(int)
             temp_counts = np.bincount(temp_labels.astype(int))
             benign_count = temp_counts[0] if len(temp_counts) > 0 else 0
             malicious_count = temp_counts[1] if len(temp_counts) > 1 else 0
             
-            # Calculate class balance ratio (closer to 1 is better)
-            true_benign = true_counts[0]
-            true_malicious = true_counts[1]
+            # Calculate predicted ratio, handling edge cases
+            pred_ratio = malicious_count / benign_count if benign_count > 0 else float('inf')
             
             # Calculate how well this threshold preserves the true class distribution
-            balance_score = abs((benign_count/malicious_count) - (true_benign/true_malicious)) if malicious_count > 0 else float('inf')
+            if true_ratio == float('inf') and pred_ratio == float('inf'):
+                # Both have only malicious samples
+                balance_score = 0
+            elif true_ratio == 0 and pred_ratio == 0:
+                # Both have only benign samples
+                balance_score = 0
+            else:
+                # Calculate absolute difference between ratios
+                balance_score = abs(pred_ratio - true_ratio)
             
             log(INFO, f"Threshold {threshold}: Benign={benign_count}, Malicious={malicious_count}, Balance Score={balance_score:.4f}")
             
@@ -243,7 +255,9 @@ class XgbClient(fl.client.Client):
     
         # Log prediction distribution
         pred_counts = np.bincount(y_pred_labels.astype(int))
-        log(INFO, f"Prediction distribution: Benign={pred_counts[0]}, Malicious={pred_counts[1]}")
+        benign_pred = pred_counts[0] if len(pred_counts) > 0 else 0
+        malicious_pred = pred_counts[1] if len(pred_counts) > 1 else 0
+        log(INFO, f"Prediction distribution: Benign={benign_pred}, Malicious={malicious_pred}")
         log(INFO, f"Prediction probabilities range: [{y_pred_proba.min():.3f}, {y_pred_proba.max():.3f}]")
         
         # Compute metrics for labeled data
