@@ -52,11 +52,11 @@ if __name__ == "__main__":
     args = client_args_parser()
     
     # Load labeled data for training
-    labeled_csv_path = "data/received/received_data_20250227_192555.csv"
+    labeled_csv_path = "data/received/network_traffic_20250227_194147.csv"
     labeled_dataset = load_csv_data(labeled_csv_path)
     
     # Load unlabeled data for prediction
-    unlabeled_csv_path = "data/received/received_data_20250227_192555.csv"
+    unlabeled_csv_path = "data/received/network_traffic_20250227_194147.csv"
     unlabeled_dataset = load_csv_data(unlabeled_csv_path)
     
     # Initialize data partitioner based on specified strategy
