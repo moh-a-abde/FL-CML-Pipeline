@@ -1,0 +1,308 @@
+{
+    "round": 20,
+    "timestamp": "2025-02-28T00:20:31.203794",
+    "metrics": {
+        "original_metrics": [
+            [
+                1,
+                [
+                    0.3133719563484192,
+                    {
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "f1": 1.0,
+                        "true_negatives": 23695,
+                        "false_positives": 0,
+                        "false_negatives": 0,
+                        "true_positives": 8360,
+                        "prediction_mode": false,
+                        "loss": 0.3133719563484192
+                    }
+                ]
+            ],
+            [
+                2,
+                [
+                    0.17039348185062408,
+                    {
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "f1": 1.0,
+                        "true_negatives": 23695,
+                        "false_positives": 0,
+                        "false_negatives": 0,
+                        "true_positives": 8360,
+                        "prediction_mode": false,
+                        "loss": 0.17039348185062408
+                    }
+                ]
+            ],
+            [
+                3,
+                [
+                    0.10062500834465027,
+                    {
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "f1": 1.0,
+                        "true_negatives": 23695,
+                        "false_positives": 0,
+                        "false_negatives": 0,
+                        "true_positives": 8360,
+                        "prediction_mode": false,
+                        "loss": 0.10062500834465027
+                    }
+                ]
+            ],
+            [
+                4,
+                [
+                    0.059145238250494,
+                    {
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "f1": 1.0,
+                        "true_negatives": 23695,
+                        "false_positives": 0,
+                        "false_negatives": 0,
+                        "true_positives": 8360,
+                        "prediction_mode": false,
+                        "loss": 0.059145238250494
+                    }
+                ]
+            ],
+            [
+                5,
+                [
+                    0.03649231791496277,
+                    {
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "f1": 1.0,
+                        "true_negatives": 23695,
+                        "false_positives": 0,
+                        "false_negatives": 0,
+                        "true_positives": 8360,
+                        "prediction_mode": false,
+                        "loss": 0.03649231791496277
+                    }
+                ]
+            ],
+            [
+                6,
+                [
+                    0.02190479449927807,
+                    {
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "f1": 1.0,
+                        "true_negatives": 23695,
+                        "false_positives": 0,
+                        "false_negatives": 0,
+                        "true_positives": 8360,
+                        "prediction_mode": false,
+                        "loss": 0.02190479449927807
+                    }
+                ]
+            ],
+            [
+                7,
+                [
+                    0.01322196051478386,
+                    {
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "f1": 1.0,
+                        "true_negatives": 23695,
+                        "false_positives": 0,
+                        "false_negatives": 0,
+                        "true_positives": 8360,
+                        "prediction_mode": false,
+                        "loss": 0.01322196051478386
+                    }
+                ]
+            ],
+            [
+                8,
+                [
+                    0.008016164414584637,
+                    {
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "f1": 1.0,
+                        "true_negatives": 23695,
+                        "false_positives": 0,
+                        "false_negatives": 0,
+                        "true_positives": 8360,
+                        "prediction_mode": false,
+                        "loss": 0.008016164414584637
+                    }
+                ]
+            ],
+            [
+                9,
+                [
+                    0.004882161971181631,
+                    {
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "f1": 1.0,
+                        "true_negatives": 23695,
+                        "false_positives": 0,
+                        "false_negatives": 0,
+                        "true_positives": 8360,
+                        "prediction_mode": false,
+                        "loss": 0.004882161971181631
+                    }
+                ]
+            ],
+            [
+                10,
+                [
+                    0.0029889396391808987,
+                    {
+                        "precision": 1.0,
+                        "recall": 1.0,
+                        "f1": 1.0,
+                        "true_negatives": 23695,
+                        "false_positives": 0,
+                        "false_negatives": 0,
+                        "true_positives": 8360,
+                        "prediction_mode": false,
+                        "loss": 0.0029889396391808987
+                    }
+                ]
+            ],
+            [
+                11,
+                [
+                    0.0018434172961860895,
+                    {
+                        "total_predictions": 160255,
+                        "malicious_predictions": 41490,
+                        "benign_predictions": 118765,
+                        "prediction_mode": true,
+                        "loss": 0.0018434172961860895
+                    }
+                ]
+            ],
+            [
+                12,
+                [
+                    0.0011492761550471187,
+                    {
+                        "total_predictions": 160255,
+                        "malicious_predictions": 41490,
+                        "benign_predictions": 118765,
+                        "prediction_mode": true,
+                        "loss": 0.0011492761550471187
+                    }
+                ]
+            ],
+            [
+                13,
+                [
+                    0.0007277056574821472,
+                    {
+                        "total_predictions": 160255,
+                        "malicious_predictions": 41490,
+                        "benign_predictions": 118765,
+                        "prediction_mode": true,
+                        "loss": 0.0007277056574821472
+                    }
+                ]
+            ],
+            [
+                14,
+                [
+                    0.0005714533617720008,
+                    {
+                        "total_predictions": 160255,
+                        "malicious_predictions": 41490,
+                        "benign_predictions": 118765,
+                        "prediction_mode": true,
+                        "loss": 0.0005714533617720008
+                    }
+                ]
+            ],
+            [
+                15,
+                [
+                    0.000479039124911651,
+                    {
+                        "total_predictions": 160255,
+                        "malicious_predictions": 41490,
+                        "benign_predictions": 118765,
+                        "prediction_mode": true,
+                        "loss": 0.000479039124911651
+                    }
+                ]
+            ],
+            [
+                16,
+                [
+                    0.0004680210258811712,
+                    {
+                        "total_predictions": 160255,
+                        "malicious_predictions": 41490,
+                        "benign_predictions": 118765,
+                        "prediction_mode": true,
+                        "loss": 0.0004680210258811712
+                    }
+                ]
+            ],
+            [
+                17,
+                [
+                    0.00046478197327814996,
+                    {
+                        "total_predictions": 160255,
+                        "malicious_predictions": 41490,
+                        "benign_predictions": 118765,
+                        "prediction_mode": true,
+                        "loss": 0.00046478197327814996
+                    }
+                ]
+            ],
+            [
+                18,
+                [
+                    0.00046395810204558074,
+                    {
+                        "total_predictions": 160255,
+                        "malicious_predictions": 41490,
+                        "benign_predictions": 118765,
+                        "prediction_mode": true,
+                        "loss": 0.00046395810204558074
+                    }
+                ]
+            ],
+            [
+                19,
+                [
+                    0.00046377969556488097,
+                    {
+                        "total_predictions": 160255,
+                        "malicious_predictions": 41490,
+                        "benign_predictions": 118765,
+                        "prediction_mode": true,
+                        "loss": 0.00046377969556488097
+                    }
+                ]
+            ],
+            [
+                20,
+                [
+                    0.00046375676174648106,
+                    {
+                        "total_predictions": 160255,
+                        "malicious_predictions": 41490,
+                        "benign_predictions": 118765,
+                        "prediction_mode": true,
+                        "loss": 0.00046375676174648106
+                    }
+                ]
+            ]
+        ]
+    }
+}
