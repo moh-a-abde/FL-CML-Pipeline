@@ -74,8 +74,51 @@ def instantiate_partitioner(partitioner_type: str, num_partitions: int):
         num_partitions=num_partitions
     )
     return partitioner
-    
+
 def preprocess_data(data):
+    """/
+    Preprocess the data by encoding categorical features and separating features and labels.
+    
+    Args:
+        data (pd.DataFrame): Input DataFrame
+        
+    Returns:
+        tuple: (features DataFrame, labels Series or None if unlabeled)
+    """
+    # Define categorical and numerical features
+    categorical_features = ['id.orig_h', 'id.resp_h', 'proto', 'conn_state', 'history', 'validation_status', 'method', 'status_msg', 'is_orig']
+
+    numerical_features = ['id.orig_p', 'id.resp_p', 'duration', 'orig_bytes', 'resp_bytes',
+                      'local_orig', 'local_resp', 'missed_bytes', 'orig_pkts', 
+                      'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ts_delta', 
+                      'rtt', 'acks', 'percent_lost', 'request_body_len', 
+                      'response_body_len', 'seen_bytes', 'missing_bytes', 'overflow_bytes']
+
+    
+    # Create a copy to avoid modifying original data
+    df = data.copy()
+    
+    # Convert categorical features to category type
+    for col in categorical_features:
+        df[col] = df[col].astype('category')
+        # Get numerical codes for categories
+        df[col] = df[col].cat.codes
+    
+    # Ensure numerical features are float type
+    for col in numerical_features:
+        df[col] = df[col].astype(float)
+    
+    # Check if this is labeled or unlabeled data
+    if 'label' in df.columns:
+        # For labeled data
+        features = df.drop(columns=['label'])
+        labels = df['label'].astype(float)
+        return features, labels
+    else:
+        # For unlabeled data
+        return df, None
+        
+def preprocess_data_stebn2(data):
     """/
     Preprocess the data by encoding categorical features and separating features and labels.
     
