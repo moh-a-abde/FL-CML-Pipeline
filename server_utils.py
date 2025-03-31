@@ -127,119 +127,97 @@ def fit_config(rnd: int) -> Dict[str, str]:
 
 
 def evaluate_metrics_aggregation(eval_metrics):
-    """Return aggregated metrics for evaluation."""
+    """
+    Aggregate evaluation metrics from multiple clients for multi-class classification.
+    
+    Args:
+        eval_metrics: List of tuples (num_examples, metrics_dict) from each client
+        
+    Returns:
+        tuple: (loss, aggregated_metrics)
+    """
     total_num = sum([num for num, _ in eval_metrics])
     
     # Log the raw metrics received from clients
-    log(INFO, f"Received metrics from {len(eval_metrics)} clients")
+    log(INFO, "Received metrics from %d clients", len(eval_metrics))
     for i, (num, metrics) in enumerate(eval_metrics):
-        log(INFO, f"Client {i+1} metrics: {metrics.keys()}")
+        log(INFO, "Client %d metrics: %s", i+1, metrics.keys())
         if "loss" in metrics:
-            log(INFO, f"Client {i+1} loss: {metrics['loss']}")
+            log(INFO, "Client %d loss: %f", i+1, metrics["loss"])
     
-    # Check if we're in prediction mode or evaluation mode
-    first_metrics = eval_metrics[0][1]
-    is_prediction_mode = first_metrics.get("prediction_mode", False)
+    # Initialize aggregated metrics dictionary
+    metrics_to_aggregate = ['precision', 'recall', 'f1', 'accuracy']
+    aggregated_metrics = {}
     
-    # Add detailed logging about prediction mode
-    log(INFO, f"PREDICTION MODE STATUS: {'ENABLED' if is_prediction_mode else 'DISABLED'}")
-    
-    # Log individual client prediction mode status
-    prediction_modes = [metrics.get("prediction_mode", False) for _, metrics in eval_metrics]
-    log(INFO, f"Client prediction modes: {prediction_modes}")
-    
-    if is_prediction_mode:
-        # Aggregate prediction statistics
-        total_predictions = sum([metrics.get("total_predictions", 0)for num, metrics in eval_metrics])
-        malicious_predictions = sum([metrics.get("malicious_predictions", 0)for num, metrics in eval_metrics])
-        benign_predictions = sum([metrics.get("benign_predictions", 0)for num, metrics in eval_metrics])
-        
-        # Calculate loss if available
-        if all("loss" in metrics for _, metrics in eval_metrics):
-            # Log individual client losses for analysis
-            client_losses = [metrics["loss"] for _, metrics in eval_metrics]
-            log(INFO, f"Individual client losses: {client_losses}")
-            
-            loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
-            log(INFO, f"PREDICTION MODE - Aggregated loss calculation: sum(loss*num)={sum([metrics['loss'] * num for num, metrics in eval_metrics])}, total_num={total_num}, result={loss}")
+    # Aggregate weighted metrics
+    for metric in metrics_to_aggregate:
+        if all(metric in metrics for _, metrics in eval_metrics):
+            weighted_sum = sum([metrics[metric] * num for num, metrics in eval_metrics])
+            aggregated_metrics[metric] = weighted_sum / total_num
         else:
-            loss = 0.0
-            log(INFO, "PREDICTION MODE - Loss not available in all client metrics")
-        
-        # Create aggregated metrics dictionary
-        aggregated_metrics = {
-            "total_predictions": total_predictions,
-            "malicious_predictions": malicious_predictions,
-            "benign_predictions": benign_predictions,
-            "prediction_mode": is_prediction_mode,
-            "loss": loss
-        }
-        
-        log(INFO, f"Aggregated prediction metrics: {aggregated_metrics}")
+            aggregated_metrics[metric] = 0.0
+            log(INFO, "Metric %s not available in all client metrics", metric)
+    
+    # Aggregate loss
+    if all("loss" in metrics for _, metrics in eval_metrics):
+        client_losses = [metrics["loss"] for _, metrics in eval_metrics]
+        log(INFO, "Individual client losses: %s", client_losses)
+        loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
+        log(INFO, "Aggregated loss calculation: sum(loss*num)=%f, total_num=%d, result=%f",
+            sum([metrics["loss"] * num for num, metrics in eval_metrics]), total_num, loss)
     else:
-        # Aggregate evaluation metrics
-        if all("precision" in metrics for _, metrics in eval_metrics):
-            precision = sum([metrics["precision"] * num for num, metrics in eval_metrics]) / total_num
-        else:
-            precision = 0.0
+        loss = 0.0
+        log(INFO, "Loss not available in all client metrics")
+    
+    aggregated_metrics["loss"] = loss
+    
+    # Aggregate confusion matrix
+    aggregated_conf_matrix = None
+    for num, metrics in eval_metrics:
+        if "confusion_matrix" in metrics:
+            conf_matrix = metrics["confusion_matrix"]
+            if aggregated_conf_matrix is None:
+                aggregated_conf_matrix = [[0 for _ in range(len(conf_matrix[0]))] for _ in range(len(conf_matrix))]
             
-        if all("recall" in metrics for _, metrics in eval_metrics):
-            recall = sum([metrics["recall"] * num for num, metrics in eval_metrics]) / total_num
-        else:
-            recall = 0.0
-            
-        if all("f1" in metrics for _, metrics in eval_metrics):
-            f1 = sum([metrics["f1"] * num for num, metrics in eval_metrics]) / total_num
-        else:
-            f1 = 0.0
-            
-        if all("loss" in metrics for _, metrics in eval_metrics):
-            # Log individual client losses for analysis
-            client_losses = [metrics["loss"] for _, metrics in eval_metrics]
-            log(INFO, f"Individual client losses: {client_losses}")
-            
-            loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
-            log(INFO, f"EVALUATION MODE - Aggregated loss calculation: sum(loss*num)={sum([metrics['loss'] * num for num, metrics in eval_metrics])}, total_num={total_num}, result={loss}")
-        else:
-            loss = 0.0
-            log(INFO, "EVALUATION MODE - Loss not available in all client metrics")
-            
-        # Aggregate confusion matrix elements
-        tn = sum([metrics.get("true_negatives", 0) for _, metrics in eval_metrics])
-        fp = sum([metrics.get("false_positives", 0) for _, metrics in eval_metrics])
-        fn = sum([metrics.get("false_negatives", 0) for _, metrics in eval_metrics])
-        tp = sum([metrics.get("true_positives", 0) for _, metrics in eval_metrics])
-        
-        # Create aggregated metrics dictionary
-        aggregated_metrics = {
-            "precision": precision,
-            "recall": recall,
-            "f1": f1,
-            "true_negatives": tn,
-            "false_positives": fp,
-            "false_negatives": fn,
-            "true_positives": tp,
-            "prediction_mode": is_prediction_mode,
-            "loss": loss
-        }
-        
-        log(INFO, f"Aggregated evaluation metrics: {aggregated_metrics}")
+            # Add weighted confusion matrix
+            for i in range(len(conf_matrix)):
+                for j in range(len(conf_matrix[0])):
+                    aggregated_conf_matrix[i][j] += conf_matrix[i][j] * num
+    
+    # Normalize confusion matrix by total examples
+    if aggregated_conf_matrix is not None:
+        for i in range(len(aggregated_conf_matrix)):
+            for j in range(len(aggregated_conf_matrix[0])):
+                aggregated_conf_matrix[i][j] /= total_num
+    
+    aggregated_metrics["confusion_matrix"] = aggregated_conf_matrix
+    
+    # Log aggregated metrics
+    log(INFO, "Aggregated metrics:")
+    log(INFO, "  Precision (weighted): %f", aggregated_metrics["precision"])
+    log(INFO, "  Recall (weighted): %f", aggregated_metrics["recall"])
+    log(INFO, "  F1 Score (weighted): %f", aggregated_metrics["f1"])
+    log(INFO, "  Accuracy: %f", aggregated_metrics["accuracy"])
+    log(INFO, "  Loss: %f", aggregated_metrics["loss"])
+    if aggregated_conf_matrix is not None:
+        log(INFO, "  Confusion Matrix:\n%s", aggregated_conf_matrix)
     
     # Save aggregated results
     save_evaluation_results(aggregated_metrics, "aggregated")
     
     return loss, aggregated_metrics
 
-def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None, true_labels=None):
+def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None, true_labels=None, prediction_types=None):
     """
     Save dataset with predictions to CSV in the specified directory.
     
     Args:
-        data: Original data (not used in this simplified version)
-        predictions: Prediction labels
+        data: Original data
+        predictions: Prediction labels (class indices)
         round_num (int): Round number
         output_dir (str, optional): Directory to save results to. If None, uses the default results directory.
         true_labels (array, optional): True labels if available
+        prediction_types (list, optional): List of prediction type strings (e.g., 'benign', 'dns_tunneling', etc.)
         
     Returns:
         str: Path to the saved CSV file
@@ -247,26 +225,29 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     # Use default results directory if no output_dir is provided
     if output_dir is None:
         output_dir = "results"
-        
+    
     os.makedirs(output_dir, exist_ok=True)
     
     # Create predictions DataFrame
     predictions_dict = {
         'predicted_label': predictions,
-        'prediction_type': ['malicious' if p == 1 else 'benign' for p in predictions]
     }
     
-    # Add true labels if available and have the same length as predictions
-    if true_labels is not None and len(true_labels) == len(predictions):
-        log(INFO, "Including true labels in the output CSV (same length as predictions)")
+    # Add prediction types if provided
+    if prediction_types is not None:
+        predictions_dict['prediction_type'] = prediction_types
+    else:
+        # Default mapping for multi-class predictions
+        label_mapping = {0: 'benign', 1: 'dns_tunneling', 2: 'icmp_tunneling'}
+        predictions_dict['prediction_type'] = [label_mapping.get(int(p), 'unknown') for p in predictions]
+    
+    # Add true labels if available
+    if true_labels is not None:
         predictions_dict['true_label'] = true_labels
-        predictions_dict['true_label_type'] = ['malicious' if t == 1 else 'benign' for t in true_labels]
-    elif true_labels is not None:
-        log(INFO, f"True labels available but length mismatch: predictions={len(predictions)}, true_labels={len(true_labels)}. Not including true labels in output.")
-        
+    
     predictions_df = pd.DataFrame(predictions_dict)
     
-    # Save to CSV in the specified directory
+    # Save predictions
     output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
     predictions_df.to_csv(output_path, index=False)
     log(INFO, "Predictions saved to: %s", output_path)

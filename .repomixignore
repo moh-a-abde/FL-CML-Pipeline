@@ -1,0 +1,16 @@
+# Ignore data directory containing large files
+data/
+
+# Common large file types
+*.csv
+*.parquet
+*.pkl
+*.model
+
+# Ignore outputs and results
+outputs/
+results/
+
+# Cache directories
+__pycache__/
+.cache/ 

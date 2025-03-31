@@ -78,6 +78,7 @@ def instantiate_partitioner(partitioner_type: str, num_partitions: int):
 def preprocess_data(data):
     """/
     Preprocess the data by encoding categorical features and separating features and labels.
+    Handles multi-class classification with three classes: benign, dns_tunneling, and icmp_tunneling.
     
     Args:
         data (pd.DataFrame): Input DataFrame
@@ -100,24 +101,43 @@ def preprocess_data(data):
     
     # Convert categorical features to category type
     for col in categorical_features:
-        df[col] = df[col].astype('category')
-        # Get numerical codes for categories
-        df[col] = df[col].cat.codes
+        if col in df.columns:  # Only process if column exists
+            df[col] = df[col].astype('category')
+            # Get numerical codes for categories
+            df[col] = df[col].cat.codes
     
     # Ensure numerical features are float type
     for col in numerical_features:
-        df[col] = df[col].astype(float)
+        if col in df.columns:  # Only process if column exists
+            df[col] = df[col].astype(float)
     
     # Check if this is labeled or unlabeled data
     if 'label' in df.columns:
-        # For labeled data
         features = df.drop(columns=['label'])
-        labels = df['label'].astype(float)
+        
+        # New label mapping for three classes
+        label_mapping = {
+            'benign': 0,
+            'dns_tunneling': 1,
+            'icmp_tunneling': 2
+        }
+        
+        # Convert labels to lowercase for case-insensitive mapping
+        labels_series = df['label'].str.lower().map(label_mapping)
+        
+        # Handle unmapped labels
+        if labels_series.isnull().any():
+            unmapped_labels = df['label'][labels_series.isnull()].unique()
+            print(f"Warning: Unmapped labels found: {unmapped_labels}")
+            # Fill unmapped labels with -1 to indicate unknown class
+            labels_series = labels_series.fillna(-1)
+        
+        labels = labels_series.astype(int)
         return features, labels
     else:
         # For unlabeled data
         return df, None
-        
+
 def preprocess_data_deprec2(data):
     """/
     Preprocess the data by encoding categorical features and separating features and labels.

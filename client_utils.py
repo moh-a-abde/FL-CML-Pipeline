@@ -34,6 +34,18 @@ import pandas as pd
 import os
 from server_utils import save_predictions_to_csv
 
+# Default XGBoost parameters for multi-class classification
+BST_PARAMS = {
+    'objective': 'multi:softmax',  # Changed to multi-class classification
+    'num_class': 3,  # Three classes: benign, dns_tunneling, icmp_tunneling
+    'eval_metric': ['mlogloss', 'merror'],  # Multi-class metrics
+    'learning_rate': 0.1,
+    'max_depth': 6,
+    'min_child_weight': 1,
+    'subsample': 0.8,
+    'colsample_bytree': 0.8,
+    'scale_pos_weight': [1.0, 2.0, 2.0]  # Weights for each class
+}
 
 class XgbClient(fl.client.Client):
     """
@@ -61,8 +73,8 @@ class XgbClient(fl.client.Client):
         num_train,
         num_val,
         num_local_round,
-        params,
-        train_method,
+        params=None,
+        train_method="cyclic",
         is_prediction_only=False,
         unlabeled_dmatrix=None
     ):
@@ -75,7 +87,7 @@ class XgbClient(fl.client.Client):
             num_train (int): Number of training samples
             num_val (int): Number of validation samples
             num_local_round (int): Number of local training rounds
-            params (dict): XGBoost parameters
+            params (dict): XGBoost parameters (defaults to BST_PARAMS if None)
             train_method (str): Training method ('bagging' or 'cyclic')
             is_prediction_only (bool): Flag indicating if the client is used for prediction only
             unlabeled_dmatrix: Unlabeled data in DMatrix format
@@ -85,7 +97,7 @@ class XgbClient(fl.client.Client):
         self.num_train = num_train
         self.num_val = num_val
         self.num_local_round = num_local_round
-        self.params = params
+        self.params = params if params is not None else BST_PARAMS.copy()
         self.train_method = train_method
         self.is_prediction_only = is_prediction_only
         self.unlabeled_dmatrix = unlabeled_dmatrix
@@ -145,9 +157,12 @@ class XgbClient(fl.client.Client):
         """
         y_train = self.train_dmatrix.get_label()
         class_counts = np.bincount(y_train.astype(int))
-        benign_count = class_counts[0] if len(class_counts) > 0 else 0
-        malicious_count = class_counts[1] if len(class_counts) > 1 else 0
-        log(INFO, f"Training data class distribution: Benign={benign_count}, Malicious={malicious_count}")
+        
+        # Log class distribution for all three classes
+        class_names = ['benign', 'dns_tunneling', 'icmp_tunneling']
+        for i, count in enumerate(class_counts):
+            class_name = class_names[i] if i < len(class_names) else f'unknown_{i}'
+            log(INFO, f"Training data class {class_name}: {count}")
         
         global_round = int(ins.config["global_round"])
         
@@ -196,200 +211,71 @@ class XgbClient(fl.client.Client):
         # First evaluate on labeled validation data
         log(INFO, f"Evaluating on labeled dataset with {self.num_val} samples")
         
-        # Generate predictions with custom threshold
+        # Generate predictions for multi-class classification
         y_pred_proba = bst.predict(self.valid_dmatrix)
         
-        # Log raw prediction probabilities for a sample of data points
-        log(INFO, f"Raw prediction probabilities (first 10): {y_pred_proba[:10]}")
-        log(INFO, f"Prediction probability histogram: {np.histogram(y_pred_proba, bins=10)[0]}")
+        # For multi-class, predictions are already class indices (0, 1, or 2)
+        y_pred_labels = y_pred_proba
         
-        # Get ground truth labels before threshold selection
+        # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
         
         # Log ground truth distribution
         true_counts = np.bincount(y_true.astype(int))
-        log(INFO, f"Ground truth distribution: Benign={true_counts[0]}, Malicious={true_counts[1]}")
+        class_names = ['benign', 'dns_tunneling', 'icmp_tunneling']
+        for i, count in enumerate(true_counts):
+            class_name = class_names[i] if i < len(class_names) else f'unknown_{i}'
+            log(INFO, f"Ground truth {class_name}: {count}")
         
-        # Try different thresholds
-        thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-        best_threshold = 0.5
-        best_balance = float('inf')
-        
-        # Get true class distribution
-        true_benign = true_counts[0] if len(true_counts) > 0 else 0
-        true_malicious = true_counts[1] if len(true_counts) > 1 else 0
-        true_ratio = true_malicious / true_benign if true_benign > 0 else float('inf')
-        
-        for threshold in thresholds:
-            temp_labels = (y_pred_proba > threshold).astype(int)
-            temp_counts = np.bincount(temp_labels.astype(int))
-            benign_count = temp_counts[0] if len(temp_counts) > 0 else 0
-            malicious_count = temp_counts[1] if len(temp_counts) > 1 else 0
-            
-            # Calculate predicted ratio, handling edge cases
-            pred_ratio = malicious_count / benign_count if benign_count > 0 else float('inf')
-            
-            # Calculate how well this threshold preserves the true class distribution
-            if true_ratio == float('inf') and pred_ratio == float('inf'):
-                # Both have only malicious samples
-                balance_score = 0
-            elif true_ratio == 0 and pred_ratio == 0:
-                # Both have only benign samples
-                balance_score = 0
-            else:
-                # Calculate absolute difference between ratios
-                balance_score = abs(pred_ratio - true_ratio)
-            
-            log(INFO, f"Threshold {threshold}: Benign={benign_count}, Malicious={malicious_count}, Balance Score={balance_score:.4f}")
-            
-            # Update best threshold if this one gives better class balance
-            if balance_score < best_balance:
-                best_balance = balance_score
-                best_threshold = threshold
-        
-        log(INFO, f"Selected best threshold: {best_threshold} with balance score: {best_balance:.4f}")
-        
-        # Use the best threshold for actual predictions
-        THRESHOLD = best_threshold
-        y_pred_labels = (y_pred_proba > THRESHOLD).astype(int)
-    
-        # Log prediction distribution
-        pred_counts = np.bincount(y_pred_labels.astype(int))
-        benign_pred = pred_counts[0] if len(pred_counts) > 0 else 0
-        malicious_pred = pred_counts[1] if len(pred_counts) > 1 else 0
-        log(INFO, f"Prediction distribution: Benign={benign_pred}, Malicious={malicious_pred}")
-        log(INFO, f"Prediction probabilities range: [{y_pred_proba.min():.3f}, {y_pred_proba.max():.3f}]")
-        
-        # Compute metrics for labeled data
+        # Compute multi-class metrics
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
+        accuracy = accuracy_score(y_true, y_pred_labels)
         
-        # Calculate and log detailed loss information
-        log(INFO, "LOSS CALCULATION DETAILS:")
-        log(INFO, f"y_true shape: {y_true.shape}, y_pred_proba shape: {y_pred_proba.shape}")
-        log(INFO, f"y_true min/max: {y_true.min()}/{y_true.max()}, y_pred_proba min/max: {y_pred_proba.min():.4f}/{y_pred_proba.max():.4f}")
-        
-        # Calculate binary cross-entropy loss
-        epsilon = 1e-10  # To avoid log(0)
-        loss_terms = y_true * np.log(y_pred_proba + epsilon) + (1 - y_true) * np.log(1 - y_pred_proba + epsilon)
-        loss = -np.mean(loss_terms)
-        
-        # Log loss calculation components
-        log(INFO, f"Loss calculation - epsilon: {epsilon}")
-        log(INFO, f"Loss calculation - first 5 loss terms: {loss_terms[:5]}")
-        log(INFO, f"Loss calculation - mean of loss terms: {np.mean(loss_terms)}")
-        log(INFO, f"Loss calculation - final loss value: {loss}")
-        
-        # Log detailed metrics
-        log(INFO, f"Evaluation metrics - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}, Loss: {loss:.4f}")
-        
-        # Generate confusion matrix
+        # Compute confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
-        tn, fp, fn, tp = conf_matrix.ravel()
-        log(INFO, f"Confusion matrix: TN={tn}, FP={fp}, FN={fn}, TP={tp}")
         
-        # Create base metrics dictionary
-        metrics = {
-            "precision": float(precision),
-            "recall": float(recall),
-            "f1": float(f1),
-            "loss": float(loss),  # Add loss to metrics dictionary
-            "true_negatives": int(tn),
-            "false_positives": int(fp),
-            "false_negatives": int(fn),
-            "true_positives": int(tp),
-            "num_predictions": self.num_val
-        }
+        # Generate detailed classification report
+        class_report = classification_report(y_true, y_pred_labels, target_names=class_names)
         
-        # Check if prediction mode is enabled
-        prediction_mode = ins.config.get("prediction_mode", "true").lower() == "true"
-        log(INFO, f"Prediction mode is {'enabled' if prediction_mode else 'disabled'} for this round")
+        # Log evaluation metrics
+        log(INFO, f"Precision (weighted): {precision:.4f}")
+        log(INFO, f"Recall (weighted): {recall:.4f}")
+        log(INFO, f"F1 Score (weighted): {f1:.4f}")
+        log(INFO, f"Accuracy: {accuracy:.4f}")
+        log(INFO, f"Confusion Matrix:\n{conf_matrix}")
+        log(INFO, f"Classification Report:\n{class_report}")
         
-        # Add unlabeled predictions if available and prediction mode is enabled
-        if self.unlabeled_dmatrix is not None and prediction_mode:
-            # Get predictions
-            unlabeled_pred_proba = bst.predict(self.unlabeled_dmatrix)
+        # If there's unlabeled data, make predictions on it
+        if self.is_prediction_only and self.unlabeled_dmatrix is not None:
+            log(INFO, "Making predictions on unlabeled data")
+            unlabeled_predictions = bst.predict(self.unlabeled_dmatrix)
             
-            # Log unlabeled prediction distribution
-            log(INFO, f"Unlabeled prediction probabilities range: [{unlabeled_pred_proba.min():.3f}, {unlabeled_pred_proba.max():.3f}]")
-            log(INFO, f"Unlabeled prediction probability histogram: {np.histogram(unlabeled_pred_proba, bins=10)[0]}")
+            # Map numeric predictions to class names
+            prediction_mapping = {0: 'benign', 1: 'dns_tunneling', 2: 'icmp_tunneling'}
+            prediction_types = [prediction_mapping.get(int(p), 'unknown') for p in unlabeled_predictions]
             
-            # Use the same threshold determined for validation data
-            unlabeled_pred_labels = (unlabeled_pred_proba > THRESHOLD).astype(int)
-            
-            # Log prediction distribution
-            unlabeled_counts = np.bincount(unlabeled_pred_labels.astype(int))
-            benign_count = unlabeled_counts[0] if len(unlabeled_counts) > 0 else 0
-            malicious_count = unlabeled_counts[1] if len(unlabeled_counts) > 1 else 0
-            log(INFO, f"Unlabeled predictions with threshold {THRESHOLD}: Benign={benign_count}, Malicious={malicious_count}")
-            
-            # Check if unlabeled data affects loss calculation
-            log(INFO, "CHECKING IF UNLABELED DATA AFFECTS LOSS:")
-            if hasattr(self.unlabeled_dmatrix, 'get_label'):
-                try:
-                    unlabeled_true_labels = self.unlabeled_dmatrix.get_label()
-                    if len(unlabeled_true_labels) > 0:
-                        log(INFO, f"Unlabeled data has labels, shape: {unlabeled_true_labels.shape}")
-                        
-                        # Calculate potential loss including unlabeled data
-                        unlabeled_loss_terms = unlabeled_true_labels * np.log(unlabeled_pred_proba + epsilon) + (1 - unlabeled_true_labels) * np.log(1 - unlabeled_pred_proba + epsilon)
-                        unlabeled_loss = -np.mean(unlabeled_loss_terms)
-                        log(INFO, f"Potential unlabeled loss: {unlabeled_loss:.4f}")
-                        
-                        # Calculate combined loss
-                        combined_loss_terms = np.concatenate([loss_terms, unlabeled_loss_terms])
-                        combined_loss = -np.mean(combined_loss_terms)
-                        log(INFO, f"Potential combined loss: {combined_loss:.4f}")
-                    else:
-                        log(INFO, "Unlabeled data has empty labels array")
-                except Exception as e:
-                    log(INFO, f"Error getting labels for unlabeled data: {str(e)}")
-            else:
-                log(INFO, "Unlabeled data has no labels attribute")
-            
-            # Save predictions using the server_utils function
-            round_num = ins.config.get("global_round", "final")
-            
-            # Check if output directory is provided in config
-            output_dir = ins.config.get("output_dir", "results")
-            
-            # Get true labels if available for unlabeled data
-            unlabeled_true_labels = None
-            if hasattr(self.unlabeled_dmatrix, 'get_label'):
-                try:
-                    unlabeled_true_labels = self.unlabeled_dmatrix.get_label()
-                    if len(unlabeled_true_labels) > 0:
-                        log(INFO, "Found true labels for unlabeled data, shape: %s", unlabeled_true_labels.shape)
-                    else:
-                        log(INFO, "Found empty true labels array for unlabeled data, not using for output")
-                        unlabeled_true_labels = None
-                except Exception as e:
-                    log(INFO, "Error getting true labels for unlabeled data: %s", str(e))
-                    unlabeled_true_labels = None
-            
-            output_path = save_predictions_to_csv(
-                None,  # We don't need the data anymore since we simplified save_predictions_to_csv
-                unlabeled_pred_labels,
-                round_num,
-                output_dir=output_dir,
-                true_labels=unlabeled_true_labels  # Pass true labels if available and non-empty
-            )
-            
-            # Add prediction metrics
-            metrics.update({
-                "total_predictions": len(unlabeled_pred_labels),
-                "malicious_predictions": int(np.sum(unlabeled_pred_labels == 1)),
-                "benign_predictions": int(np.sum(unlabeled_pred_labels == 0)),
-                "predictions_file": output_path
-            })
+            # Save predictions
+            if hasattr(self.unlabeled_dmatrix, 'get_data'):
+                unlabeled_data = self.unlabeled_dmatrix.get_data()
+                save_predictions_to_csv(
+                    unlabeled_data,
+                    unlabeled_predictions,
+                    int(ins.config.get("global_round", 0)),
+                    prediction_types=prediction_types
+                )
         
-        # Always include prediction_mode in metrics
-        metrics["prediction_mode"] = prediction_mode
-
+        # Return evaluation metrics
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
-            loss=float(loss),
+            loss=1.0 - accuracy,  # Use accuracy as the primary metric
             num_examples=self.num_val,
-            metrics=metrics
+            metrics={
+                "precision": float(precision),
+                "recall": float(recall),
+                "f1": float(f1),
+                "accuracy": float(accuracy),
+                "confusion_matrix": conf_matrix.tolist()
+            }
         )
