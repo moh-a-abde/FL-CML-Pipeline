@@ -44,7 +44,7 @@ BST_PARAMS = {
     'min_child_weight': 1,
     'subsample': 0.8,
     'colsample_bytree': 0.8,
-    'scale_pos_weight': [1.0, 1.0, 1.0]  # Weights for each class
+    'scale_pos_weight': [7.0, 1.0, 1.0]  # Weights for each class
 }
 
 class XgbClient(fl.client.Client):
