@@ -44,7 +44,7 @@ BST_PARAMS = {
     'min_child_weight': 1,
     'subsample': 0.8,
     'colsample_bytree': 0.8,
-    'scale_pos_weight': [1.0, 2.0, 2.0]  # Weights for each class
+    'scale_pos_weight': [1.0, 1.0, 1.0]  # Weights for each class
 }
 
 class XgbClient(fl.client.Client):
@@ -246,36 +246,29 @@ class XgbClient(fl.client.Client):
         log(INFO, f"Accuracy: {accuracy:.4f}")
         log(INFO, f"Confusion Matrix:\n{conf_matrix}")
         log(INFO, f"Classification Report:\n{class_report}")
+
+        # Format metrics in a way that Flower can handle
+        # Convert confusion matrix to individual metrics
+        metrics = {
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1": float(f1),
+            "accuracy": float(accuracy),
+            # Store confusion matrix elements as individual metrics
+            "conf_00": int(conf_matrix[0][0]),  # benign correct
+            "conf_01": int(conf_matrix[0][1]),  # benign misclassified as dns
+            "conf_02": int(conf_matrix[0][2]),  # benign misclassified as icmp
+            "conf_10": int(conf_matrix[1][0]),  # dns misclassified as benign
+            "conf_11": int(conf_matrix[1][1]),  # dns correct
+            "conf_12": int(conf_matrix[1][2]),  # dns misclassified as icmp
+            "conf_20": int(conf_matrix[2][0]),  # icmp misclassified as benign
+            "conf_21": int(conf_matrix[2][1]),  # icmp misclassified as dns
+            "conf_22": int(conf_matrix[2][2]),  # icmp correct
+        }
         
-        # If there's unlabeled data, make predictions on it
-        if self.is_prediction_only and self.unlabeled_dmatrix is not None:
-            log(INFO, "Making predictions on unlabeled data")
-            unlabeled_predictions = bst.predict(self.unlabeled_dmatrix)
-            
-            # Map numeric predictions to class names
-            prediction_mapping = {0: 'benign', 1: 'dns_tunneling', 2: 'icmp_tunneling'}
-            prediction_types = [prediction_mapping.get(int(p), 'unknown') for p in unlabeled_predictions]
-            
-            # Save predictions
-            if hasattr(self.unlabeled_dmatrix, 'get_data'):
-                unlabeled_data = self.unlabeled_dmatrix.get_data()
-                save_predictions_to_csv(
-                    unlabeled_data,
-                    unlabeled_predictions,
-                    int(ins.config.get("global_round", 0)),
-                    prediction_types=prediction_types
-                )
-        
-        # Return evaluation metrics
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
             loss=1.0 - accuracy,  # Use accuracy as the primary metric
             num_examples=self.num_val,
-            metrics={
-                "precision": float(precision),
-                "recall": float(recall),
-                "f1": float(f1),
-                "accuracy": float(accuracy),
-                "confusion_matrix": conf_matrix.tolist()
-            }
+            metrics=metrics
         )
