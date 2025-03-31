@@ -4,7 +4,8 @@ import argparse
 # Hyper-parameters for xgboost training
 NUM_LOCAL_ROUND = 1
 BST_PARAMS = {
-    "objective": "binary:logistic",
+    "objective": "multi:softmax",
+    "num_class": 3,
     "eta": 0.1,
     "max_depth": 6,
     "min_child_weight": 5,
@@ -13,7 +14,7 @@ BST_PARAMS = {
     "colsample_bytree": 0.8,
     "nthread": 16,
     "tree_method": "hist",
-    "eval_metric": ["error", "auc", "logloss"],
+    "eval_metric": ["mlogloss", "merror"],
     "max_delta_step": 5,
     "reg_alpha": 0.1,
     "reg_lambda": 1.0,
