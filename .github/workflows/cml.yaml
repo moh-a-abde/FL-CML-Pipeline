@@ -50,7 +50,8 @@ jobs:
         run: |
           git config --local user.email "abde8473@stthomas.edu"
           git config --local user.name "moh-a-abde"
-          
+
+          git checkout multi-class-predictions
           # Add aggegrated results files
           git add results/
           
