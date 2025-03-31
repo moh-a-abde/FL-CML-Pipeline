@@ -212,10 +212,8 @@ class XgbClient(fl.client.Client):
         log(INFO, f"Evaluating on labeled dataset with {self.num_val} samples")
         
         # Generate predictions for multi-class classification
-        y_pred_proba = bst.predict(self.valid_dmatrix)
-        
-        # For multi-class, predictions are already class indices (0, 1, or 2)
-        y_pred_labels = y_pred_proba
+        y_pred_proba = bst.predict(self.valid_dmatrix, output_margin=True)  # Get raw predictions for mlogloss
+        y_pred_labels = bst.predict(self.valid_dmatrix)  # Get class predictions
         
         # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
@@ -233,6 +231,13 @@ class XgbClient(fl.client.Client):
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
         accuracy = accuracy_score(y_true, y_pred_labels)
         
+        # Calculate mlogloss manually
+        epsilon = 1e-15  # Small constant to avoid log(0)
+        y_pred_proba_softmax = np.exp(y_pred_proba) / np.sum(np.exp(y_pred_proba), axis=1, keepdims=True)
+        y_true_one_hot = np.zeros_like(y_pred_proba_softmax)
+        y_true_one_hot[np.arange(len(y_true)), y_true.astype(int)] = 1
+        mlogloss = -np.mean(np.sum(y_true_one_hot * np.log(y_pred_proba_softmax + epsilon), axis=1))
+        
         # Compute confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
         
@@ -244,16 +249,28 @@ class XgbClient(fl.client.Client):
         log(INFO, f"Recall (weighted): {recall:.4f}")
         log(INFO, f"F1 Score (weighted): {f1:.4f}")
         log(INFO, f"Accuracy: {accuracy:.4f}")
+        log(INFO, f"Multi-class Log Loss: {mlogloss:.4f}")
         log(INFO, f"Confusion Matrix:\n{conf_matrix}")
         log(INFO, f"Classification Report:\n{class_report}")
 
+        # Save predictions for this round
+        global_round = int(ins.config["global_round"])
+        from server_utils import save_predictions_to_csv
+        save_predictions_to_csv(
+            data=self.valid_dmatrix,
+            predictions=y_pred_labels,
+            round_num=global_round,
+            output_dir=ins.config.get("output_dir", "results"),
+            true_labels=y_true
+        )
+
         # Format metrics in a way that Flower can handle
-        # Convert confusion matrix to individual metrics
         metrics = {
             "precision": float(precision),
             "recall": float(recall),
             "f1": float(f1),
             "accuracy": float(accuracy),
+            "mlogloss": float(mlogloss),
             # Store confusion matrix elements as individual metrics
             "conf_00": int(conf_matrix[0][0]),  # benign correct
             "conf_01": int(conf_matrix[0][1]),  # benign misclassified as dns
@@ -268,7 +285,7 @@ class XgbClient(fl.client.Client):
         
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
-            loss=1.0 - accuracy,  # Use accuracy as the primary metric
+            loss=float(mlogloss),  # Use mlogloss as the primary loss metric
             num_examples=self.num_val,
             metrics=metrics
         )

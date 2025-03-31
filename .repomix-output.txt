@@ -427,6 +427,18 @@ import numpy as np
 import pandas as pd
 import os
 from server_utils import save_predictions_to_csv
+# Default XGBoost parameters for multi-class classification
+BST_PARAMS = {
+    'objective': 'multi:softmax',  # Changed to multi-class classification
+    'num_class': 3,  # Three classes: benign, dns_tunneling, icmp_tunneling
+    'eval_metric': ['mlogloss', 'merror'],  # Multi-class metrics
+    'learning_rate': 0.1,
+    'max_depth': 6,
+    'min_child_weight': 1,
+    'subsample': 0.8,
+    'colsample_bytree': 0.8,
+    'scale_pos_weight': [1.0, 1.0, 1.0]  # Weights for each class
+}
 class XgbClient(fl.client.Client):
     """
     A Flower client implementing federated learning for XGBoost models.
@@ -450,8 +462,8 @@ class XgbClient(fl.client.Client):
         num_train,
         num_val,
         num_local_round,
-        params,
-        train_method,
+        params=None,
+        train_method="cyclic",
         is_prediction_only=False,
         unlabeled_dmatrix=None
     ):
@@ -463,7 +475,7 @@ class XgbClient(fl.client.Client):
             num_train (int): Number of training samples
             num_val (int): Number of validation samples
             num_local_round (int): Number of local training rounds
-            params (dict): XGBoost parameters
+            params (dict): XGBoost parameters (defaults to BST_PARAMS if None)
             train_method (str): Training method ('bagging' or 'cyclic')
             is_prediction_only (bool): Flag indicating if the client is used for prediction only
             unlabeled_dmatrix: Unlabeled data in DMatrix format
@@ -473,7 +485,7 @@ class XgbClient(fl.client.Client):
         self.num_train = num_train
         self.num_val = num_val
         self.num_local_round = num_local_round
-        self.params = params
+        self.params = params if params is not None else BST_PARAMS.copy()
         self.train_method = train_method
         self.is_prediction_only = is_prediction_only
         self.unlabeled_dmatrix = unlabeled_dmatrix
@@ -523,9 +535,11 @@ class XgbClient(fl.client.Client):
         """
         y_train = self.train_dmatrix.get_label()
         class_counts = np.bincount(y_train.astype(int))
-        benign_count = class_counts[0] if len(class_counts) > 0 else 0
-        malicious_count = class_counts[1] if len(class_counts) > 1 else 0
-        log(INFO, f"Training data class distribution: Benign={benign_count}, Malicious={malicious_count}")
+        # Log class distribution for all three classes
+        class_names = ['benign', 'dns_tunneling', 'icmp_tunneling']
+        for i, count in enumerate(class_counts):
+            class_name = class_names[i] if i < len(class_names) else f'unknown_{i}'
+            log(INFO, f"Training data class {class_name}: {count}")
         global_round = int(ins.config["global_round"])
         if global_round == 1:
             # First round: train from scratch
@@ -566,165 +580,55 @@ class XgbClient(fl.client.Client):
         bst.load_model(para_b)
         # First evaluate on labeled validation data
         log(INFO, f"Evaluating on labeled dataset with {self.num_val} samples")
-        # Generate predictions with custom threshold
+        # Generate predictions for multi-class classification
         y_pred_proba = bst.predict(self.valid_dmatrix)
-        # Log raw prediction probabilities for a sample of data points
-        log(INFO, f"Raw prediction probabilities (first 10): {y_pred_proba[:10]}")
-        log(INFO, f"Prediction probability histogram: {np.histogram(y_pred_proba, bins=10)[0]}")
-        # Get ground truth labels before threshold selection
+        # For multi-class, predictions are already class indices (0, 1, or 2)
+        y_pred_labels = y_pred_proba
+        # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
         # Log ground truth distribution
         true_counts = np.bincount(y_true.astype(int))
-        log(INFO, f"Ground truth distribution: Benign={true_counts[0]}, Malicious={true_counts[1]}")
-        # Try different thresholds
-        thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-        best_threshold = 0.5
-        best_balance = float('inf')
-        # Get true class distribution
-        true_benign = true_counts[0] if len(true_counts) > 0 else 0
-        true_malicious = true_counts[1] if len(true_counts) > 1 else 0
-        true_ratio = true_malicious / true_benign if true_benign > 0 else float('inf')
-        for threshold in thresholds:
-            temp_labels = (y_pred_proba > threshold).astype(int)
-            temp_counts = np.bincount(temp_labels.astype(int))
-            benign_count = temp_counts[0] if len(temp_counts) > 0 else 0
-            malicious_count = temp_counts[1] if len(temp_counts) > 1 else 0
-            # Calculate predicted ratio, handling edge cases
-            pred_ratio = malicious_count / benign_count if benign_count > 0 else float('inf')
-            # Calculate how well this threshold preserves the true class distribution
-            if true_ratio == float('inf') and pred_ratio == float('inf'):
-                # Both have only malicious samples
-                balance_score = 0
-            elif true_ratio == 0 and pred_ratio == 0:
-                # Both have only benign samples
-                balance_score = 0
-            else:
-                # Calculate absolute difference between ratios
-                balance_score = abs(pred_ratio - true_ratio)
-            log(INFO, f"Threshold {threshold}: Benign={benign_count}, Malicious={malicious_count}, Balance Score={balance_score:.4f}")
-            # Update best threshold if this one gives better class balance
-            if balance_score < best_balance:
-                best_balance = balance_score
-                best_threshold = threshold
-        log(INFO, f"Selected best threshold: {best_threshold} with balance score: {best_balance:.4f}")
-        # Use the best threshold for actual predictions
-        THRESHOLD = best_threshold
-        y_pred_labels = (y_pred_proba > THRESHOLD).astype(int)
-        # Log prediction distribution
-        pred_counts = np.bincount(y_pred_labels.astype(int))
-        benign_pred = pred_counts[0] if len(pred_counts) > 0 else 0
-        malicious_pred = pred_counts[1] if len(pred_counts) > 1 else 0
-        log(INFO, f"Prediction distribution: Benign={benign_pred}, Malicious={malicious_pred}")
-        log(INFO, f"Prediction probabilities range: [{y_pred_proba.min():.3f}, {y_pred_proba.max():.3f}]")
-        # Compute metrics for labeled data
+        class_names = ['benign', 'dns_tunneling', 'icmp_tunneling']
+        for i, count in enumerate(true_counts):
+            class_name = class_names[i] if i < len(class_names) else f'unknown_{i}'
+            log(INFO, f"Ground truth {class_name}: {count}")
+        # Compute multi-class metrics
         precision = precision_score(y_true, y_pred_labels, average='weighted')
         recall = recall_score(y_true, y_pred_labels, average='weighted')
         f1 = f1_score(y_true, y_pred_labels, average='weighted')
-        # Calculate and log detailed loss information
-        log(INFO, "LOSS CALCULATION DETAILS:")
-        log(INFO, f"y_true shape: {y_true.shape}, y_pred_proba shape: {y_pred_proba.shape}")
-        log(INFO, f"y_true min/max: {y_true.min()}/{y_true.max()}, y_pred_proba min/max: {y_pred_proba.min():.4f}/{y_pred_proba.max():.4f}")
-        # Calculate binary cross-entropy loss
-        epsilon = 1e-10  # To avoid log(0)
-        loss_terms = y_true * np.log(y_pred_proba + epsilon) + (1 - y_true) * np.log(1 - y_pred_proba + epsilon)
-        loss = -np.mean(loss_terms)
-        # Log loss calculation components
-        log(INFO, f"Loss calculation - epsilon: {epsilon}")
-        log(INFO, f"Loss calculation - first 5 loss terms: {loss_terms[:5]}")
-        log(INFO, f"Loss calculation - mean of loss terms: {np.mean(loss_terms)}")
-        log(INFO, f"Loss calculation - final loss value: {loss}")
-        # Log detailed metrics
-        log(INFO, f"Evaluation metrics - Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}, Loss: {loss:.4f}")
-        # Generate confusion matrix
+        accuracy = accuracy_score(y_true, y_pred_labels)
+        # Compute confusion matrix
         conf_matrix = confusion_matrix(y_true, y_pred_labels)
-        tn, fp, fn, tp = conf_matrix.ravel()
-        log(INFO, f"Confusion matrix: TN={tn}, FP={fp}, FN={fn}, TP={tp}")
-        # Create base metrics dictionary
+        # Generate detailed classification report
+        class_report = classification_report(y_true, y_pred_labels, target_names=class_names)
+        # Log evaluation metrics
+        log(INFO, f"Precision (weighted): {precision:.4f}")
+        log(INFO, f"Recall (weighted): {recall:.4f}")
+        log(INFO, f"F1 Score (weighted): {f1:.4f}")
+        log(INFO, f"Accuracy: {accuracy:.4f}")
+        log(INFO, f"Confusion Matrix:\n{conf_matrix}")
+        log(INFO, f"Classification Report:\n{class_report}")
+        # Format metrics in a way that Flower can handle
+        # Convert confusion matrix to individual metrics
         metrics = {
             "precision": float(precision),
             "recall": float(recall),
             "f1": float(f1),
-            "loss": float(loss),  # Add loss to metrics dictionary
-            "true_negatives": int(tn),
-            "false_positives": int(fp),
-            "false_negatives": int(fn),
-            "true_positives": int(tp),
-            "num_predictions": self.num_val
+            "accuracy": float(accuracy),
+            # Store confusion matrix elements as individual metrics
+            "conf_00": int(conf_matrix[0][0]),  # benign correct
+            "conf_01": int(conf_matrix[0][1]),  # benign misclassified as dns
+            "conf_02": int(conf_matrix[0][2]),  # benign misclassified as icmp
+            "conf_10": int(conf_matrix[1][0]),  # dns misclassified as benign
+            "conf_11": int(conf_matrix[1][1]),  # dns correct
+            "conf_12": int(conf_matrix[1][2]),  # dns misclassified as icmp
+            "conf_20": int(conf_matrix[2][0]),  # icmp misclassified as benign
+            "conf_21": int(conf_matrix[2][1]),  # icmp misclassified as dns
+            "conf_22": int(conf_matrix[2][2]),  # icmp correct
         }
-        # Check if prediction mode is enabled
-        prediction_mode = ins.config.get("prediction_mode", "true").lower() == "true"
-        log(INFO, f"Prediction mode is {'enabled' if prediction_mode else 'disabled'} for this round")
-        # Add unlabeled predictions if available and prediction mode is enabled
-        if self.unlabeled_dmatrix is not None and prediction_mode:
-            # Get predictions
-            unlabeled_pred_proba = bst.predict(self.unlabeled_dmatrix)
-            # Log unlabeled prediction distribution
-            log(INFO, f"Unlabeled prediction probabilities range: [{unlabeled_pred_proba.min():.3f}, {unlabeled_pred_proba.max():.3f}]")
-            log(INFO, f"Unlabeled prediction probability histogram: {np.histogram(unlabeled_pred_proba, bins=10)[0]}")
-            # Use the same threshold determined for validation data
-            unlabeled_pred_labels = (unlabeled_pred_proba > THRESHOLD).astype(int)
-            # Log prediction distribution
-            unlabeled_counts = np.bincount(unlabeled_pred_labels.astype(int))
-            benign_count = unlabeled_counts[0] if len(unlabeled_counts) > 0 else 0
-            malicious_count = unlabeled_counts[1] if len(unlabeled_counts) > 1 else 0
-            log(INFO, f"Unlabeled predictions with threshold {THRESHOLD}: Benign={benign_count}, Malicious={malicious_count}")
-            # Check if unlabeled data affects loss calculation
-            log(INFO, "CHECKING IF UNLABELED DATA AFFECTS LOSS:")
-            if hasattr(self.unlabeled_dmatrix, 'get_label'):
-                try:
-                    unlabeled_true_labels = self.unlabeled_dmatrix.get_label()
-                    if len(unlabeled_true_labels) > 0:
-                        log(INFO, f"Unlabeled data has labels, shape: {unlabeled_true_labels.shape}")
-                        # Calculate potential loss including unlabeled data
-                        unlabeled_loss_terms = unlabeled_true_labels * np.log(unlabeled_pred_proba + epsilon) + (1 - unlabeled_true_labels) * np.log(1 - unlabeled_pred_proba + epsilon)
-                        unlabeled_loss = -np.mean(unlabeled_loss_terms)
-                        log(INFO, f"Potential unlabeled loss: {unlabeled_loss:.4f}")
-                        # Calculate combined loss
-                        combined_loss_terms = np.concatenate([loss_terms, unlabeled_loss_terms])
-                        combined_loss = -np.mean(combined_loss_terms)
-                        log(INFO, f"Potential combined loss: {combined_loss:.4f}")
-                    else:
-                        log(INFO, "Unlabeled data has empty labels array")
-                except Exception as e:
-                    log(INFO, f"Error getting labels for unlabeled data: {str(e)}")
-            else:
-                log(INFO, "Unlabeled data has no labels attribute")
-            # Save predictions using the server_utils function
-            round_num = ins.config.get("global_round", "final")
-            # Check if output directory is provided in config
-            output_dir = ins.config.get("output_dir", "results")
-            # Get true labels if available for unlabeled data
-            unlabeled_true_labels = None
-            if hasattr(self.unlabeled_dmatrix, 'get_label'):
-                try:
-                    unlabeled_true_labels = self.unlabeled_dmatrix.get_label()
-                    if len(unlabeled_true_labels) > 0:
-                        log(INFO, "Found true labels for unlabeled data, shape: %s", unlabeled_true_labels.shape)
-                    else:
-                        log(INFO, "Found empty true labels array for unlabeled data, not using for output")
-                        unlabeled_true_labels = None
-                except Exception as e:
-                    log(INFO, "Error getting true labels for unlabeled data: %s", str(e))
-                    unlabeled_true_labels = None
-            output_path = save_predictions_to_csv(
-                None,  # We don't need the data anymore since we simplified save_predictions_to_csv
-                unlabeled_pred_labels,
-                round_num,
-                output_dir=output_dir,
-                true_labels=unlabeled_true_labels  # Pass true labels if available and non-empty
-            )
-            # Add prediction metrics
-            metrics.update({
-                "total_predictions": len(unlabeled_pred_labels),
-                "malicious_predictions": int(np.sum(unlabeled_pred_labels == 1)),
-                "benign_predictions": int(np.sum(unlabeled_pred_labels == 0)),
-                "predictions_file": output_path
-            })
-        # Always include prediction_mode in metrics
-        metrics["prediction_mode"] = prediction_mode
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
-            loss=float(loss),
+            loss=1.0 - accuracy,  # Use accuracy as the primary metric
             num_examples=self.num_val,
             metrics=metrics
         )
@@ -916,8 +820,9 @@ def instantiate_partitioner(partitioner_type: str, num_partitions: int):
     )
     return partitioner
 def preprocess_data(data):
-    """/
+    """
     Preprocess the data by encoding categorical features and separating features and labels.
+    Handles multi-class classification with three classes: benign (0), dns_tunneling (1), and icmp_tunneling (2).
     Args:
         data (pd.DataFrame): Input DataFrame
     Returns:
@@ -934,17 +839,25 @@ def preprocess_data(data):
     df = data.copy()
     # Convert categorical features to category type
     for col in categorical_features:
-        df[col] = df[col].astype('category')
-        # Get numerical codes for categories
-        df[col] = df[col].cat.codes
+        if col in df.columns:  # Only process if column exists
+            df[col] = df[col].astype('category')
+            # Get numerical codes for categories
+            df[col] = df[col].cat.codes
     # Ensure numerical features are float type
     for col in numerical_features:
-        df[col] = df[col].astype(float)
+        if col in df.columns:  # Only process if column exists
+            df[col] = df[col].astype(float)
     # Check if this is labeled or unlabeled data
     if 'label' in df.columns:
-        # For labeled data
         features = df.drop(columns=['label'])
-        labels = df['label'].astype(float)
+        # Convert labels to numeric type directly since they're already numeric
+        labels = df['label'].astype(int)
+        # Validate that labels are within expected range (0, 1, 2)
+        unique_labels = labels.unique()
+        if not all(label in [0, 1, 2] for label in unique_labels):
+            print(f"Warning: Unexpected label values found: {unique_labels}")
+            # Map any unexpected values to -1
+            labels = labels.map(lambda x: x if x in [0, 1, 2] else -1)
         return features, labels
     else:
         # For unlabeled data
@@ -1169,114 +1082,195 @@ git pull
 
 ## Implementation Steps
 
-### 1. Data Preprocessing Modifications
-- [ ] Update `preprocess_data()` in `dataset.py`:
-  - Modify label handling to support three classes
-  - Update categorical feature encoding to handle new class labels
-  - Ensure numerical features remain unchanged
-  - Add class label mapping for human-readable output
-  - Add specific feature engineering for DNS and ICMP traffic patterns
+### 1. Data Preprocessing Modifications (`dataset.py`)
+- [ ] Update `preprocess_data()` function:
+  ```python
+  def preprocess_data(data):
+      # ... existing code ...
+      if 'label' in df.columns:
+          features = df.drop(columns=['label'])
+          
+          # New label mapping for three classes
+          label_mapping = {
+              'benign': 0, 
+              'dns_tunneling': 1, 
+              'icmp_tunneling': 2
+          }
+          labels_series = df['label'].map(label_mapping)
+          
+          # Handle unmapped labels
+          if labels_series.isnull().any():
+              unmapped_labels = df['label'][labels_series.isnull()].unique()
+              print(f"Warning: Unmapped labels found: {unmapped_labels}")
+              labels_series = labels_series.fillna(-1)
+          
+          labels = labels_series.astype(int)
+          return features, labels
+      else:
+          return df, None
+  ```
 
-### 2. Model Configuration Updates
-- [ ] Modify XGBoost parameters in `client_utils.py`:
-  - Change objective from 'binary:logistic' to 'multi:softmax'
-  - Add num_class parameter (3 classes)
-  - Update evaluation metrics for multi-class
-  - Adjust learning rate and other hyperparameters if needed
-  - Add class weights to handle potential imbalance
+### 2. Model Configuration Updates (`client_utils.py`)
+- [ ] Update XGBoost parameters in `utils.py`:
+  ```python
+  BST_PARAMS = {
+      'objective': 'multi:softmax',
+      'num_class': 3,
+      'eval_metric': ['mlogloss', 'merror'],
+      'learning_rate': 0.1,
+      'max_depth': 6,
+      'min_child_weight': 1,
+      'subsample': 0.8,
+      'colsample_bytree': 0.8,
+      'scale_pos_weight': [1.0, 2.0, 2.0]  # Adjust based on class distribution
+  }
+  ```
 
-### 3. Training Pipeline Updates
-- [ ] Update `client_utils.py`:
-  - Modify fit() method to handle three-class labels
-  - Update evaluation metrics calculation
-  - Adjust prediction threshold handling
-  - Update model serialization/deserialization
-  - Add specific handling for DNS and ICMP traffic patterns
+- [ ] Modify `evaluate()` method in `XgbClient` class:
+  ```python
+  def evaluate(self, ins: EvaluateIns) -> EvaluateRes:
+      # ... existing model loading code ...
+      
+      # Generate predictions - No thresholding needed for multi-class
+      y_pred_proba = bst.predict(self.valid_dmatrix)
+      y_pred_labels = np.argmax(y_pred_proba, axis=1)
+      
+      # Get ground truth labels
+      y_true = self.valid_dmatrix.get_label()
+      
+      # Compute multi-class metrics
+      precision = precision_score(y_true, y_pred_labels, average='weighted')
+      recall = recall_score(y_true, y_pred_labels, average='weighted')
+      f1 = f1_score(y_true, y_pred_labels, average='weighted')
+      accuracy = accuracy_score(y_true, y_pred_labels)
+      
+      # Multi-class loss calculation
+      epsilon = 1e-10
+      log_likelihood = -np.log(y_pred_proba[np.arange(len(y_true)), y_true.astype(int)] + epsilon)
+      loss = np.mean(log_likelihood)
+      
+      # Multi-class confusion matrix
+      conf_matrix = confusion_matrix(y_true, y_pred_labels)
+      
+      metrics = {
+          "precision": float(precision),
+          "recall": float(recall),
+          "f1": float(f1),
+          "accuracy": float(accuracy),
+          "loss": float(loss),
+          "confusion_matrix": conf_matrix.tolist(),
+          "num_predictions": self.num_val
+      }
+      
+      return metrics
+  ```
 
-### 4. Prediction and Evaluation Updates
-- [ ] Modify `use_saved_model.py`:
-  - Update prediction handling for three classes
-  - Modify confidence score calculation
-  - Update output format to include class probabilities
-  - Add multi-class specific metrics (confusion matrix, per-class metrics)
-  - Add specific evaluation for DNS and ICMP detection accuracy
+### 3. Server-Side Updates (`server_utils.py`)
+- [ ] Update metrics aggregation:
+  ```python
+  def evaluate_metrics_aggregation(eval_metrics):
+      total_num = sum([num for num, _ in eval_metrics])
+      
+      # Aggregate evaluation metrics
+      metrics_to_aggregate = ['precision', 'recall', 'f1', 'accuracy', 'loss']
+      aggregated_metrics = {}
+      
+      for metric in metrics_to_aggregate:
+          if all(metric in metrics for _, metrics in eval_metrics):
+              aggregated_metrics[metric] = sum([metrics[metric] * num for num, metrics in eval_metrics]) / total_num
+          else:
+              aggregated_metrics[metric] = 0.0
+      
+      # Aggregate confusion matrix
+      aggregated_conf_matrix = None
+      for num, metrics in eval_metrics:
+          conf_matrix = np.array(metrics.get("confusion_matrix", [[0, 0, 0], [0, 0, 0], [0, 0, 0]]))
+          if aggregated_conf_matrix is None:
+              aggregated_conf_matrix = conf_matrix
+          else:
+              aggregated_conf_matrix += conf_matrix
+      
+      aggregated_metrics["confusion_matrix"] = aggregated_conf_matrix.tolist()
+      aggregated_metrics["prediction_mode"] = eval_metrics[0][1].get("prediction_mode", False)
+      
+      return aggregated_metrics["loss"], aggregated_metrics
+  ```
 
-### 5. Server-Side Updates
-- [ ] Update `server_utils.py`:
-  - Modify model aggregation for three-class classification
-  - Update evaluation metrics aggregation
-  - Adjust prediction handling for multiple classes
-  - Add specific handling for DNS and ICMP traffic patterns
+- [ ] Update prediction saving:
+  ```python
+  def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None, true_labels=None):
+      predictions_dict = {
+          'predicted_label': predictions,
+          'prediction_type': [
+              'benign' if p == 0 else 
+              ('dns_tunneling' if p == 1 else 'icmp_tunneling') 
+              for p in predictions
+          ]
+      }
+      # ... rest of the function
+  ```
 
-### 6. Testing and Validation
-- [ ] Create test cases for:
-  - Three-class data loading and preprocessing
-  - Model training with multiple classes
-  - Prediction with multiple classes
-  - Evaluation metrics for multi-class scenario
-  - Specific tests for DNS and ICMP tunneling detection
-  - False positive/negative analysis for each class
+### 4. Prediction Updates (`use_saved_model.py`)
+- [ ] Update prediction saving:
+  ```python
+  def save_detailed_predictions(predictions, output_path):
+      results_df = pd.DataFrame()
+      
+      if predictions.ndim > 1 and predictions.shape[1] > 1:
+          results_df['raw_probabilities'] = predictions.tolist()
+          predicted_labels = np.argmax(predictions, axis=1)
+          results_df['predicted_label'] = predicted_labels
+          
+          results_df['prediction_type'] = [
+              'benign' if p == 0 else 
+              ('dns_tunneling' if p == 1 else 'icmp_tunneling')
+              for p in predicted_labels
+          ]
+          
+          results_df['prediction_score'] = predictions[
+              np.arange(len(predicted_labels)), 
+              predicted_labels
+          ]
+      
+      results_df.to_csv(output_path, index=False)
+      return results_df
+  ```
 
-### 7. Documentation Updates
-- [ ] Update README.md with:
-  - New three-class classification capabilities
-  - Updated usage instructions
-  - New evaluation metrics explanation
-  - Example outputs and interpretations
-  - Specific documentation for DNS and ICMP tunneling detection
+- [ ] Update main evaluation:
+  ```python
+  def main():
+      # ... existing code ...
+      if args.has_labels:
+          y_pred_labels = np.argmax(raw_predictions, axis=1)
+          accuracy = accuracy_score(y_true, y_pred_labels)
+          
+          cm = confusion_matrix(y_true, y_pred_labels)
+          report = classification_report(y_true, y_pred_labels)
+          
+          log(INFO, f"Accuracy: {accuracy:.4f}")
+          log(INFO, f"Confusion Matrix:\n{cm}")
+          log(INFO, f"Classification Report:\n{report}")
+  ```
 
-## Technical Details
+## Testing Strategy
 
-### Class Labels
-Based on the classification task, we'll use the following classes:
-- Benign (0)
-- Malicious DNS Tunneling (1)
-- Malicious ICMP Tunneling (2)
+### 1. Unit Tests
+- [ ] Test label mapping in `dataset.py`
+- [ ] Test multi-class metrics calculation
+- [ ] Test prediction format and class probabilities
+- [ ] Test confusion matrix calculation
 
-### Model Parameters
-```python
-params = {
-    'objective': 'multi:softmax',
-    'num_class': 3,
-    'eval_metric': ['mlogloss', 'merror'],
-    'learning_rate': 0.1,
-    'max_depth': 6,
-    'min_child_weight': 1,
-    'subsample': 0.8,
-    'colsample_bytree': 0.8,
-    'scale_pos_weight': [1.0, 2.0, 2.0]  # Adjust based on class distribution
-}
-```
+### 2. Integration Tests
+- [ ] Test full training pipeline with three classes
+- [ ] Test federated learning convergence
+- [ ] Test model saving and loading
+- [ ] Test prediction pipeline
 
-### Evaluation Metrics
-- Multi-class accuracy
-- Per-class precision, recall, and F1-score
-- Confusion matrix
-- Multi-class log loss
-- Classification report with per-class metrics
-- Specific metrics for DNS and ICMP tunneling detection
-- False positive/negative rates for each class
-
-### Output Format
-```python
-{
-    'predicted_class': int,
-    'class_probabilities': [float],
-    'confidence_score': float,
-    'class_names': ['benign', 'malicious_dns_tunneling', 'malicious_icmp_tunneling'],
-    'traffic_type': str,  # Additional field for traffic type identification
-    'risk_level': str     # Additional field for risk assessment
-}
-```
-
-## Implementation Order
-1. Data preprocessing modifications
-2. Model configuration updates
-3. Training pipeline updates
-4. Prediction and evaluation updates
-5. Server-side updates
-6. Testing and validation
-7. Documentation updates
+### 3. System Tests
+- [ ] End-to-end training and evaluation
+- [ ] Performance testing with large datasets
+- [ ] Class imbalance handling
+- [ ] Error handling and edge cases
 
 ## Success Criteria
 1. Model successfully trains on three-class data
@@ -1288,22 +1282,37 @@ params = {
 7. Documentation is complete and accurate
 8. Test cases pass successfully
 
-## Potential Challenges
-1. Class imbalance (benign traffic likely outnumbers malicious)
-2. Model complexity increase with three classes
-3. Federated learning convergence with multiple classes
-4. Performance impact of multi-class predictions
-5. Distinguishing between different types of malicious traffic
-6. False positives in benign traffic classification
+## Potential Challenges and Mitigations
+1. Class imbalance
+   - Solution: Use class weights in model parameters
+   - Monitor class distribution in training data
+   - Consider data augmentation for underrepresented classes
 
-## Mitigation Strategies
-1. Implement class weights or sampling techniques
-2. Monitor model complexity and adjust parameters
-3. Increase communication rounds if needed
-4. Optimize prediction pipeline for efficiency
-5. Add specific feature engineering for DNS and ICMP patterns
-6. Implement ensemble methods for better classification
-7. Use threshold-based classification for high-confidence predictions
+2. Model complexity
+   - Solution: Start with simpler model and gradually increase complexity
+   - Monitor training metrics for overfitting
+   - Use cross-validation for parameter tuning
+
+3. Federated learning convergence
+   - Solution: Adjust learning rate and number of rounds
+   - Monitor loss curves across clients
+   - Consider using FedAvg with momentum
+
+4. Performance impact
+   - Solution: Profile code for bottlenecks
+   - Optimize prediction pipeline
+   - Consider batch processing for large datasets
+
+## Timeline
+1. Data preprocessing: 1 day
+2. Model configuration: 1 day
+3. Training pipeline: 2 days
+4. Prediction and evaluation: 2 days
+5. Server-side updates: 1 day
+6. Testing and validation: 2 days
+7. Documentation: 1 day
+
+Total estimated time: 10 days
 </file>
 
 <file path="pretrained_model_usage.md">
@@ -2041,99 +2050,81 @@ def fit_config(rnd: int) -> Dict[str, str]:
     }
     return config
 def evaluate_metrics_aggregation(eval_metrics):
-    """Return aggregated metrics for evaluation."""
+    """
+    Aggregate evaluation metrics from multiple clients for multi-class classification.
+    Args:
+        eval_metrics: List of tuples (num_examples, metrics_dict) from each client
+    Returns:
+        tuple: (loss, aggregated_metrics)
+    """
     total_num = sum([num for num, _ in eval_metrics])
     # Log the raw metrics received from clients
-    log(INFO, f"Received metrics from {len(eval_metrics)} clients")
+    log(INFO, "Received metrics from %d clients", len(eval_metrics))
     for i, (num, metrics) in enumerate(eval_metrics):
-        log(INFO, f"Client {i+1} metrics: {metrics.keys()}")
+        log(INFO, "Client %d metrics: %s", i+1, metrics.keys())
         if "loss" in metrics:
-            log(INFO, f"Client {i+1} loss: {metrics['loss']}")
-    # Check if we're in prediction mode or evaluation mode
-    first_metrics = eval_metrics[0][1]
-    is_prediction_mode = first_metrics.get("prediction_mode", False)
-    # Add detailed logging about prediction mode
-    log(INFO, f"PREDICTION MODE STATUS: {'ENABLED' if is_prediction_mode else 'DISABLED'}")
-    # Log individual client prediction mode status
-    prediction_modes = [metrics.get("prediction_mode", False) for _, metrics in eval_metrics]
-    log(INFO, f"Client prediction modes: {prediction_modes}")
-    if is_prediction_mode:
-        # Aggregate prediction statistics
-        total_predictions = sum([metrics.get("total_predictions", 0)for num, metrics in eval_metrics])
-        malicious_predictions = sum([metrics.get("malicious_predictions", 0)for num, metrics in eval_metrics])
-        benign_predictions = sum([metrics.get("benign_predictions", 0)for num, metrics in eval_metrics])
-        # Calculate loss if available
-        if all("loss" in metrics for _, metrics in eval_metrics):
-            # Log individual client losses for analysis
-            client_losses = [metrics["loss"] for _, metrics in eval_metrics]
-            log(INFO, f"Individual client losses: {client_losses}")
-            loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
-            log(INFO, f"PREDICTION MODE - Aggregated loss calculation: sum(loss*num)={sum([metrics['loss'] * num for num, metrics in eval_metrics])}, total_num={total_num}, result={loss}")
+            log(INFO, "Client %d loss: %f", i+1, metrics["loss"])
+    # Initialize aggregated metrics dictionary
+    metrics_to_aggregate = ['precision', 'recall', 'f1', 'accuracy']
+    aggregated_metrics = {}
+    # Aggregate weighted metrics
+    for metric in metrics_to_aggregate:
+        if all(metric in metrics for _, metrics in eval_metrics):
+            weighted_sum = sum([metrics[metric] * num for num, metrics in eval_metrics])
+            aggregated_metrics[metric] = weighted_sum / total_num
         else:
-            loss = 0.0
-            log(INFO, "PREDICTION MODE - Loss not available in all client metrics")
-        # Create aggregated metrics dictionary
-        aggregated_metrics = {
-            "total_predictions": total_predictions,
-            "malicious_predictions": malicious_predictions,
-            "benign_predictions": benign_predictions,
-            "prediction_mode": is_prediction_mode,
-            "loss": loss
-        }
-        log(INFO, f"Aggregated prediction metrics: {aggregated_metrics}")
+            aggregated_metrics[metric] = 0.0
+            log(INFO, "Metric %s not available in all client metrics", metric)
+    # Aggregate loss
+    if all("loss" in metrics for _, metrics in eval_metrics):
+        client_losses = [metrics["loss"] for _, metrics in eval_metrics]
+        log(INFO, "Individual client losses: %s", client_losses)
+        loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
+        log(INFO, "Aggregated loss calculation: sum(loss*num)=%f, total_num=%d, result=%f",
+            sum([metrics["loss"] * num for num, metrics in eval_metrics]), total_num, loss)
     else:
-        # Aggregate evaluation metrics
-        if all("precision" in metrics for _, metrics in eval_metrics):
-            precision = sum([metrics["precision"] * num for num, metrics in eval_metrics]) / total_num
-        else:
-            precision = 0.0
-        if all("recall" in metrics for _, metrics in eval_metrics):
-            recall = sum([metrics["recall"] * num for num, metrics in eval_metrics]) / total_num
-        else:
-            recall = 0.0
-        if all("f1" in metrics for _, metrics in eval_metrics):
-            f1 = sum([metrics["f1"] * num for num, metrics in eval_metrics]) / total_num
-        else:
-            f1 = 0.0
-        if all("loss" in metrics for _, metrics in eval_metrics):
-            # Log individual client losses for analysis
-            client_losses = [metrics["loss"] for _, metrics in eval_metrics]
-            log(INFO, f"Individual client losses: {client_losses}")
-            loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
-            log(INFO, f"EVALUATION MODE - Aggregated loss calculation: sum(loss*num)={sum([metrics['loss'] * num for num, metrics in eval_metrics])}, total_num={total_num}, result={loss}")
-        else:
-            loss = 0.0
-            log(INFO, "EVALUATION MODE - Loss not available in all client metrics")
-        # Aggregate confusion matrix elements
-        tn = sum([metrics.get("true_negatives", 0) for _, metrics in eval_metrics])
-        fp = sum([metrics.get("false_positives", 0) for _, metrics in eval_metrics])
-        fn = sum([metrics.get("false_negatives", 0) for _, metrics in eval_metrics])
-        tp = sum([metrics.get("true_positives", 0) for _, metrics in eval_metrics])
-        # Create aggregated metrics dictionary
-        aggregated_metrics = {
-            "precision": precision,
-            "recall": recall,
-            "f1": f1,
-            "true_negatives": tn,
-            "false_positives": fp,
-            "false_negatives": fn,
-            "true_positives": tp,
-            "prediction_mode": is_prediction_mode,
-            "loss": loss
-        }
-        log(INFO, f"Aggregated evaluation metrics: {aggregated_metrics}")
+        loss = 0.0
+        log(INFO, "Loss not available in all client metrics")
+    aggregated_metrics["loss"] = loss
+    # Aggregate confusion matrix
+    aggregated_conf_matrix = None
+    for num, metrics in eval_metrics:
+        if "confusion_matrix" in metrics:
+            conf_matrix = metrics["confusion_matrix"]
+            if aggregated_conf_matrix is None:
+                aggregated_conf_matrix = [[0 for _ in range(len(conf_matrix[0]))] for _ in range(len(conf_matrix))]
+            # Add weighted confusion matrix
+            for i in range(len(conf_matrix)):
+                for j in range(len(conf_matrix[0])):
+                    aggregated_conf_matrix[i][j] += conf_matrix[i][j] * num
+    # Normalize confusion matrix by total examples
+    if aggregated_conf_matrix is not None:
+        for i in range(len(aggregated_conf_matrix)):
+            for j in range(len(aggregated_conf_matrix[0])):
+                aggregated_conf_matrix[i][j] /= total_num
+    aggregated_metrics["confusion_matrix"] = aggregated_conf_matrix
+    # Log aggregated metrics
+    log(INFO, "Aggregated metrics:")
+    log(INFO, "  Precision (weighted): %f", aggregated_metrics["precision"])
+    log(INFO, "  Recall (weighted): %f", aggregated_metrics["recall"])
+    log(INFO, "  F1 Score (weighted): %f", aggregated_metrics["f1"])
+    log(INFO, "  Accuracy: %f", aggregated_metrics["accuracy"])
+    log(INFO, "  Loss: %f", aggregated_metrics["loss"])
+    if aggregated_conf_matrix is not None:
+        log(INFO, "  Confusion Matrix:\n%s", aggregated_conf_matrix)
     # Save aggregated results
     save_evaluation_results(aggregated_metrics, "aggregated")
     return loss, aggregated_metrics
-def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None, true_labels=None):
+def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None, true_labels=None, prediction_types=None):
     """
     Save dataset with predictions to CSV in the specified directory.
     Args:
-        data: Original data (not used in this simplified version)
-        predictions: Prediction labels
+        data: Original data
+        predictions: Prediction labels (class indices)
         round_num (int): Round number
         output_dir (str, optional): Directory to save results to. If None, uses the default results directory.
         true_labels (array, optional): True labels if available
+        prediction_types (list, optional): List of prediction type strings (e.g., 'benign', 'dns_tunneling', etc.)
     Returns:
         str: Path to the saved CSV file
     """
@@ -2144,17 +2135,19 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     # Create predictions DataFrame
     predictions_dict = {
         'predicted_label': predictions,
-        'prediction_type': ['malicious' if p == 1 else 'benign' for p in predictions]
     }
-    # Add true labels if available and have the same length as predictions
-    if true_labels is not None and len(true_labels) == len(predictions):
-        log(INFO, "Including true labels in the output CSV (same length as predictions)")
+    # Add prediction types if provided
+    if prediction_types is not None:
+        predictions_dict['prediction_type'] = prediction_types
+    else:
+        # Default mapping for multi-class predictions
+        label_mapping = {0: 'benign', 1: 'dns_tunneling', 2: 'icmp_tunneling'}
+        predictions_dict['prediction_type'] = [label_mapping.get(int(p), 'unknown') for p in predictions]
+    # Add true labels if available
+    if true_labels is not None:
         predictions_dict['true_label'] = true_labels
-        predictions_dict['true_label_type'] = ['malicious' if t == 1 else 'benign' for t in true_labels]
-    elif true_labels is not None:
-        log(INFO, f"True labels available but length mismatch: predictions={len(predictions)}, true_labels={len(true_labels)}. Not including true labels in output.")
     predictions_df = pd.DataFrame(predictions_dict)
-    # Save to CSV in the specified directory
+    # Save predictions
     output_path = os.path.join(output_dir, f"predictions_round_{round_num}.csv")
     predictions_df.to_csv(output_path, index=False)
     log(INFO, "Predictions saved to: %s", output_path)
@@ -2722,12 +2715,14 @@ if __name__ == "__main__":
 #!/usr/bin/env python
 """
 use_saved_model.py
-This script demonstrates how to load and use a saved XGBoost model from the federated learning process
-to make predictions on new data.
+This script demonstrates how to load and use a saved XGBoost model from the
+federated learning process to make predictions on new data.
 Usage:
-    python use_saved_model.py --model_path <path_to_model> --data_path <path_to_data> --output_path <path_for_predictions>
+    python use_saved_model.py --model_path <path_to_model> --data_path <path_to_data>
+    --output_path <path_for_predictions>
 Example:
-    python use_saved_model.py --model_path outputs/2023-05-01/12-34-56/final_model.json --data_path data/test_data.csv --output_path predictions.csv
+    python use_saved_model.py --model_path outputs/2023-05-01/12-34-56/final_model.json
+    --data_path data/test_data.csv --output_path predictions.csv
 """
 import argparse
 import os
@@ -2736,7 +2731,11 @@ import pandas as pd
 import numpy as np
 import xgboost as xgb
 from flwr.common.logger import log
-from server_utils import load_saved_model, predict_with_saved_model
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    confusion_matrix, classification_report
+)
+from server_utils import load_saved_model
 from dataset import transform_dataset_to_dmatrix, load_csv_data
 def parse_args():
     """Parse command line arguments."""
@@ -2790,24 +2789,24 @@ def display_model_info(model):
         sorted_importance = sorted(importance.items(), key=lambda x: x[1], reverse=True)[:10]
         for feature, score in sorted_importance:
             log(INFO, "  %s: %.4f", feature, score)
-    except Exception as e:
-        log(INFO, "Could not get feature importance: %s", str(e))
+    except (ValueError, KeyError) as error:
+        log(INFO, "Could not get feature importance: %s", str(error))
     # Get model parameters
     try:
         params = model.get_params()
         log(INFO, "Model parameters: %s", params)
-    except Exception as e:
-        log(INFO, "Could not get model parameters: %s", str(e))
-def clean_data_for_xgboost(df):
+    except (ValueError, KeyError) as error:
+        log(INFO, "Could not get model parameters: %s", str(error))
+def clean_data_for_xgboost(data_frame):
     """
     Clean data for XGBoost by handling infinity values and extremely large numbers.
     Args:
-        df (pd.DataFrame): Input DataFrame
+        data_frame (pd.DataFrame): Input DataFrame
     Returns:
         pd.DataFrame: Cleaned DataFrame
     """
     # Create a copy to avoid modifying the original
-    cleaned_df = df.copy()
+    cleaned_df = data_frame.copy()
     # Replace infinity values with NaN
     cleaned_df.replace([np.inf, -np.inf], np.nan, inplace=True)
     # Cap extremely large values (adjust threshold as needed)
@@ -2815,64 +2814,110 @@ def clean_data_for_xgboost(df):
     for col in numeric_cols:
         # Get the 99th percentile as a reference
         threshold = cleaned_df[col].quantile(0.99) * 10
-        # If threshold is too small, use a default large value
-        if threshold < 1e6:
-            threshold = 1e6
+        # Use max() to set minimum threshold
+        threshold = max(threshold, 1e6)
         # Cap values and log the changes
         mask = cleaned_df[col] > threshold
         if mask.sum() > 0:
             log(INFO, "Capping %d extreme values in column '%s'", mask.sum(), col)
             cleaned_df.loc[mask, col] = np.nan
     return cleaned_df
-def save_detailed_predictions(predictions, output_path, threshold=0.5):
+def save_detailed_predictions(predictions, output_path):
     """
-    Save detailed prediction information to CSV.
+    Save detailed prediction information to CSV for multi-class classification.
     Args:
-        predictions (np.ndarray): Raw prediction scores from the model
+        predictions (np.ndarray): Raw predictions from the model
         output_path (str): Path to save the predictions
-        threshold (float): Threshold for binary classification (default: 0.5)
     """
     # Create a DataFrame to store predictions
     results_df = pd.DataFrame()
-    # Check if predictions are probabilities (between 0 and 1)
-    is_probability = np.all((predictions >= 0) & (predictions <= 1))
-    if is_probability:
-        # For binary classification with probability outputs
-        results_df['raw_score'] = predictions
-        results_df['predicted_label'] = (predictions >= threshold).astype(int)
-        # Add prediction type
-        results_df['prediction_type'] = np.where(
-            results_df['predicted_label'] == 0, 'benign', 'malicious'
-        )
-        # Add prediction score (probability of the predicted class)
-        results_df['prediction_score'] = np.where(
-            results_df['predicted_label'] == 0, 
-            1 - predictions,  # Probability of class 0 (benign)
-            predictions       # Probability of class 1 (malicious)
-        )
+    # Check if predictions are multi-dimensional (one-hot encoded)
+    if predictions.ndim > 1 and predictions.shape[1] > 1:
+        # Store raw probabilities
+        results_df['raw_probabilities'] = predictions.tolist()
+        # Get predicted class (argmax)
+        predicted_labels = np.argmax(predictions, axis=1)
+        results_df['predicted_label'] = predicted_labels
+        # Map numeric predictions to class names
+        label_mapping = {0: 'benign', 1: 'dns_tunneling', 2: 'icmp_tunneling'}
+        results_df['prediction_type'] = [
+            label_mapping.get(int(p), 'unknown') for p in predicted_labels
+        ]
+        # Store confidence scores (probability of predicted class)
+        results_df['prediction_score'] = predictions[
+            np.arange(len(predicted_labels)),
+            predicted_labels
+        ]
     else:
-        # For regression or multi-class outputs
-        results_df['predicted_value'] = predictions
-        # For binary classification with non-probability outputs
-        if np.all(np.isin(np.unique(predictions.astype(int)), [0, 1])):
-            results_df['predicted_label'] = predictions.astype(int)
-            results_df['prediction_type'] = np.where(
-                results_df['predicted_label'] == 0, 'benign', 'malicious'
-            )
-            results_df['prediction_score'] = 1.0  # Default confidence
+        # For single class predictions
+        results_df['predicted_label'] = predictions.astype(int)
+        # Map numeric predictions to class names
+        label_mapping = {0: 'benign', 1: 'dns_tunneling', 2: 'icmp_tunneling'}
+        results_df['prediction_type'] = [
+            label_mapping.get(int(p), 'unknown') for p in predictions
+        ]
+        # Default confidence score of 1.0 for direct class predictions
+        results_df['prediction_score'] = 1.0
     # Save to CSV
     results_df.to_csv(output_path, index=False)
     log(INFO, "Saved %d predictions to %s", len(results_df), output_path)
     # Log prediction statistics
-    if 'predicted_label' in results_df.columns:
-        label_counts = results_df['predicted_label'].value_counts()
-        log(INFO, "Prediction counts: %s", dict(label_counts))
-        if 'prediction_score' in results_df.columns:
-            log(INFO, "Score statistics: min=%.6f, max=%.6f, mean=%.6f", 
-                results_df['prediction_score'].min(),
-                results_df['prediction_score'].max(),
-                results_df['prediction_score'].mean())
+    label_counts = results_df['predicted_label'].value_counts()
+    log(INFO, "Prediction counts by class:")
+    for label, count in label_counts.items():
+        class_name = label_mapping.get(int(label), f'unknown_{label}')
+        log(INFO, "  %s: %d", class_name, count)
+    if 'prediction_score' in results_df.columns:
+        log(INFO, "Confidence score statistics: min=%.6f, max=%.6f, mean=%.6f",
+            results_df['prediction_score'].min(),
+            results_df['prediction_score'].max(),
+            results_df['prediction_score'].mean())
     return results_df
+def evaluate_labeled_data(model, dataset, output_path):
+    """Handle evaluation of labeled data."""
+    # Convert to DMatrix
+    dmatrix = transform_dataset_to_dmatrix(dataset)
+    # Get true labels for evaluation
+    y_true = dmatrix.get_label()
+    # Make predictions
+    raw_predictions = model.predict(dmatrix)
+    # Save detailed predictions
+    _ = save_detailed_predictions(raw_predictions, output_path)
+    # Evaluate if data has labels
+    if raw_predictions.ndim > 1:
+        y_pred_labels = np.argmax(raw_predictions, axis=1)
+    else:
+        y_pred_labels = raw_predictions.astype(int)
+    # Calculate metrics
+    accuracy = accuracy_score(y_true, y_pred_labels)
+    precision = precision_score(y_true, y_pred_labels, average='weighted')
+    recall = recall_score(y_true, y_pred_labels, average='weighted')
+    f1_score_val = f1_score(y_true, y_pred_labels, average='weighted')
+    # Generate confusion matrix
+    conf_matrix = confusion_matrix(y_true, y_pred_labels)
+    # Generate classification report
+    class_names = ['benign', 'dns_tunneling', 'icmp_tunneling']
+    report = classification_report(y_true, y_pred_labels, target_names=class_names)
+    # Log evaluation results
+    log(INFO, "Evaluation Results:")
+    log(INFO, "  Accuracy: %.4f", accuracy)
+    log(INFO, "  Precision (weighted): %.4f", precision)
+    log(INFO, "  Recall (weighted): %.4f", recall)
+    log(INFO, "  F1 Score (weighted): %.4f", f1_score_val)
+    log(INFO, "Confusion Matrix:\n%s", conf_matrix)
+    log(INFO, "Classification Report:\n%s", report)
+def predict_unlabeled_data(model, data_path, output_path):
+    """Handle prediction of unlabeled data."""
+    # Load unlabeled data
+    data = pd.read_csv(data_path)
+    # Clean data
+    data = clean_data_for_xgboost(data)
+    # Convert to DMatrix
+    dmatrix = xgb.DMatrix(data)
+    # Make predictions
+    raw_predictions = model.predict(dmatrix)
+    # Save predictions
+    save_detailed_predictions(raw_predictions, output_path)
 def main():
     """Main function to load model and make predictions."""
     args = parse_args()
@@ -2899,81 +2944,23 @@ def main():
             log(INFO, "Error: Data file not found: %s", args.data_path)
             return
         log(INFO, "Loading data from: %s", args.data_path)
-        # Load data
+        # Process data based on whether it has labels
         if args.has_labels:
             try:
-                # Use the dataset loading function if data has labels
                 dataset = load_csv_data(args.data_path)["test"]
                 dataset.set_format("pandas")
-                data = dataset.to_pandas()
-                # Convert to DMatrix
-                dmatrix = transform_dataset_to_dmatrix(dataset)
-                # Get true labels for evaluation
-                y_true = dmatrix.get_label()
-                # Make predictions
-                raw_predictions = model.predict(dmatrix)
-                # Save detailed predictions
-                save_detailed_predictions(raw_predictions, args.output_path)
-                # Evaluate if data has labels
-                y_pred_labels = (raw_predictions >= 0.5).astype(int)
-                # Calculate accuracy
-                accuracy = np.mean(y_pred_labels == y_true)
-                log(INFO, "Accuracy: %.4f", accuracy)
-                # Print confusion matrix
-                from sklearn.metrics import confusion_matrix, classification_report
-                cm = confusion_matrix(y_true, y_pred_labels)
-                log(INFO, "Confusion Matrix:\n%s", cm)
-                # Print classification report
-                report = classification_report(y_true, y_pred_labels)
-                log(INFO, "Classification Report:\n%s", report)
-            except Exception as e:
-                log(INFO, "Error processing labeled data: %s", str(e))
-                log(INFO, "Falling back to unlabeled data processing")
-                # Fall back to unlabeled data processing
-                data = pd.read_csv(args.data_path)
-                log(INFO, "Data columns: %s", data.columns.tolist())
-                # Clean data for XGBoost
-                data = clean_data_for_xgboost(data)
-                # Convert to DMatrix (without label)
-                dmatrix = xgb.DMatrix(data, missing=np.nan)
-                # Make predictions directly with the model
-                raw_predictions = model.predict(dmatrix)
-                # Save detailed predictions
-                save_detailed_predictions(raw_predictions, args.output_path)
+                evaluate_labeled_data(model, dataset, args.output_path)
+            except (ValueError, KeyError) as error:
+                log(INFO, "Error during evaluation: %s", str(error))
+                raise
         else:
-            # If data doesn't have labels, load as pandas DataFrame
-            data = pd.read_csv(args.data_path)
-            # Check if data has expected features
-            log(INFO, "Data columns: %s", data.columns.tolist())
-            # Handle Timestamp column if present
-            if 'Timestamp' in data.columns:
-                log(INFO, "Dropping Timestamp column as it's not needed for prediction")
-                data = data.drop(columns=['Timestamp'])
-            # Clean data for XGBoost
-            data = clean_data_for_xgboost(data)
-            # Handle categorical columns
-            categorical_cols = []
-            for col in data.columns:
-                if data[col].dtype == 'object' or data[col].dtype.name == 'category':
-                    if col not in ['Label', 'Timestamp']:  # Skip label and timestamp
-                        categorical_cols.append(col)
-                        data[col] = data[col].astype('category').cat.codes
-            if categorical_cols:
-                log(INFO, "Converted categorical columns to codes: %s", categorical_cols)
-            # Convert to DMatrix with enable_categorical=True if there are categorical features
-            if categorical_cols:
-                dmatrix = xgb.DMatrix(data, enable_categorical=True, missing=np.nan)
-            else:
-                dmatrix = xgb.DMatrix(data, missing=np.nan)
-            # Make predictions directly with the model
-            raw_predictions = model.predict(dmatrix)
-            # Save detailed predictions
-            save_detailed_predictions(raw_predictions, args.output_path)
-        log(INFO, "Predictions saved to: %s", args.output_path)
-    except (FileNotFoundError, ValueError, TypeError, xgb.core.XGBoostError) as e:
-        log(INFO, "Error: %s", str(e))
-    except Exception as e:
-        log(INFO, "Unexpected error: %s", str(e))
+            try:
+                predict_unlabeled_data(model, args.data_path, args.output_path)
+            except (ValueError, KeyError) as error:
+                log(INFO, "Error during prediction: %s", str(error))
+                raise
+    except Exception as error:  # pylint: disable=broad-except
+        log(INFO, "Error: %s", str(error))
         raise
 if __name__ == "__main__":
     main()
@@ -2984,7 +2971,8 @@ import argparse
 # Hyper-parameters for xgboost training
 NUM_LOCAL_ROUND = 1
 BST_PARAMS = {
-    "objective": "binary:logistic",
+    "objective": "multi:softmax",
+    "num_class": 3,
     "eta": 0.1,
     "max_depth": 6,
     "min_child_weight": 5,
@@ -2993,7 +2981,7 @@ BST_PARAMS = {
     "colsample_bytree": 0.8,
     "nthread": 16,
     "tree_method": "hist",
-    "eval_metric": ["error", "auc", "logloss"],
+    "eval_metric": ["mlogloss", "merror"],
     "max_delta_step": 5,
     "reg_alpha": 0.1,
     "reg_lambda": 1.0,
