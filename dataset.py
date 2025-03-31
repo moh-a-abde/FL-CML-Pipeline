@@ -76,9 +76,9 @@ def instantiate_partitioner(partitioner_type: str, num_partitions: int):
     return partitioner
 
 def preprocess_data(data):
-    """/
+    """
     Preprocess the data by encoding categorical features and separating features and labels.
-    Handles multi-class classification with three classes: benign, dns_tunneling, and icmp_tunneling.
+    Handles multi-class classification with three classes: benign (0), dns_tunneling (1), and icmp_tunneling (2).
     
     Args:
         data (pd.DataFrame): Input DataFrame
@@ -115,24 +115,16 @@ def preprocess_data(data):
     if 'label' in df.columns:
         features = df.drop(columns=['label'])
         
-        # New label mapping for three classes
-        label_mapping = {
-            'benign': 0,
-            'dns_tunneling': 1,
-            'icmp_tunneling': 2
-        }
+        # Convert labels to numeric type directly since they're already numeric
+        labels = df['label'].astype(int)
         
-        # Convert labels to lowercase for case-insensitive mapping
-        labels_series = df['label'].str.lower().map(label_mapping)
+        # Validate that labels are within expected range (0, 1, 2)
+        unique_labels = labels.unique()
+        if not all(label in [0, 1, 2] for label in unique_labels):
+            print(f"Warning: Unexpected label values found: {unique_labels}")
+            # Map any unexpected values to -1
+            labels = labels.map(lambda x: x if x in [0, 1, 2] else -1)
         
-        # Handle unmapped labels
-        if labels_series.isnull().any():
-            unmapped_labels = df['label'][labels_series.isnull()].unique()
-            print(f"Warning: Unmapped labels found: {unmapped_labels}")
-            # Fill unmapped labels with -1 to indicate unknown class
-            labels_series = labels_series.fillna(-1)
-        
-        labels = labels_series.astype(int)
         return features, labels
     else:
         # For unlabeled data
