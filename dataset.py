@@ -344,17 +344,20 @@ def train_test_split(
     data,
     test_fraction: float = 0.2,
     random_state: int = 42,
-) -> Tuple[xgb.DMatrix, xgb.DMatrix]:
+) -> Tuple[xgb.DMatrix, xgb.DMatrix, FeatureProcessor]:
     """
-    Split dataset into train and test sets.
+    Split dataset into train and test sets, preprocess, and return DMatrices and the fitted processor.
     
     Args:
-        data: Input dataset
+        data: Input dataset (Hugging Face Dataset or pandas DataFrame)
         test_fraction (float): Fraction of data to use for testing
         random_state (int): Random seed for reproducibility
         
     Returns:
-        Tuple[xgb.DMatrix, xgb.DMatrix]: Training and test datasets
+        Tuple[xgb.DMatrix, xgb.DMatrix, FeatureProcessor]: 
+            - Training DMatrix
+            - Test DMatrix
+            - Fitted FeatureProcessor instance
     """
     # Convert to pandas if needed
     if not isinstance(data, pd.DataFrame):
@@ -367,14 +370,15 @@ def train_test_split(
         random_state=random_state
     )
     
-    # Initialize feature processor on training data
+    # Initialize feature processor
     processor = FeatureProcessor()
     
-    # Transform train and test data using the same processor
+    # Fit processor on training data and transform both sets
+    # Note: transform calls fit implicitly if is_training=True and not fitted
     train_dmatrix = transform_dataset_to_dmatrix(train_data, processor=processor, is_training=True)
     test_dmatrix = transform_dataset_to_dmatrix(test_data, processor=processor, is_training=False)
     
-    return train_dmatrix, test_dmatrix
+    return train_dmatrix, test_dmatrix, processor # Return the fitted processor
 
 def resplit(dataset: DatasetDict) -> DatasetDict:
     """

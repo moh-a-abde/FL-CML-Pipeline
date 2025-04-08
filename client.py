@@ -88,56 +88,31 @@ if __name__ == "__main__":
         num_val = valid_data.shape[0]
     else:
         # Perform local train/test split using the updated function
+        # This now returns the fitted processor as well
         log(INFO, "Performing local train/test split...")
-        train_dmatrix, valid_dmatrix = train_test_split(
+        train_dmatrix, valid_dmatrix, processor = train_test_split( # Capture processor
             train_partition,
             test_fraction=args.test_fraction,
-            random_state=args.seed  # Use random_state instead of seed
+            random_state=args.seed
         )
         # Get counts from the DMatrix objects
         num_train = train_dmatrix.num_row()
         num_val = valid_dmatrix.num_row()
         log(INFO, "Local split: %d train samples, %d validation samples", num_train, num_val)
     
-    # Transform unlabeled data for prediction (train/valid are already DMatrix)
+    # Transform unlabeled data for prediction using the processor from train_test_split
     log(INFO, "Reformatting unlabeled data...")
     unlabeled_data = unlabeled_dataset["train"]
     # Convert unlabeled data to pandas DataFrame first
     if not isinstance(unlabeled_data, pd.DataFrame):
         unlabeled_data = unlabeled_data.to_pandas()
     
-    # We need a FeatureProcessor instance. Since we don't have the one from train_test_split,
-    # let's re-create and fit it on the training data DMatrix (requires converting back temporarily)
-    # This is inefficient, ideally the processor should be passed around.
-    # TODO: Refactor to pass the fitted FeatureProcessor instance from train_test_split
-    temp_train_df = train_dmatrix.get_data() # Assuming get_data() returns a suitable format, might need adjustment
-    if isinstance(temp_train_df, xgb.QuantileDMatrix): # Handle potential QuantileDMatrix if using GPU hist
-        log(WARNING, "Cannot reliably reconstruct DataFrame from QuantileDMatrix for refitting processor. Unlabeled data preprocessing might be inconsistent.")
-        # Fallback or raise error? For now, create an empty processor.
-        processor = FeatureProcessor() 
-    else:
-         # Attempt to reconstruct DataFrame, assuming columns match original order
-         # This part is fragile and depends on DMatrix internals/assumptions
-         try:
-             # We need feature names to reconstruct the DataFrame correctly
-             # Assuming train_dmatrix has feature_names attribute
-             if not train_dmatrix.feature_names:
-                 log(WARNING, "train_dmatrix does not have feature_names. Cannot reconstruct DataFrame reliably.")
-                 processor = FeatureProcessor() # Create an unfitted processor
-             else:
-                 temp_train_df_pd = pd.DataFrame(temp_train_df, columns=train_dmatrix.feature_names)
-                 processor = FeatureProcessor()
-                 processor.fit(temp_train_df_pd) # Fit processor on reconstructed training data
-         except Exception as e:
-             log(ERROR, "Failed to reconstruct DataFrame from DMatrix for processor fitting: %s. Proceeding with unfitted processor.", e) # Changed to lazy formatting
-             processor = FeatureProcessor()
-
-
-    # Preprocess unlabeled data using the (potentially refitted) processor
-    # Ensure preprocess_data returns features and labels even if labels are not present
+    # Preprocess unlabeled data using the fitted processor from train/test split
     try:
+        # Use the processor returned by train_test_split
         unlabeled_features, _ = preprocess_data(unlabeled_data, processor=processor, is_training=False)
         unlabeled_dmatrix = xgb.DMatrix(unlabeled_features, missing=np.nan)
+        log(INFO, "Successfully preprocessed unlabeled data.")
     except Exception as e:
         log(ERROR, "Failed to preprocess unlabeled data or create DMatrix: %s", e)
         # Handle error appropriately, e.g., skip prediction for this client or use an empty DMatrix
