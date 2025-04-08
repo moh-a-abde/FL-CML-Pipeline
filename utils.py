@@ -6,19 +6,24 @@ NUM_LOCAL_ROUND = 1
 BST_PARAMS = {
     "objective": "multi:softmax",
     "num_class": 3,
-    "eta": 0.1,
-    "max_depth": 6,
-    "min_child_weight": 5,
-    "gamma": 0.5,
-    "subsample": 0.8,
-    "colsample_bytree": 0.8,
+    "eta": 0.05,  # Reduced learning rate to prevent overfitting
+    "max_depth": 3,  # Reduced max_depth to prevent memorization
+    "min_child_weight": 10,  # Increased to prevent fitting to small samples
+    "gamma": 1.0,  # Increased minimum loss reduction for split
+    "subsample": 0.7,  # Sample fewer rows per iteration
+    "colsample_bytree": 0.6,  # Sample fewer features per tree
+    "colsample_bylevel": 0.6,  # Sample fewer features per level
     "nthread": 16,
     "tree_method": "hist",
     "eval_metric": ["mlogloss", "merror"],
     "max_delta_step": 5,
-    "reg_alpha": 0.1,
-    "reg_lambda": 1.0,
-    "base_score": 0.5  # Add this to start from a neutral point
+    "reg_alpha": 2.0,  # Increased L1 regularization
+    "reg_lambda": 5.0,  # Increased L2 regularization
+    "base_score": 0.5,  # Neutral starting point
+    "scale_pos_weight": 1.0,  # No specific class weight
+    "grow_policy": "lossguide",  # Alternative tree growing policy
+    "normalize_type": "tree",  # Helps with interpretability
+    "random_state": 42  # Fixed seed for reproducibility
 }
 
 

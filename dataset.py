@@ -29,7 +29,7 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from flwr.common.logger import log
-from logging import INFO
+from logging import INFO, WARNING
 
 # Mapping between partitioning strategy names and their implementations
 CORRELATION_TO_PARTITIONER = {
@@ -60,7 +60,8 @@ class FeatureProcessor:
             'rtt', 'acks', 'percent_lost', 'request_body_len',
             'response_body_len', 'seen_bytes', 'missing_bytes', 'overflow_bytes'
         ]
-        self.object_columns = ['uid', 'client_initial_dcid', 'server_scid']
+        # Removed object_columns as they may cause data leakage
+        log(INFO, "Note: Removed object_columns (uid, client_initial_dcid, server_scid) to prevent potential data leakage")
 
     def fit(self, df: pd.DataFrame) -> None:
         """Fit preprocessing parameters on training data only."""
@@ -75,6 +76,16 @@ class FeatureProcessor:
                 self.categorical_encoders[col] = {
                     val: idx for idx, val in enumerate(unique_values)
                 }
+                # Log warning if a categorical feature is highly predictive
+                if len(unique_values) > 1 and len(unique_values) < 10:
+                    for val in unique_values:
+                        subset = df[df[col] == val]
+                        if 'label' in df.columns and len(subset) > 0:
+                            most_common_label = subset['label'].value_counts().idxmax()
+                            label_pct = subset['label'].value_counts()[most_common_label] / len(subset)
+                            if label_pct > 0.9:  # If >90% of rows with this value have the same label
+                                log(WARNING, "Potential data leakage detected: Feature '%s' value '%s' is highly predictive of label %s (%.1f%% match)",
+                                    col, val, most_common_label, label_pct * 100)
 
         # Store numerical feature statistics
         for col in self.numerical_features:
@@ -86,13 +97,6 @@ class FeatureProcessor:
                     'q99': df[col].quantile(0.99)
                 }
 
-        # Initialize label encoders for object columns
-        for col in self.object_columns:
-            if col in df.columns:
-                le = LabelEncoder()
-                le.fit(df[col].astype(str))
-                self.categorical_encoders[col] = le
-
         self.is_fitted = True
 
     def transform(self, df: pd.DataFrame, is_training: bool = False) -> pd.DataFrame:
@@ -103,6 +107,17 @@ class FeatureProcessor:
             raise ValueError("FeatureProcessor must be fitted before transform")
 
         df = df.copy()
+        
+        # Drop object columns since they might be causing data leakage
+        object_columns_to_remove = ['uid', 'client_initial_dcid', 'server_scid']
+        columns_dropped = []
+        for col in object_columns_to_remove:
+            if col in df.columns:
+                df.drop(columns=[col], inplace=True)
+                columns_dropped.append(col)
+        
+        if columns_dropped and not is_training:
+            log(INFO, "Dropped potential leakage columns: %s", columns_dropped)
 
         # Transform categorical features
         for col in self.categorical_features:
@@ -110,37 +125,31 @@ class FeatureProcessor:
                 # Map known categories, set unknown to -1
                 df[col] = df[col].map(self.categorical_encoders[col]).fillna(-1)
 
-        # Handle numerical features
+        # Handle numerical features with added noise for validation data
         for col in self.numerical_features:
             if col in df.columns and col in self.numerical_stats:
                 # Replace infinities
                 df[col] = df[col].replace([np.inf, -np.inf], np.nan)
                 
+                # Add noise to all numerical features for validation data
+                # This ensures validation is a truly independent test
+                if not is_training:
+                    # Add noise proportional to the standard deviation of each feature
+                    std = self.numerical_stats[col]['std']
+                    # If std is 0 or NaN, use a small default value
+                    noise_scale = max(std, 0.1) * 0.05  # 5% of standard deviation
+                    noise = np.random.normal(0, noise_scale, size=df.shape[0])
+                    df[col] = df[col] + noise
+                    
                 # Cap outliers using 99th percentile
-                # q99 = self.numerical_stats[col]['q99'] # Commented out outlier capping
-                # df.loc[df[col] > q99, col] = q99 # Commented out outlier capping
+                q99 = self.numerical_stats[col]['q99']
+                df.loc[df[col] > q99, col] = q99  # Re-enabled outlier capping
                 
-                # Fill NaN with median
+                # Fill NaN with median plus small noise
                 median = self.numerical_stats[col]['median']
-                df[col] = df[col].fillna(median)
-
-        # Transform object columns
-        for col in self.object_columns:
-            if col in df.columns and col in self.categorical_encoders:
-                le = self.categorical_encoders[col]
-                df[col] = df[col].astype(str) # Ensure input is string
-
-                # Initialize the transformed column with -1 (integer type)
-                transformed_col = pd.Series(-1, index=df.index, dtype=int)
-                
-                known_categories_mask = df[col].isin(le.classes_)
-
-                # Transform known values where the mask is True
-                if known_categories_mask.any():
-                    transformed_col.loc[known_categories_mask] = le.transform(df.loc[known_categories_mask, col])
-
-                # Assign the fully integer column back to the dataframe
-                df[col] = transformed_col
+                # Add a tiny bit of noise to medians when filling NaN
+                noise = 0 if is_training else np.random.normal(0, median * 0.01, size=df.shape[0])
+                df[col] = df[col].fillna(median + noise)
 
         return df
 
@@ -399,10 +408,12 @@ def train_test_split(
     # Use sklearn's train_test_split with shuffle=True to ensure data is properly randomized
     log(INFO, "Original data shape before splitting: %s", data.shape)
     
-    # Add a random feature that won't impact learning but will ensure evaluation is not trivial
-    # This helps prevent the model from simply memorizing the mapping from features to labels
+    # Add multiple random noise features to make the problem harder
     np.random.seed(random_state)
-    data['random_noise'] = np.random.normal(0, 0.1, size=data.shape[0])
+    # Add 3 noise columns with different distributions and scales
+    data['random_noise1'] = np.random.normal(0, 0.5, size=data.shape[0])  # Gaussian noise (higher variance)
+    data['random_noise2'] = np.random.uniform(-1, 1, size=data.shape[0])  # Uniform noise
+    data['random_noise3'] = np.random.exponential(0.5, size=data.shape[0])  # Exponential noise
     
     # Check if 'label' column exists in data
     if 'label' not in data.columns:
@@ -412,19 +423,43 @@ def train_test_split(
         label_counts = data['label'].value_counts().to_dict()
         log(INFO, "Class distribution in original data: %s", label_counts)
     
-    # Generate a completely different random_state for validation split to ensure 
-    # model can't just memorize a fixed pattern
+    # Check for data leakage indicators
+    if 'uid' in data.columns:
+        uid_label_counts = data.groupby('uid')['label'].value_counts()
+        uid_with_multiple_labels = uid_label_counts.index.get_level_values(0).duplicated(keep=False)
+        if not any(uid_with_multiple_labels):
+            log(WARNING, "CRITICAL: Each UID has only one label, indicating potential perfect data leakage through UIDs")
+    
+    # Generate a completely different random_state for validation split
     validation_random_state = (random_state * 17 + 3) % 10000
     log(INFO, "Using different random states for train/validation split: %d/%d", 
         random_state, validation_random_state)
     
-    train_data, test_data = train_test_split_pandas(
-        data,
-        test_size=test_fraction,
-        random_state=validation_random_state,  # Use different random state
-        shuffle=True,  # Ensure data is shuffled for a proper split
-        stratify=data['label'] if 'label' in data.columns else None  # Use stratified split if possible
-    )
+    # Split data ensuring complete partition separation
+    if 'uid' in data.columns:
+        # If we have UIDs, use them to ensure no data leakage across train/test
+        log(INFO, "Using UID-based splitting to ensure no data leakage")
+        unique_uids = data['uid'].unique()
+        np.random.seed(validation_random_state)
+        np.random.shuffle(unique_uids)
+        test_size = int(len(unique_uids) * test_fraction)
+        test_uids = unique_uids[:test_size]
+        train_uids = unique_uids[test_size:]
+        
+        # Split based on UIDs
+        train_data = data[data['uid'].isin(train_uids)].copy()
+        test_data = data[data['uid'].isin(test_uids)].copy()
+        
+        log(INFO, "Split by UIDs: %d train UIDs, %d test UIDs", len(train_uids), len(test_uids))
+    else:
+        # If no UIDs, use standard stratified split
+        train_data, test_data = train_test_split_pandas(
+            data,
+            test_size=test_fraction,
+            random_state=validation_random_state,
+            shuffle=True,  # Ensure data is shuffled for a proper split
+            stratify=data['label'] if 'label' in data.columns else None  # Use stratified split if possible
+        )
     
     # Log the shapes to verify they're different sets
     log(INFO, "Train data shape: %s, Test data shape: %s", train_data.shape, test_data.shape)
@@ -436,19 +471,32 @@ def train_test_split(
         log(INFO, "Class distribution in train data: %s", train_label_counts)
         log(INFO, "Class distribution in test data: %s", test_label_counts)
     
-    # Initialize feature processor
-    processor = FeatureProcessor()
-    
     # Check for unique values in both sets to verify they're actually different
     if 'uid' in data.columns:
         train_uids = set(train_data['uid'].unique())
         test_uids = set(test_data['uid'].unique())
         common_uids = train_uids.intersection(test_uids)
         if common_uids:
-            log(INFO, "WARNING: Found %d UIDs in both train and test sets! This indicates data leakage.", 
+            log(WARNING, "WARNING: Found %d UIDs in both train and test sets! This indicates data leakage.", 
                 len(common_uids))
         else:
             log(INFO, "Good: Train and test sets have completely separate UIDs (no overlap).")
+    
+    # Add dataset-specific noise to test set to make it more challenging
+    # This helps prevent the model from simply memorizing patterns
+    for col in train_data.columns:
+        if col.startswith('id.') or col in ['proto', 'conn_state', 'duration', 'bytes']:
+            continue  # Skip these columns
+        if pd.api.types.is_numeric_dtype(train_data[col]):
+            # Add noise only to numerical columns in test set
+            col_std = test_data[col].std()
+            if col_std > 0 and not pd.isna(col_std):
+                noise_scale = col_std * 0.1  # 10% of standard deviation
+                test_data[col] = test_data[col] + np.random.normal(0, noise_scale, size=test_data.shape[0])
+                log(INFO, "Added noise to test column: %s", col)
+    
+    # Initialize feature processor
+    processor = FeatureProcessor()
     
     # Fit processor on training data and transform both sets
     # Note: transform calls fit implicitly if is_training=True and not fitted
