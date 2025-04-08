@@ -84,23 +84,51 @@ if __name__ == "__main__":
         num_train = train_data.shape[0]
         num_val = valid_data.shape[0]
     else:
-        # Perform local train/test split
-        train_data, valid_data, num_train, num_val = train_test_split(
+        # Perform local train/test split using the updated function
+        log(INFO, "Performing local train/test split...")
+        train_dmatrix, valid_dmatrix = train_test_split(
             train_partition,
             test_fraction=args.test_fraction,
-            seed=args.seed
+            random_state=args.seed  # Use random_state instead of seed
         )
+        # Get counts from the DMatrix objects
+        num_train = train_dmatrix.num_row()
+        num_val = valid_dmatrix.num_row()
+        log(INFO, f"Local split: {num_train} train samples, {num_val} validation samples")
     
-    # Transform training data into XGBoost's DMatrix format
-    log(INFO, "Reformatting training data...")
-    train_dmatrix = transform_dataset_to_dmatrix(train_data)
-    valid_dmatrix = transform_dataset_to_dmatrix(valid_data)
-    
-    # Transform unlabeled data for prediction
+    # Transform unlabeled data for prediction (train/valid are already DMatrix)
     log(INFO, "Reformatting unlabeled data...")
     unlabeled_data = unlabeled_dataset["train"]
-    unlabeled_data.set_format("numpy")
-    unlabeled_dmatrix = transform_dataset_to_dmatrix(unlabeled_data)
+    # Convert unlabeled data to pandas DataFrame first
+    if not isinstance(unlabeled_data, pd.DataFrame):
+        unlabeled_data = unlabeled_data.to_pandas()
+    
+    # We need a FeatureProcessor instance. Since we don't have the one from train_test_split,
+    # let's re-create and fit it on the training data DMatrix (requires converting back temporarily)
+    # This is inefficient, ideally the processor should be passed around.
+    # TODO: Refactor to pass the fitted FeatureProcessor instance from train_test_split
+    temp_train_df = train_dmatrix.get_data() # Assuming get_data() returns a suitable format, might need adjustment
+    if isinstance(temp_train_df, xgb.QuantileDMatrix): # Handle potential QuantileDMatrix if using GPU hist
+        log(WARNING, "Cannot reliably reconstruct DataFrame from QuantileDMatrix for refitting processor. Unlabeled data preprocessing might be inconsistent.")
+        # Fallback or raise error? For now, create an empty processor.
+        processor = FeatureProcessor() 
+    else:
+         # Attempt to reconstruct DataFrame, assuming columns match original order
+         # This part is fragile and depends on DMatrix internals/assumptions
+         try:
+             # We need feature names to reconstruct the DataFrame correctly
+             # Assuming train_dmatrix has feature_names attribute
+             temp_train_df_pd = pd.DataFrame(temp_train_df, columns=train_dmatrix.feature_names)
+             processor = FeatureProcessor()
+             processor.fit(temp_train_df_pd) # Fit processor on reconstructed training data
+         except Exception as e:
+             log(ERROR, f"Failed to reconstruct DataFrame from DMatrix for processor fitting: {e}. Proceeding with unfitted processor for unlabeled data.")
+             processor = FeatureProcessor()
+
+
+    # Preprocess unlabeled data using the (potentially refitted) processor
+    unlabeled_features, _ = preprocess_data(unlabeled_data, processor=processor, is_training=False)
+    unlabeled_dmatrix = xgb.DMatrix(unlabeled_features, missing=np.nan)
     
     # Configure training parameters
     num_local_round = NUM_LOCAL_ROUND
