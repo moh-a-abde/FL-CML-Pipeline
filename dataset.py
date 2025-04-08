@@ -397,15 +397,33 @@ def train_test_split(
         data = data.to_pandas()
     
     # Use sklearn's train_test_split with shuffle=True to ensure data is properly randomized
+    log(INFO, "Original data shape before splitting: %s", data.shape)
+    
+    # Check if 'label' column exists in data
+    if 'label' not in data.columns:
+        log(INFO, "Warning: No 'label' column found in data. Available columns: %s", data.columns.tolist())
+    else:
+        # Report class distribution
+        label_counts = data['label'].value_counts().to_dict()
+        log(INFO, "Class distribution in original data: %s", label_counts)
+    
     train_data, test_data = train_test_split_pandas(
         data,
         test_size=test_fraction,
         random_state=random_state,
-        shuffle=True  # Ensure data is shuffled for a proper split
+        shuffle=True,  # Ensure data is shuffled for a proper split
+        stratify=data['label'] if 'label' in data.columns else None  # Use stratified split if possible
     )
     
     # Log the shapes to verify they're different sets
-    log(INFO, f"Train data shape: {train_data.shape}, Test data shape: {test_data.shape}")
+    log(INFO, "Train data shape: %s, Test data shape: %s", train_data.shape, test_data.shape)
+    
+    # Verify label distributions to ensure proper stratification
+    if 'label' in data.columns:
+        train_label_counts = train_data['label'].value_counts().to_dict()
+        test_label_counts = test_data['label'].value_counts().to_dict()
+        log(INFO, "Class distribution in train data: %s", train_label_counts)
+        log(INFO, "Class distribution in test data: %s", test_label_counts)
     
     # Initialize feature processor
     processor = FeatureProcessor()
@@ -416,7 +434,8 @@ def train_test_split(
     test_dmatrix = transform_dataset_to_dmatrix(test_data, processor=processor, is_training=False)
     
     # Log number of examples for verification
-    log(INFO, f"Train DMatrix has {train_dmatrix.num_row()} rows, Test DMatrix has {test_dmatrix.num_row()} rows")
+    log(INFO, "Train DMatrix has %d rows, Test DMatrix has %d rows", 
+        train_dmatrix.num_row(), test_dmatrix.num_row())
     
     return train_dmatrix, test_dmatrix, processor # Return the fitted processor
 

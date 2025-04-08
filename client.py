@@ -73,10 +73,21 @@ if __name__ == "__main__":
         num_partitions=args.num_partitions
     )
     
-    # Load the specific partition for training
-    log(INFO, "Loading training partition...")
-    train_partition = labeled_dataset["train"]
-    train_partition.set_format("numpy")
+    # Load the specific partition for training based on partition_id
+    log(INFO, "Loading training partition for client with partition_id=%d...", args.partition_id)
+    
+    # Get the entire dataset first
+    full_train_data = labeled_dataset["train"] 
+    full_train_data.set_format("numpy")
+    
+    # Apply the partitioner to get client-specific data partition
+    # First get the indices for this client's partition
+    partition_indices = partitioner.get_indices(args.partition_id)
+    # Then select only those indices from the full data
+    train_partition = full_train_data.select(partition_indices)
+    
+    log(INFO, "Partition size: %d samples (out of %d total)", 
+        len(train_partition), len(full_train_data))
     
     # Handle data splitting based on evaluation strategy
     if args.centralised_eval:

@@ -876,6 +876,8 @@ from sklearn.model_selection import train_test_split as train_test_split_pandas
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from flwr.common.logger import log
+from logging import INFO
 # Mapping between partitioning strategy names and their implementations
 CORRELATION_TO_PARTITIONER = {
     "uniform": IidPartitioner,
@@ -949,8 +951,8 @@ class FeatureProcessor:
                 # Replace infinities
                 df[col] = df[col].replace([np.inf, -np.inf], np.nan)
                 # Cap outliers using 99th percentile
-                q99 = self.numerical_stats[col]['q99']
-                df.loc[df[col] > q99, col] = q99
+                # q99 = self.numerical_stats[col]['q99'] # Commented out outlier capping
+                # df.loc[df[col] > q99, col] = q99 # Commented out outlier capping
                 # Fill NaN with median
                 median = self.numerical_stats[col]['median']
                 df[col] = df[col].fillna(median)
@@ -958,13 +960,15 @@ class FeatureProcessor:
         for col in self.object_columns:
             if col in df.columns and col in self.categorical_encoders:
                 le = self.categorical_encoders[col]
-                # Transform known values, handle unknown ones
-                df[col] = df[col].astype(str)
-                known_categories = set(le.classes_)
-                unknown_mask = ~df[col].isin(known_categories)
-                if unknown_mask.any():
-                    df.loc[unknown_mask, col] = le.classes_[0]  # Use first category for unknown
-                df[col] = le.transform(df[col])
+                df[col] = df[col].astype(str) # Ensure input is string
+                # Initialize the transformed column with -1 (integer type)
+                transformed_col = pd.Series(-1, index=df.index, dtype=int)
+                known_categories_mask = df[col].isin(le.classes_)
+                # Transform known values where the mask is True
+                if known_categories_mask.any():
+                    transformed_col.loc[known_categories_mask] = le.transform(df.loc[known_categories_mask, col])
+                # Assign the fully integer column back to the dataframe
+                df[col] = transformed_col
         return df
 def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_training: bool = False):
     """
@@ -1008,9 +1012,22 @@ def load_csv_data(file_path: str) -> DatasetDict:
     print("Dataset Statistics:")
     print(f"Total samples: {len(df)}")
     print(f"Features: {df.columns.tolist()}")
-    # Convert to Dataset format
+    # Check if this is an unlabeled test set (from filename)
+    is_unlabeled = "nolabel" in file_path.lower()
+    # Create appropriate dataset structure
     dataset = Dataset.from_pandas(df)
-    return DatasetDict({"train": dataset, "test": dataset})
+    if is_unlabeled:
+        # For unlabeled data, keep the current structure (all data in both train/test)
+        # This won't create issues since unlabeled data is only used for prediction
+        return DatasetDict({"train": dataset, "test": dataset})
+    else:
+        # For labeled data, create a proper 80/20 split to avoid data leakage
+        # Use a specific random seed for reproducibility
+        train_test_dict = dataset.train_test_split(test_size=0.2, seed=42)
+        return DatasetDict({
+            "train": train_test_dict["train"],
+            "test": train_test_dict["test"]
+        })
 def instantiate_partitioner(partitioner_type: str, num_partitions: int):
     """
     Create a data partitioner based on specified strategy and number of partitions.
@@ -1126,7 +1143,17 @@ def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_tr
     x, y = preprocess_data(data, processor=processor, is_training=is_training)
     # Handle case where preprocess_data might return None for labels (e.g., unlabeled data)
     if y is None:
+        log(INFO, "No labels found in data. This appears to be unlabeled data for prediction only.")
         return xgb.DMatrix(x, missing=np.nan)
+    # For validation data, log label distribution to help identify issues
+    if not is_training:
+        # Count occurrences of each label
+        label_counts = np.bincount(y.astype(int))
+        label_names = ['benign', 'dns_tunneling', 'icmp_tunneling']
+        log(INFO, "Label distribution in validation data:")
+        for i, count in enumerate(label_counts):
+            class_name = label_names[i] if i < len(label_names) else f'unknown_{i}'
+            log(INFO, f"  {class_name}: {count}")
     return xgb.DMatrix(x, label=y, missing=np.nan)
 def train_test_split(
     data,
@@ -1148,18 +1175,23 @@ def train_test_split(
     # Convert to pandas if needed
     if not isinstance(data, pd.DataFrame):
         data = data.to_pandas()
-    # Split data
+    # Use sklearn's train_test_split with shuffle=True to ensure data is properly randomized
     train_data, test_data = train_test_split_pandas(
         data,
         test_size=test_fraction,
-        random_state=random_state
+        random_state=random_state,
+        shuffle=True  # Ensure data is shuffled for a proper split
     )
+    # Log the shapes to verify they're different sets
+    log(INFO, f"Train data shape: {train_data.shape}, Test data shape: {test_data.shape}")
     # Initialize feature processor
     processor = FeatureProcessor()
     # Fit processor on training data and transform both sets
     # Note: transform calls fit implicitly if is_training=True and not fitted
     train_dmatrix = transform_dataset_to_dmatrix(train_data, processor=processor, is_training=True)
     test_dmatrix = transform_dataset_to_dmatrix(test_data, processor=processor, is_training=False)
+    # Log number of examples for verification
+    log(INFO, f"Train DMatrix has {train_dmatrix.num_row()} rows, Test DMatrix has {test_dmatrix.num_row()} rows")
     return train_dmatrix, test_dmatrix, processor # Return the fitted processor
 def resplit(dataset: DatasetDict) -> DatasetDict:
     """
@@ -2220,8 +2252,8 @@ def evaluate_metrics_aggregation(eval_metrics):
     log(INFO, "Received metrics from %d clients", len(eval_metrics))
     for i, (num, metrics) in enumerate(eval_metrics):
         log(INFO, "Client %d metrics: %s", i+1, metrics.keys())
-        if "loss" in metrics:
-            log(INFO, "Client %d loss: %f", i+1, metrics["loss"])
+        if "mlogloss" in metrics:
+            log(INFO, "Client %d mlogloss: %f", i+1, metrics["mlogloss"])
     # Initialize aggregated metrics dictionary
     metrics_to_aggregate = ['precision', 'recall', 'f1', 'accuracy']
     aggregated_metrics = {}
@@ -2233,17 +2265,18 @@ def evaluate_metrics_aggregation(eval_metrics):
         else:
             aggregated_metrics[metric] = 0.0
             log(INFO, "Metric %s not available in all client metrics", metric)
-    # Aggregate loss
-    if all("loss" in metrics for _, metrics in eval_metrics):
-        client_losses = [metrics["loss"] for _, metrics in eval_metrics]
-        log(INFO, "Individual client losses: %s", client_losses)
-        loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
-        log(INFO, "Aggregated loss calculation: sum(loss*num)=%f, total_num=%d, result=%f",
-            sum([metrics["loss"] * num for num, metrics in eval_metrics]), total_num, loss)
+    # Aggregate loss (using mlogloss)
+    if all("mlogloss" in metrics for _, metrics in eval_metrics):
+        client_losses = [metrics["mlogloss"] for _, metrics in eval_metrics]
+        log(INFO, "Individual client losses (mlogloss): %s", client_losses)
+        loss = sum([metrics["mlogloss"] * num for num, metrics in eval_metrics]) / total_num
+        log(INFO, "Aggregated loss calculation: sum(mlogloss*num)=%f, total_num=%d, result=%f",
+            sum([metrics["mlogloss"] * num for num, metrics in eval_metrics]), total_num, loss)
     else:
         loss = 0.0
-        log(INFO, "Loss not available in all client metrics")
-    aggregated_metrics["loss"] = loss
+        log(INFO, "Mlogloss not available in all client metrics")
+    aggregated_metrics["loss"] = loss  # Keep as "loss" for compatibility
+    aggregated_metrics["mlogloss"] = loss  # Also store as mlogloss
     # Aggregate confusion matrix
     aggregated_conf_matrix = None
     for num, metrics in eval_metrics:
@@ -2267,7 +2300,7 @@ def evaluate_metrics_aggregation(eval_metrics):
     log(INFO, "  Recall (weighted): %f", aggregated_metrics["recall"])
     log(INFO, "  F1 Score (weighted): %f", aggregated_metrics["f1"])
     log(INFO, "  Accuracy: %f", aggregated_metrics["accuracy"])
-    log(INFO, "  Loss: %f", aggregated_metrics["loss"])
+    log(INFO, "  Loss (mlogloss): %f", aggregated_metrics["loss"])
     if aggregated_conf_matrix is not None:
         log(INFO, "  Confusion Matrix:\n%s", aggregated_conf_matrix)
     # Save aggregated results
