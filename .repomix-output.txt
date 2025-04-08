@@ -771,10 +771,35 @@ if __name__ == "__main__":
         partitioner_type=args.partitioner_type,
         num_partitions=args.num_partitions
     )
-    # Load the specific partition for training
-    log(INFO, "Loading training partition...")
-    train_partition = labeled_dataset["train"]
-    train_partition.set_format("numpy")
+    # Load the specific partition for training based on partition_id
+    log(INFO, "Loading training partition for client with partition_id=%d...", args.partition_id)
+    # Get the entire dataset first
+    full_train_data = labeled_dataset["train"] 
+    full_train_data.set_format("numpy")
+    # Apply the partitioner to get client-specific data partition
+    # The ExponentialPartitioner doesn't have get_indices, but provides partition method
+    # which returns the partition directly rather than just indices
+    try:
+        # First try to use get_partition method which returns the partition subset directly
+        train_partition = partitioner.get_partition(full_train_data, args.partition_id)
+    except AttributeError:
+        # If that fails, try using the partition method (used in newer versions)
+        try:
+            # Newer versions use a different API
+            train_partition = partitioner.partition(full_train_data)[args.partition_id]
+        except (AttributeError, TypeError, IndexError):
+            # As a fallback, if all partition methods fail, use a simple numerical partition
+            # by getting evenly spaced indices based on partition ID
+            total_samples = len(full_train_data)
+            samples_per_partition = total_samples // args.num_partitions
+            start_idx = args.partition_id * samples_per_partition
+            end_idx = start_idx + samples_per_partition if args.partition_id < args.num_partitions - 1 else total_samples
+            partition_indices = list(range(start_idx, end_idx))
+            train_partition = full_train_data.select(partition_indices)
+            log(INFO, "Used fallback partitioning. Partition %d: samples %d to %d", 
+                args.partition_id, start_idx, end_idx)
+    log(INFO, "Partition size: %d samples (out of %d total)", 
+        len(train_partition), len(full_train_data))
     # Handle data splitting based on evaluation strategy
     if args.centralised_eval:
         # Use centralized test set for evaluation
@@ -1176,14 +1201,29 @@ def train_test_split(
     if not isinstance(data, pd.DataFrame):
         data = data.to_pandas()
     # Use sklearn's train_test_split with shuffle=True to ensure data is properly randomized
+    log(INFO, "Original data shape before splitting: %s", data.shape)
+    # Check if 'label' column exists in data
+    if 'label' not in data.columns:
+        log(INFO, "Warning: No 'label' column found in data. Available columns: %s", data.columns.tolist())
+    else:
+        # Report class distribution
+        label_counts = data['label'].value_counts().to_dict()
+        log(INFO, "Class distribution in original data: %s", label_counts)
     train_data, test_data = train_test_split_pandas(
         data,
         test_size=test_fraction,
         random_state=random_state,
-        shuffle=True  # Ensure data is shuffled for a proper split
+        shuffle=True,  # Ensure data is shuffled for a proper split
+        stratify=data['label'] if 'label' in data.columns else None  # Use stratified split if possible
     )
     # Log the shapes to verify they're different sets
-    log(INFO, f"Train data shape: {train_data.shape}, Test data shape: {test_data.shape}")
+    log(INFO, "Train data shape: %s, Test data shape: %s", train_data.shape, test_data.shape)
+    # Verify label distributions to ensure proper stratification
+    if 'label' in data.columns:
+        train_label_counts = train_data['label'].value_counts().to_dict()
+        test_label_counts = test_data['label'].value_counts().to_dict()
+        log(INFO, "Class distribution in train data: %s", train_label_counts)
+        log(INFO, "Class distribution in test data: %s", test_label_counts)
     # Initialize feature processor
     processor = FeatureProcessor()
     # Fit processor on training data and transform both sets
@@ -1191,7 +1231,8 @@ def train_test_split(
     train_dmatrix = transform_dataset_to_dmatrix(train_data, processor=processor, is_training=True)
     test_dmatrix = transform_dataset_to_dmatrix(test_data, processor=processor, is_training=False)
     # Log number of examples for verification
-    log(INFO, f"Train DMatrix has {train_dmatrix.num_row()} rows, Test DMatrix has {test_dmatrix.num_row()} rows")
+    log(INFO, "Train DMatrix has %d rows, Test DMatrix has %d rows", 
+        train_dmatrix.num_row(), test_dmatrix.num_row())
     return train_dmatrix, test_dmatrix, processor # Return the fitted processor
 def resplit(dataset: DatasetDict) -> DatasetDict:
     """

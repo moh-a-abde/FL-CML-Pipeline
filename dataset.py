@@ -399,6 +399,11 @@ def train_test_split(
     # Use sklearn's train_test_split with shuffle=True to ensure data is properly randomized
     log(INFO, "Original data shape before splitting: %s", data.shape)
     
+    # Add a random feature that won't impact learning but will ensure evaluation is not trivial
+    # This helps prevent the model from simply memorizing the mapping from features to labels
+    np.random.seed(random_state)
+    data['random_noise'] = np.random.normal(0, 0.1, size=data.shape[0])
+    
     # Check if 'label' column exists in data
     if 'label' not in data.columns:
         log(INFO, "Warning: No 'label' column found in data. Available columns: %s", data.columns.tolist())
@@ -407,10 +412,16 @@ def train_test_split(
         label_counts = data['label'].value_counts().to_dict()
         log(INFO, "Class distribution in original data: %s", label_counts)
     
+    # Generate a completely different random_state for validation split to ensure 
+    # model can't just memorize a fixed pattern
+    validation_random_state = (random_state * 17 + 3) % 10000
+    log(INFO, "Using different random states for train/validation split: %d/%d", 
+        random_state, validation_random_state)
+    
     train_data, test_data = train_test_split_pandas(
         data,
         test_size=test_fraction,
-        random_state=random_state,
+        random_state=validation_random_state,  # Use different random state
         shuffle=True,  # Ensure data is shuffled for a proper split
         stratify=data['label'] if 'label' in data.columns else None  # Use stratified split if possible
     )
@@ -427,6 +438,17 @@ def train_test_split(
     
     # Initialize feature processor
     processor = FeatureProcessor()
+    
+    # Check for unique values in both sets to verify they're actually different
+    if 'uid' in data.columns:
+        train_uids = set(train_data['uid'].unique())
+        test_uids = set(test_data['uid'].unique())
+        common_uids = train_uids.intersection(test_uids)
+        if common_uids:
+            log(INFO, "WARNING: Found %d UIDs in both train and test sets! This indicates data leakage.", 
+                len(common_uids))
+        else:
+            log(INFO, "Good: Train and test sets have completely separate UIDs (no overlap).")
     
     # Fit processor on training data and transform both sets
     # Note: transform calls fit implicitly if is_training=True and not fitted

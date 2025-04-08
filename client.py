@@ -118,10 +118,16 @@ if __name__ == "__main__":
         # Perform local train/test split using the updated function
         # This now returns the fitted processor as well
         log(INFO, "Performing local train/test split...")
+        
+        # Generate a unique seed for each client based on partition_id to ensure
+        # different clients get different train/test splits
+        client_specific_seed = args.seed + (args.partition_id * 1000)
+        log(INFO, "Using client-specific random seed for train/test split: %d", client_specific_seed)
+        
         train_dmatrix, valid_dmatrix, processor = train_test_split( # Capture processor
             train_partition,
             test_fraction=args.test_fraction,
-            random_state=args.seed
+            random_state=client_specific_seed  # Use client-specific seed
         )
         # Get counts from the DMatrix objects
         num_train = train_dmatrix.num_row()
