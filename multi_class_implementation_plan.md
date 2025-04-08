@@ -229,13 +229,3 @@
    - Optimize prediction pipeline
    - Consider batch processing for large datasets
 
-## Timeline
-1. Data preprocessing: 1 day
-2. Model configuration: 1 day
-3. Training pipeline: 2 days
-4. Prediction and evaluation: 2 days
-5. Server-side updates: 1 day
-6. Testing and validation: 2 days
-7. Documentation: 1 day
-
-Total estimated time: 10 days
