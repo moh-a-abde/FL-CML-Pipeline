@@ -142,8 +142,8 @@ def evaluate_metrics_aggregation(eval_metrics):
     log(INFO, "Received metrics from %d clients", len(eval_metrics))
     for i, (num, metrics) in enumerate(eval_metrics):
         log(INFO, "Client %d metrics: %s", i+1, metrics.keys())
-        if "loss" in metrics:
-            log(INFO, "Client %d loss: %f", i+1, metrics["loss"])
+        if "mlogloss" in metrics:
+            log(INFO, "Client %d mlogloss: %f", i+1, metrics["mlogloss"])
     
     # Initialize aggregated metrics dictionary
     metrics_to_aggregate = ['precision', 'recall', 'f1', 'accuracy']
@@ -158,18 +158,19 @@ def evaluate_metrics_aggregation(eval_metrics):
             aggregated_metrics[metric] = 0.0
             log(INFO, "Metric %s not available in all client metrics", metric)
     
-    # Aggregate loss
-    if all("loss" in metrics for _, metrics in eval_metrics):
-        client_losses = [metrics["loss"] for _, metrics in eval_metrics]
-        log(INFO, "Individual client losses: %s", client_losses)
-        loss = sum([metrics["loss"] * num for num, metrics in eval_metrics]) / total_num
-        log(INFO, "Aggregated loss calculation: sum(loss*num)=%f, total_num=%d, result=%f",
-            sum([metrics["loss"] * num for num, metrics in eval_metrics]), total_num, loss)
+    # Aggregate loss (using mlogloss)
+    if all("mlogloss" in metrics for _, metrics in eval_metrics):
+        client_losses = [metrics["mlogloss"] for _, metrics in eval_metrics]
+        log(INFO, "Individual client losses (mlogloss): %s", client_losses)
+        loss = sum([metrics["mlogloss"] * num for num, metrics in eval_metrics]) / total_num
+        log(INFO, "Aggregated loss calculation: sum(mlogloss*num)=%f, total_num=%d, result=%f",
+            sum([metrics["mlogloss"] * num for num, metrics in eval_metrics]), total_num, loss)
     else:
         loss = 0.0
-        log(INFO, "Loss not available in all client metrics")
+        log(INFO, "Mlogloss not available in all client metrics")
     
-    aggregated_metrics["loss"] = loss
+    aggregated_metrics["loss"] = loss  # Keep as "loss" for compatibility
+    aggregated_metrics["mlogloss"] = loss  # Also store as mlogloss
     
     # Aggregate confusion matrix
     aggregated_conf_matrix = None
@@ -198,7 +199,7 @@ def evaluate_metrics_aggregation(eval_metrics):
     log(INFO, "  Recall (weighted): %f", aggregated_metrics["recall"])
     log(INFO, "  F1 Score (weighted): %f", aggregated_metrics["f1"])
     log(INFO, "  Accuracy: %f", aggregated_metrics["accuracy"])
-    log(INFO, "  Loss: %f", aggregated_metrics["loss"])
+    log(INFO, "  Loss (mlogloss): %f", aggregated_metrics["loss"])
     if aggregated_conf_matrix is not None:
         log(INFO, "  Confusion Matrix:\n%s", aggregated_conf_matrix)
     
