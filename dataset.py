@@ -28,6 +28,8 @@ from sklearn.model_selection import train_test_split as train_test_split_pandas
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from flwr.common.logger import log
+from logging import INFO
 
 # Mapping between partitioning strategy names and their implementations
 CORRELATION_TO_PARTITIONER = {
@@ -196,9 +198,24 @@ def load_csv_data(file_path: str) -> DatasetDict:
     print(f"Total samples: {len(df)}")
     print(f"Features: {df.columns.tolist()}")
     
-    # Convert to Dataset format
+    # Check if this is an unlabeled test set (from filename)
+    is_unlabeled = "nolabel" in file_path.lower()
+    
+    # Create appropriate dataset structure
     dataset = Dataset.from_pandas(df)
-    return DatasetDict({"train": dataset, "test": dataset})
+    
+    if is_unlabeled:
+        # For unlabeled data, keep the current structure (all data in both train/test)
+        # This won't create issues since unlabeled data is only used for prediction
+        return DatasetDict({"train": dataset, "test": dataset})
+    else:
+        # For labeled data, create a proper 80/20 split to avoid data leakage
+        # Use a specific random seed for reproducibility
+        train_test_dict = dataset.train_test_split(test_size=0.2, seed=42)
+        return DatasetDict({
+            "train": train_test_dict["train"],
+            "test": train_test_dict["test"]
+        })
 
 def instantiate_partitioner(partitioner_type: str, num_partitions: int):
     """
@@ -341,7 +358,19 @@ def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_tr
     
     # Handle case where preprocess_data might return None for labels (e.g., unlabeled data)
     if y is None:
+        log(INFO, "No labels found in data. This appears to be unlabeled data for prediction only.")
         return xgb.DMatrix(x, missing=np.nan)
+    
+    # For validation data, log label distribution to help identify issues
+    if not is_training:
+        # Count occurrences of each label
+        label_counts = np.bincount(y.astype(int))
+        label_names = ['benign', 'dns_tunneling', 'icmp_tunneling']
+        log(INFO, "Label distribution in validation data:")
+        for i, count in enumerate(label_counts):
+            class_name = label_names[i] if i < len(label_names) else f'unknown_{i}'
+            log(INFO, f"  {class_name}: {count}")
+    
     return xgb.DMatrix(x, label=y, missing=np.nan)
 
 def train_test_split(
@@ -366,13 +395,17 @@ def train_test_split(
     # Convert to pandas if needed
     if not isinstance(data, pd.DataFrame):
         data = data.to_pandas()
-        
-    # Split data
+    
+    # Use sklearn's train_test_split with shuffle=True to ensure data is properly randomized
     train_data, test_data = train_test_split_pandas(
         data,
         test_size=test_fraction,
-        random_state=random_state
+        random_state=random_state,
+        shuffle=True  # Ensure data is shuffled for a proper split
     )
+    
+    # Log the shapes to verify they're different sets
+    log(INFO, f"Train data shape: {train_data.shape}, Test data shape: {test_data.shape}")
     
     # Initialize feature processor
     processor = FeatureProcessor()
@@ -381,6 +414,9 @@ def train_test_split(
     # Note: transform calls fit implicitly if is_training=True and not fitted
     train_dmatrix = transform_dataset_to_dmatrix(train_data, processor=processor, is_training=True)
     test_dmatrix = transform_dataset_to_dmatrix(test_data, processor=processor, is_training=False)
+    
+    # Log number of examples for verification
+    log(INFO, f"Train DMatrix has {train_dmatrix.num_row()} rows, Test DMatrix has {test_dmatrix.num_row()} rows")
     
     return train_dmatrix, test_dmatrix, processor # Return the fitted processor
 
