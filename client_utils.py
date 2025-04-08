@@ -38,7 +38,7 @@ from server_utils import save_predictions_to_csv
 BST_PARAMS = {
     'objective': 'multi:softmax',  # Changed to multi-class classification
     'num_class': 3,  # Three classes: benign, dns_tunneling, icmp_tunneling
-    'eval_metric': ['mlogloss', 'merror'],  # Multi-class metrics
+    'eval_metric': ['loss', 'merror'],  # Multi-class metrics
     'learning_rate': 0.1,
     'max_depth': 6,
     'min_child_weight': 1,
