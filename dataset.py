@@ -23,9 +23,7 @@ from flwr_datasets.partitioner import (
     SquarePartitioner,
     ExponentialPartitioner,
 )
-from typing import Union, Tuple, Dict, List
-from collections import defaultdict
-from flwr.common.typing import NDArrays
+from typing import Union, Tuple
 from sklearn.model_selection import train_test_split as train_test_split_pandas
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
@@ -50,11 +48,12 @@ class FeatureProcessor:
         # Define feature groups
         self.categorical_features = [
             'id.orig_h', 'id.resp_h', 'proto', 'conn_state', 'history', 
-            'validation_status', 'method', 'status_msg', 'is_orig'
+            'validation_status', 'method', 'status_msg', 'is_orig',
+            'local_orig', 'local_resp'
         ]
         self.numerical_features = [
             'id.orig_p', 'id.resp_p', 'duration', 'orig_bytes', 'resp_bytes',
-            'local_orig', 'local_resp', 'missed_bytes', 'orig_pkts',
+            'missed_bytes', 'orig_pkts',
             'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ts_delta',
             'rtt', 'acks', 'percent_lost', 'request_body_len',
             'response_body_len', 'seen_bytes', 'missing_bytes', 'overflow_bytes'
@@ -170,8 +169,7 @@ def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_t
             labels = labels.map(lambda x: x if x in [0, 1, 2] else -1)
         
         return features, labels
-    else:
-        return df, None
+    return df, None
 
 def load_csv_data(file_path: str) -> DatasetDict:
     """
@@ -250,9 +248,8 @@ def preprocess_data_deprec2(data):
         features = df.drop(columns=['label'])
         labels = df['label'].astype(float)
         return features, labels
-    else:
-        # For unlabeled data
-        return df, None
+    # For unlabeled data
+    return df, None
 
 def preprocess_data_deprec(data):
     """
@@ -308,9 +305,8 @@ def preprocess_data_deprec(data):
             labels = df['Label']
         features = df.drop(columns=['Label'])
         return features, labels
-    else:
-        # If no label column, return the processed DataFrame and None for labels
-        return df, None
+    # If no label column, return the processed DataFrame and None for labels
+    return df, None
         
 def separate_xy(data):
     """
@@ -342,8 +338,7 @@ def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_tr
     # Handle case where preprocess_data might return None for labels (e.g., unlabeled data)
     if y is None:
         return xgb.DMatrix(x, missing=np.nan)
-    else:
-        return xgb.DMatrix(x, label=y, missing=np.nan)
+    return xgb.DMatrix(x, label=y, missing=np.nan)
 
 def train_test_split(
     data,
