@@ -12,8 +12,11 @@ Key Components:
 """
 
 import warnings
-from logging import INFO
+from logging import INFO, WARNING, ERROR
 import os
+import pandas as pd
+import xgboost as xgb
+import numpy as np
 
 import flwr as fl
 from flwr.common.logger import log
@@ -22,8 +25,8 @@ from dataset import (
     load_csv_data,
     instantiate_partitioner,
     train_test_split,
-    transform_dataset_to_dmatrix,
-    resplit,
+    FeatureProcessor,
+    preprocess_data
 )
 from utils import client_args_parser, BST_PARAMS, NUM_LOCAL_ROUND
 from client_utils import XgbClient
@@ -94,7 +97,7 @@ if __name__ == "__main__":
         # Get counts from the DMatrix objects
         num_train = train_dmatrix.num_row()
         num_val = valid_dmatrix.num_row()
-        log(INFO, f"Local split: {num_train} train samples, {num_val} validation samples")
+        log(INFO, "Local split: %d train samples, %d validation samples", num_train, num_val)
     
     # Transform unlabeled data for prediction (train/valid are already DMatrix)
     log(INFO, "Reformatting unlabeled data...")
@@ -118,17 +121,28 @@ if __name__ == "__main__":
          try:
              # We need feature names to reconstruct the DataFrame correctly
              # Assuming train_dmatrix has feature_names attribute
-             temp_train_df_pd = pd.DataFrame(temp_train_df, columns=train_dmatrix.feature_names)
-             processor = FeatureProcessor()
-             processor.fit(temp_train_df_pd) # Fit processor on reconstructed training data
+             if not train_dmatrix.feature_names:
+                 log(WARNING, "train_dmatrix does not have feature_names. Cannot reconstruct DataFrame reliably.")
+                 processor = FeatureProcessor() # Create an unfitted processor
+             else:
+                 temp_train_df_pd = pd.DataFrame(temp_train_df, columns=train_dmatrix.feature_names)
+                 processor = FeatureProcessor()
+                 processor.fit(temp_train_df_pd) # Fit processor on reconstructed training data
          except Exception as e:
-             log(ERROR, f"Failed to reconstruct DataFrame from DMatrix for processor fitting: {e}. Proceeding with unfitted processor for unlabeled data.")
+             log(ERROR, "Failed to reconstruct DataFrame from DMatrix for processor fitting: %s. Proceeding with unfitted processor.", e) # Changed to lazy formatting
              processor = FeatureProcessor()
 
 
     # Preprocess unlabeled data using the (potentially refitted) processor
-    unlabeled_features, _ = preprocess_data(unlabeled_data, processor=processor, is_training=False)
-    unlabeled_dmatrix = xgb.DMatrix(unlabeled_features, missing=np.nan)
+    # Ensure preprocess_data returns features and labels even if labels are not present
+    try:
+        unlabeled_features, _ = preprocess_data(unlabeled_data, processor=processor, is_training=False)
+        unlabeled_dmatrix = xgb.DMatrix(unlabeled_features, missing=np.nan)
+    except Exception as e:
+        log(ERROR, "Failed to preprocess unlabeled data or create DMatrix: %s", e)
+        # Handle error appropriately, e.g., skip prediction for this client or use an empty DMatrix
+        unlabeled_dmatrix = xgb.DMatrix(np.empty((0,0))) # Create an empty DMatrix as fallback
+
     
     # Configure training parameters
     num_local_round = NUM_LOCAL_ROUND

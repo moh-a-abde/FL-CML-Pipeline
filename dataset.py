@@ -23,8 +23,13 @@ from flwr_datasets.partitioner import (
     SquarePartitioner,
     ExponentialPartitioner,
 )
-from typing import Union, Tuple, Dict
+from typing import Union, Tuple, Dict, List
 from collections import defaultdict
+from flwr.common.typing import NDArrays
+from sklearn.model_selection import train_test_split as train_test_split_pandas
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 
 # Mapping between partitioning strategy names and their implementations
 CORRELATION_TO_PARTITIONER = {
