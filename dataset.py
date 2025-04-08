@@ -115,8 +115,8 @@ class FeatureProcessor:
                 df[col] = df[col].replace([np.inf, -np.inf], np.nan)
                 
                 # Cap outliers using 99th percentile
-                q99 = self.numerical_stats[col]['q99']
-                df.loc[df[col] > q99, col] = q99
+                # q99 = self.numerical_stats[col]['q99'] # Commented out outlier capping
+                # df.loc[df[col] > q99, col] = q99 # Commented out outlier capping
                 
                 # Fill NaN with median
                 median = self.numerical_stats[col]['median']
@@ -131,10 +131,16 @@ class FeatureProcessor:
                 known_categories = set(le.classes_)
                 unknown_mask = ~df[col].isin(known_categories)
                 
+                # Assign -1 to unknown categories instead of mapping to first known category
                 if unknown_mask.any():
-                    df.loc[unknown_mask, col] = le.classes_[0]  # Use first category for unknown
-                
-                df[col] = le.transform(df[col])
+                    # df.loc[unknown_mask, col] = le.classes_[0]  # Original handling
+                    df.loc[unknown_mask, col] = -1 # Assign -1 for unknown
+
+                # Transform known values, handling potential -1 assignment from above
+                # Need to filter out the -1 before transform and add it back
+                known_mask = ~unknown_mask
+                if known_mask.any():
+                   df.loc[known_mask, col] = le.transform(df.loc[known_mask, col])
 
         return df
 
