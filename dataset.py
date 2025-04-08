@@ -23,7 +23,8 @@ from flwr_datasets.partitioner import (
     SquarePartitioner,
     ExponentialPartitioner,
 )
-from typing import Union, Tuple
+from typing import Union, Tuple, Dict
+from collections import defaultdict
 
 # Mapping between partitioning strategy names and their implementations
 CORRELATION_TO_PARTITIONER = {
@@ -32,6 +33,140 @@ CORRELATION_TO_PARTITIONER = {
     "square": SquarePartitioner,
     "exponential": ExponentialPartitioner,
 }
+
+class FeatureProcessor:
+    """Handles feature preprocessing while preventing data leakage."""
+    
+    def __init__(self):
+        self.categorical_encoders = {}
+        self.numerical_stats = {}
+        self.is_fitted = False
+        
+        # Define feature groups
+        self.categorical_features = [
+            'id.orig_h', 'id.resp_h', 'proto', 'conn_state', 'history', 
+            'validation_status', 'method', 'status_msg', 'is_orig'
+        ]
+        self.numerical_features = [
+            'id.orig_p', 'id.resp_p', 'duration', 'orig_bytes', 'resp_bytes',
+            'local_orig', 'local_resp', 'missed_bytes', 'orig_pkts',
+            'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ts_delta',
+            'rtt', 'acks', 'percent_lost', 'request_body_len',
+            'response_body_len', 'seen_bytes', 'missing_bytes', 'overflow_bytes'
+        ]
+        self.object_columns = ['uid', 'client_initial_dcid', 'server_scid']
+
+    def fit(self, df: pd.DataFrame) -> None:
+        """Fit preprocessing parameters on training data only."""
+        if self.is_fitted:
+            return
+            
+        # Initialize encoders for categorical features
+        for col in self.categorical_features:
+            if col in df.columns:
+                unique_values = df[col].unique()
+                # Create a mapping for each unique value to an integer
+                self.categorical_encoders[col] = {
+                    val: idx for idx, val in enumerate(unique_values)
+                }
+
+        # Store numerical feature statistics
+        for col in self.numerical_features:
+            if col in df.columns:
+                self.numerical_stats[col] = {
+                    'mean': df[col].mean(),
+                    'std': df[col].std(),
+                    'median': df[col].median(),
+                    'q99': df[col].quantile(0.99)
+                }
+
+        # Initialize label encoders for object columns
+        for col in self.object_columns:
+            if col in df.columns:
+                le = LabelEncoder()
+                le.fit(df[col].astype(str))
+                self.categorical_encoders[col] = le
+
+        self.is_fitted = True
+
+    def transform(self, df: pd.DataFrame, is_training: bool = False) -> pd.DataFrame:
+        """Transform data using fitted parameters."""
+        if not self.is_fitted and is_training:
+            self.fit(df)
+        elif not self.is_fitted:
+            raise ValueError("FeatureProcessor must be fitted before transform")
+
+        df = df.copy()
+
+        # Transform categorical features
+        for col in self.categorical_features:
+            if col in df.columns and col in self.categorical_encoders:
+                # Map known categories, set unknown to -1
+                df[col] = df[col].map(self.categorical_encoders[col]).fillna(-1)
+
+        # Handle numerical features
+        for col in self.numerical_features:
+            if col in df.columns and col in self.numerical_stats:
+                # Replace infinities
+                df[col] = df[col].replace([np.inf, -np.inf], np.nan)
+                
+                # Cap outliers using 99th percentile
+                q99 = self.numerical_stats[col]['q99']
+                df.loc[df[col] > q99, col] = q99
+                
+                # Fill NaN with median
+                median = self.numerical_stats[col]['median']
+                df[col] = df[col].fillna(median)
+
+        # Transform object columns
+        for col in self.object_columns:
+            if col in df.columns and col in self.categorical_encoders:
+                le = self.categorical_encoders[col]
+                # Transform known values, handle unknown ones
+                df[col] = df[col].astype(str)
+                known_categories = set(le.classes_)
+                unknown_mask = ~df[col].isin(known_categories)
+                
+                if unknown_mask.any():
+                    df.loc[unknown_mask, col] = le.classes_[0]  # Use first category for unknown
+                
+                df[col] = le.transform(df[col])
+
+        return df
+
+def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_training: bool = False):
+    """
+    Preprocess the data by encoding categorical features and separating features and labels.
+    Handles multi-class classification with three classes: benign (0), dns_tunneling (1), and icmp_tunneling (2).
+    
+    Args:
+        data (pd.DataFrame): Input DataFrame
+        processor (FeatureProcessor): Feature processor instance for consistent preprocessing
+        is_training (bool): Whether this is training data
+        
+    Returns:
+        tuple: (features DataFrame, labels Series or None if unlabeled)
+    """
+    if processor is None:
+        processor = FeatureProcessor()
+    
+    # Process features
+    df = processor.transform(data, is_training)
+    
+    # Handle labels
+    if 'label' in df.columns:
+        features = df.drop(columns=['label'])
+        labels = df['label'].astype(int)
+        
+        # Validate labels
+        unique_labels = labels.unique()
+        if not all(label in [0, 1, 2] for label in unique_labels):
+            print(f"Warning: Unexpected label values found: {unique_labels}")
+            labels = labels.map(lambda x: x if x in [0, 1, 2] else -1)
+        
+        return features, labels
+    else:
+        return df, None
 
 def load_csv_data(file_path: str) -> DatasetDict:
     """
@@ -74,61 +209,6 @@ def instantiate_partitioner(partitioner_type: str, num_partitions: int):
         num_partitions=num_partitions
     )
     return partitioner
-
-def preprocess_data(data):
-    """
-    Preprocess the data by encoding categorical features and separating features and labels.
-    Handles multi-class classification with three classes: benign (0), dns_tunneling (1), and icmp_tunneling (2).
-    
-    Args:
-        data (pd.DataFrame): Input DataFrame
-        
-    Returns:
-        tuple: (features DataFrame, labels Series or None if unlabeled)
-    """
-    # Define categorical and numerical features
-    categorical_features = ['id.orig_h', 'id.resp_h', 'proto', 'conn_state', 'history', 'validation_status', 'method', 'status_msg', 'is_orig']
-
-    numerical_features = ['id.orig_p', 'id.resp_p', 'duration', 'orig_bytes', 'resp_bytes',
-                      'local_orig', 'local_resp', 'missed_bytes', 'orig_pkts', 
-                      'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ts_delta', 
-                      'rtt', 'acks', 'percent_lost', 'request_body_len', 
-                      'response_body_len', 'seen_bytes', 'missing_bytes', 'overflow_bytes']
-
-    
-    # Create a copy to avoid modifying original data
-    df = data.copy()
-    
-    # Convert categorical features to category type
-    for col in categorical_features:
-        if col in df.columns:  # Only process if column exists
-            df[col] = df[col].astype('category')
-            # Get numerical codes for categories
-            df[col] = df[col].cat.codes
-    
-    # Ensure numerical features are float type
-    for col in numerical_features:
-        if col in df.columns:  # Only process if column exists
-            df[col] = df[col].astype(float)
-    
-    # Check if this is labeled or unlabeled data
-    if 'label' in df.columns:
-        features = df.drop(columns=['label'])
-        
-        # Convert labels to numeric type directly since they're already numeric
-        labels = df['label'].astype(int)
-        
-        # Validate that labels are within expected range (0, 1, 2)
-        unique_labels = labels.unique()
-        if not all(label in [0, 1, 2] for label in unique_labels):
-            print(f"Warning: Unexpected label values found: {unique_labels}")
-            # Map any unexpected values to -1
-            labels = labels.map(lambda x: x if x in [0, 1, 2] else -1)
-        
-        return features, labels
-    else:
-        # For unlabeled data
-        return df, None
 
 def preprocess_data_deprec2(data):
     """/
@@ -239,57 +319,56 @@ def separate_xy(data):
     """
     return preprocess_data(data.to_pandas())
 
-def transform_dataset_to_dmatrix(data):
+def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_training: bool = False):
     """
     Transform dataset to DMatrix format.
     
     Args:
         data: Input dataset
+        processor (FeatureProcessor): Feature processor instance for consistent preprocessing
+        is_training (bool): Whether this is training data
         
     Returns:
         xgb.DMatrix: Transformed dataset
     """
-    x, y = separate_xy(data)
-    
-    x_encoded = x.copy()
-    
-    # Encode object columns
-    object_columns = ['uid', 'client_initial_dcid', 'server_scid']
-    for col in object_columns:
-        if col in x_encoded.columns:
-            le = LabelEncoder()
-            x_encoded[col] = le.fit_transform(x_encoded[col].astype(str))
-    
-    return xgb.DMatrix(x_encoded, label=y, missing=np.nan)
+    x, y = preprocess_data(data.to_pandas(), processor=processor, is_training=is_training)
+    return xgb.DMatrix(x, label=y, missing=np.nan)
 
 def train_test_split(
-    partition: Dataset, 
-    test_fraction: float, 
-    seed: int
-) -> Tuple[Dataset, Dataset, int, int]:
+    data,
+    test_fraction: float = 0.2,
+    random_state: int = 42,
+) -> Tuple[xgb.DMatrix, xgb.DMatrix]:
     """
-    Split dataset into training and validation sets.
-
+    Split dataset into train and test sets.
+    
     Args:
-        partition (Dataset): Input dataset to split
+        data: Input dataset
         test_fraction (float): Fraction of data to use for testing
-        seed (int): Random seed for reproducibility
-
+        random_state (int): Random seed for reproducibility
+        
     Returns:
-        Tuple containing:
-            - Training dataset
-            - Test dataset
-            - Number of training samples
-            - Number of test samples
+        Tuple[xgb.DMatrix, xgb.DMatrix]: Training and test datasets
     """
-    train_test = partition.train_test_split(test_size=test_fraction, seed=seed)
-    partition_train = train_test["train"]
-    partition_test = train_test["test"]
-
-    num_train = len(partition_train)
-    num_test = len(partition_test)
-
-    return partition_train, partition_test, num_train, num_test
+    # Convert to pandas if needed
+    if not isinstance(data, pd.DataFrame):
+        data = data.to_pandas()
+        
+    # Split data
+    train_data, test_data = train_test_split_pandas(
+        data,
+        test_size=test_fraction,
+        random_state=random_state
+    )
+    
+    # Initialize feature processor on training data
+    processor = FeatureProcessor()
+    
+    # Transform train and test data using the same processor
+    train_dmatrix = transform_dataset_to_dmatrix(train_data, processor=processor, is_training=True)
+    test_dmatrix = transform_dataset_to_dmatrix(test_data, processor=processor, is_training=False)
+    
+    return train_dmatrix, test_dmatrix
 
 def resplit(dataset: DatasetDict) -> DatasetDict:
     """
