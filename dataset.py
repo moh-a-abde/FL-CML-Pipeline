@@ -336,8 +336,14 @@ def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_tr
     Returns:
         xgb.DMatrix: Transformed dataset
     """
-    x, y = preprocess_data(data.to_pandas(), processor=processor, is_training=is_training)
-    return xgb.DMatrix(x, label=y, missing=np.nan)
+    # The input 'data' should already be a pandas DataFrame in this context
+    x, y = preprocess_data(data, processor=processor, is_training=is_training)
+    
+    # Handle case where preprocess_data might return None for labels (e.g., unlabeled data)
+    if y is None:
+        return xgb.DMatrix(x, missing=np.nan)
+    else:
+        return xgb.DMatrix(x, label=y, missing=np.nan)
 
 def train_test_split(
     data,
