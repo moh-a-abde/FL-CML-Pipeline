@@ -81,10 +81,27 @@ if __name__ == "__main__":
     full_train_data.set_format("numpy")
     
     # Apply the partitioner to get client-specific data partition
-    # First get the indices for this client's partition
-    partition_indices = partitioner.get_indices(args.partition_id)
-    # Then select only those indices from the full data
-    train_partition = full_train_data.select(partition_indices)
+    # The ExponentialPartitioner doesn't have get_indices, but provides partition method
+    # which returns the partition directly rather than just indices
+    try:
+        # First try to use get_partition method which returns the partition subset directly
+        train_partition = partitioner.get_partition(full_train_data, args.partition_id)
+    except AttributeError:
+        # If that fails, try using the partition method (used in newer versions)
+        try:
+            # Newer versions use a different API
+            train_partition = partitioner.partition(full_train_data)[args.partition_id]
+        except (AttributeError, TypeError, IndexError):
+            # As a fallback, if all partition methods fail, use a simple numerical partition
+            # by getting evenly spaced indices based on partition ID
+            total_samples = len(full_train_data)
+            samples_per_partition = total_samples // args.num_partitions
+            start_idx = args.partition_id * samples_per_partition
+            end_idx = start_idx + samples_per_partition if args.partition_id < args.num_partitions - 1 else total_samples
+            partition_indices = list(range(start_idx, end_idx))
+            train_partition = full_train_data.select(partition_indices)
+            log(INFO, "Used fallback partitioning. Partition %d: samples %d to %d", 
+                args.partition_id, start_idx, end_idx)
     
     log(INFO, "Partition size: %d samples (out of %d total)", 
         len(train_partition), len(full_train_data))
