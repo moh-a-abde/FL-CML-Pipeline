@@ -126,21 +126,19 @@ class FeatureProcessor:
         for col in self.object_columns:
             if col in df.columns and col in self.categorical_encoders:
                 le = self.categorical_encoders[col]
-                # Transform known values, handle unknown ones
-                df[col] = df[col].astype(str)
-                known_categories = set(le.classes_)
-                unknown_mask = ~df[col].isin(known_categories)
-                
-                # Assign -1 to unknown categories instead of mapping to first known category
-                if unknown_mask.any():
-                    # df.loc[unknown_mask, col] = le.classes_[0]  # Original handling
-                    df.loc[unknown_mask, col] = -1 # Assign -1 for unknown
+                df[col] = df[col].astype(str) # Ensure input is string
 
-                # Transform known values, handling potential -1 assignment from above
-                # Need to filter out the -1 before transform and add it back
-                known_mask = ~unknown_mask
-                if known_mask.any():
-                   df.loc[known_mask, col] = le.transform(df.loc[known_mask, col])
+                # Initialize the transformed column with -1 (integer type)
+                transformed_col = pd.Series(-1, index=df.index, dtype=int)
+                
+                known_categories_mask = df[col].isin(le.classes_)
+
+                # Transform known values where the mask is True
+                if known_categories_mask.any():
+                    transformed_col.loc[known_categories_mask] = le.transform(df.loc[known_categories_mask, col])
+
+                # Assign the fully integer column back to the dataframe
+                df[col] = transformed_col
 
         return df
 
