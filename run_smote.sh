@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Define default partition ID
 PARTITION_ID=0
@@ -13,7 +14,7 @@ echo "Starting SMOTE-enhanced client with partition ID: $PARTITION_ID"
 python smote_client.py \
   --partition-id ${PARTITION_ID} \
   --train-method bagging \
-  --num-partitions 10 \
-  --partitioner-type uniform
+  --num-partitions 2 \
+  --partitioner-type exponential
 
 echo "SMOTE client execution completed" 
