@@ -39,12 +39,12 @@ BST_PARAMS = {
     'objective': 'multi:softmax',  # Multi-class classification
     'num_class': 3,  # Classes: benign (0), dns_tunneling (1), icmp_tunneling (2)
     'eval_metric': ['mlogloss', 'merror'],  # Multi-class metrics
-    'learning_rate': 0.1,
+    'learning_rate': 0.05,  # Reduced to match utils.py and prevent overfitting
     'max_depth': 6,
     'min_child_weight': 1,
     'subsample': 0.8,
     'colsample_bytree': 0.8,
-    'scale_pos_weight': [1.0, 3.0, 1.0]  # Adjusted: dns_tunneling gets higher weight to improve recall
+    'scale_pos_weight': [1.0, 2.0, 1.0]  # More moderate weight adjustment for dns_tunneling
 }
 
 class XgbClient(fl.client.Client):

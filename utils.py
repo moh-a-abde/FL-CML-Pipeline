@@ -20,7 +20,7 @@ BST_PARAMS = {
     "reg_alpha": 2.0,  # Increased L1 regularization
     "reg_lambda": 5.0,  # Increased L2 regularization
     "base_score": 0.5,  # Neutral starting point
-    "scale_pos_weight": [1.0, 3.0, 1.0],  # Adjusted weights: boost dns_tunneling (class index 1)
+    "scale_pos_weight": [1.0, 2.0, 1.0],  # More moderate weight adjustment for dns_tunneling
     "grow_policy": "lossguide",  # Alternative tree growing policy
     "normalize_type": "tree",  # Helps with interpretability
     "random_state": 42  # Fixed seed for reproducibility
