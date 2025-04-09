@@ -138,9 +138,8 @@ class FeatureProcessor:
                     std = self.numerical_stats[col]['std']
                     # If std is 0 or NaN, use a small default value
                     noise_scale = max(std, 0.1) * 0.05  # 5% of standard deviation
-                    # Commenting out noise application
-                    # noise = np.random.normal(0, noise_scale, size=df.shape[0])
-                    # df[col] = df[col] + noise
+                    noise = np.random.normal(0, noise_scale, size=df.shape[0])
+                    df[col] = df[col] + noise
                     
                 # Cap outliers using 99th percentile
                 q99 = self.numerical_stats[col]['q99']
@@ -158,9 +157,8 @@ class FeatureProcessor:
                 if not is_training and nan_mask.any():
                     # Add a tiny bit of noise to medians for previously NaN values
                     noise_scale = median * 0.01 if median != 0 else 0.001
-                    # Commenting out noise application
-                    # noise = np.random.normal(0, noise_scale, size=nan_mask.sum())
-                    # df.loc[nan_mask, col] += noise
+                    noise = np.random.normal(0, noise_scale, size=nan_mask.sum())
+                    df.loc[nan_mask, col] += noise
 
         return df
 
@@ -419,13 +417,8 @@ def train_test_split(
     # Use sklearn's train_test_split with shuffle=True to ensure data is properly randomized
     log(INFO, "Original data shape before splitting: %s", data.shape)
     
-    # Add multiple random noise features to make the problem harder
+    # Set random seed for consistency
     np.random.seed(random_state)
-    # Commenting out noise columns
-    # Add 3 noise columns with different distributions and scales
-    # data['random_noise1'] = np.random.normal(0, 0.5, size=data.shape[0])  # Gaussian noise (higher variance)
-    # data['random_noise2'] = np.random.uniform(-1, 1, size=data.shape[0])  # Uniform noise
-    # data['random_noise3'] = np.random.exponential(0.5, size=data.shape[0])  # Exponential noise
     
     # Check if 'label' column exists in data
     if 'label' not in data.columns:
@@ -503,11 +496,9 @@ def train_test_split(
             # Add noise only to numerical columns in test set
             col_std = test_data[col].std()
             if col_std > 0 and not pd.isna(col_std):
-                # Commenting out noise application
-                # noise_scale = col_std * 0.1  # 10% of standard deviation
-                # test_data[col] = test_data[col] + np.random.normal(0, noise_scale, size=test_data.shape[0])
-                # log(INFO, "Added noise to test column: %s", col)
-                pass  # Keeping the if-statement structure intact
+                noise_scale = col_std * 0.1  # 10% of standard deviation
+                test_data[col] = test_data[col] + np.random.normal(0, noise_scale, size=test_data.shape[0])
+                log(INFO, "Added noise to test column: %s", col)
     
     # Initialize feature processor
     processor = FeatureProcessor()
