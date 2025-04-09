@@ -298,6 +298,17 @@ def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_t
     # Process features
     df = processor.transform(data, is_training)
     
+    # Explicitly drop object columns that cause XGBoost errors
+    object_columns_to_drop = ['uid', 'client_initial_dcid', 'server_scid']
+    columns_dropped = []
+    for col in object_columns_to_drop:
+        if col in df.columns:
+            df = df.drop(columns=[col])
+            columns_dropped.append(col)
+    
+    if columns_dropped:
+        log(INFO, "Dropped object columns for XGBoost compatibility: %s", columns_dropped)
+    
     # Handle labels
     if 'label' in df.columns:
         features = df.drop(columns=['label'])
