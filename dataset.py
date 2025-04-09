@@ -134,12 +134,8 @@ class FeatureProcessor:
                 # Add noise to all numerical features for validation data
                 # This ensures validation is a truly independent test
                 if not is_training:
-                    # Add noise proportional to the standard deviation of each feature
-                    std = self.numerical_stats[col]['std']
-                    # If std is 0 or NaN, use a small default value
-                    noise_scale = max(std, 0.1) * 0.02  # 2% of standard deviation (reduced from 5%)
-                    noise = np.random.normal(0, noise_scale, size=df.shape[0])
-                    df[col] = df[col] + noise
+                    # Skip noise addition as it's now handled in train_test_split only
+                    pass
                     
                 # Cap outliers using 99th percentile
                 q99 = self.numerical_stats[col]['q99']
@@ -155,10 +151,8 @@ class FeatureProcessor:
                 
                 # Then add noise only to the previously NaN positions if not training
                 if not is_training and nan_mask.any():
-                    # Add a tiny bit of noise to medians for previously NaN values
-                    noise_scale = median * 0.005 if median != 0 else 0.0005  # 0.5% of median (reduced from 1%)
-                    noise = np.random.normal(0, noise_scale, size=nan_mask.sum())
-                    df.loc[nan_mask, col] += noise
+                    # Skip noise addition as it's now handled in train_test_split only
+                    pass
 
         return df
 
