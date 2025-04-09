@@ -137,7 +137,7 @@ class FeatureProcessor:
                     # Add noise proportional to the standard deviation of each feature
                     std = self.numerical_stats[col]['std']
                     # If std is 0 or NaN, use a small default value
-                    noise_scale = max(std, 0.1) * 0.05  # 5% of standard deviation
+                    noise_scale = max(std, 0.1) * 0.02  # 2% of standard deviation (reduced from 5%)
                     noise = np.random.normal(0, noise_scale, size=df.shape[0])
                     df[col] = df[col] + noise
                     
@@ -156,7 +156,7 @@ class FeatureProcessor:
                 # Then add noise only to the previously NaN positions if not training
                 if not is_training and nan_mask.any():
                     # Add a tiny bit of noise to medians for previously NaN values
-                    noise_scale = median * 0.01 if median != 0 else 0.001
+                    noise_scale = median * 0.005 if median != 0 else 0.0005  # 0.5% of median (reduced from 1%)
                     noise = np.random.normal(0, noise_scale, size=nan_mask.sum())
                     df.loc[nan_mask, col] += noise
 
@@ -496,7 +496,7 @@ def train_test_split(
             # Add noise only to numerical columns in test set
             col_std = test_data[col].std()
             if col_std > 0 and not pd.isna(col_std):
-                noise_scale = col_std * 0.1  # 10% of standard deviation
+                noise_scale = col_std * 0.05  # 5% of standard deviation (reduced from 10%)
                 test_data[col] = test_data[col] + np.random.normal(0, noise_scale, size=test_data.shape[0])
                 log(INFO, "Added noise to test column: %s", col)
     
