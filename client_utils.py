@@ -36,24 +36,15 @@ from server_utils import save_predictions_to_csv
 
 # Default XGBoost parameters for multi-class classification
 BST_PARAMS = {
-    'objective': 'multi:softmax',  # Changed to multi-class classification
-    'num_class': 3,  # Three classes: benign, dns_tunneling, icmp_tunneling
+    'objective': 'multi:softmax',  # Multi-class classification
+    'num_class': 3,  # Classes: benign (0), dns_tunneling (1), icmp_tunneling (2)
     'eval_metric': ['mlogloss', 'merror'],  # Multi-class metrics
-    'learning_rate': 0.05,  # Reduced learning rate for better generalization
-    'max_depth': 8,  # Increased depth to capture more complex patterns
-    'min_child_weight': 3,  # Adjusted to balance bias/variance
-    'gamma': 0.3,  # Minimum loss reduction for split
-    'subsample': 0.8,  # Sample fraction per tree to prevent overfitting
-    'colsample_bytree': 0.7,  # Feature sampling per tree
-    'colsample_bylevel': 0.7,  # Feature sampling per level
-    'max_delta_step': 2,
-    'reg_alpha': 0.5,  # L1 regularization
-    'reg_lambda': 1.5,  # L2 regularization
-    'base_score': 0.5,
-    # Adjusting class weights to give more importance to dns_tunneling which has lowest recall
-    'scale_pos_weight': [1.0, 2.5, 1.5],  # Higher weight for dns_tunneling class
-    'random_state': 42,  # For reproducibility
-    'early_stopping_rounds': 10  # Early stopping to prevent overfitting
+    'learning_rate': 0.1,
+    'max_depth': 6,
+    'min_child_weight': 1,
+    'subsample': 0.8,
+    'colsample_bytree': 0.8,
+    'scale_pos_weight': [1.0, 3.0, 1.0]  # Adjusted: dns_tunneling gets higher weight to improve recall
 }
 
 class XgbClient(fl.client.Client):
@@ -173,25 +164,6 @@ class XgbClient(fl.client.Client):
             class_name = class_names[i] if i < len(class_names) else f'unknown_{i}'
             log(INFO, f"Training data class {class_name}: {count}")
         
-        # Calculate class weights for balanced training
-        total_samples = len(y_train)
-        n_classes = len(class_names)
-        class_weights = total_samples / (n_classes * class_counts)
-        
-        # Assign sample weights based on class distribution
-        # This helps with imbalanced data handling
-        sample_weights = np.ones(len(y_train))
-        for i, weight in enumerate(class_weights):
-            sample_weights[y_train == i] = weight
-        
-        # Log the applied class weights for transparency
-        for i, weight in enumerate(class_weights):
-            class_name = class_names[i] if i < len(class_names) else f'unknown_{i}'
-            log(INFO, f"Applied weight for class {class_name}: {weight:.4f}")
-        
-        # Set sample weights in the DMatrix
-        self.train_dmatrix.set_weight(sample_weights)
-        
         global_round = int(ins.config["global_round"])
         
         if global_round == 1:
@@ -241,10 +213,7 @@ class XgbClient(fl.client.Client):
         
         # Generate predictions for multi-class classification
         y_pred_proba = bst.predict(self.valid_dmatrix, output_margin=True)  # Get raw predictions for mlogloss
-        y_pred_proba_softmax = np.exp(y_pred_proba) / np.sum(np.exp(y_pred_proba), axis=1, keepdims=True)
-        
-        # Apply calibrated thresholds to improve recall on dns_tunneling class
-        y_pred_labels = self._calibrated_prediction(y_pred_proba_softmax)
+        y_pred_labels = bst.predict(self.valid_dmatrix)  # Get class predictions
         
         # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
@@ -264,6 +233,7 @@ class XgbClient(fl.client.Client):
         
         # Calculate mlogloss manually
         epsilon = 1e-15  # Small constant to avoid log(0)
+        y_pred_proba_softmax = np.exp(y_pred_proba) / np.sum(np.exp(y_pred_proba), axis=1, keepdims=True)
         y_true_one_hot = np.zeros_like(y_pred_proba_softmax)
         y_true_one_hot[np.arange(len(y_true)), y_true.astype(int)] = 1
         mlogloss = -np.mean(np.sum(y_true_one_hot * np.log(y_pred_proba_softmax + epsilon), axis=1))
@@ -319,51 +289,3 @@ class XgbClient(fl.client.Client):
             num_examples=self.num_val,
             metrics=metrics
         )
-
-    def _calibrated_prediction(self, probabilities):
-        """
-        Apply calibrated decision thresholds to improve class prediction.
-        
-        This method applies modified thresholds to improve recall on dns_tunneling 
-        class which has been shown to be frequently misclassified as benign.
-        
-        Args:
-            probabilities (np.ndarray): Probability array from model prediction
-        
-        Returns:
-            np.ndarray: Predicted class labels after threshold adjustment
-        """
-        # Default predictions would use argmax (highest probability wins)
-        default_predictions = np.argmax(probabilities, axis=1)
-        
-        # Make a copy to avoid modifying the original
-        calibrated_predictions = default_predictions.copy()
-        
-        # Custom thresholds: we lower the threshold for dns_tunneling (class 1)
-        # to favor recall over precision for this class
-        dns_tunneling_idx = 1
-        dns_threshold = 0.25  # Lower than default 0.33 for 3-class problem
-        
-        # Find cases where dns_tunneling probability exceeds our lowered threshold
-        # but was not the highest probability
-        for i, probs in enumerate(probabilities):
-            # If the model didn't predict dns_tunneling
-            if default_predictions[i] != dns_tunneling_idx:
-                # But dns_tunneling probability is higher than our threshold
-                if probs[dns_tunneling_idx] >= dns_threshold:
-                    # And the difference between the highest prob and dns_tunneling 
-                    # prob is not too large (to prevent too many false positives)
-                    highest_prob = probs[default_predictions[i]]
-                    diff = highest_prob - probs[dns_tunneling_idx]
-                    
-                    # If the difference is small enough, change prediction to dns_tunneling
-                    if diff < 0.2:  # Adjustable parameter
-                        calibrated_predictions[i] = dns_tunneling_idx
-        
-        # Log the impact of threshold calibration
-        changes = np.sum(calibrated_predictions != default_predictions)
-        if changes > 0:
-            total = len(calibrated_predictions)
-            log(INFO, f"Threshold calibration changed {changes} predictions ({changes/total:.1%} of total)")
-        
-        return calibrated_predictions

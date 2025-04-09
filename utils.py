@@ -2,31 +2,28 @@ import argparse
 
 
 # Hyper-parameters for xgboost training
-NUM_LOCAL_ROUND = 3  # Increased from 1 to allow for more iterations
-
-# Updated parameters to improve performance based on confusion matrix analysis
+NUM_LOCAL_ROUND = 1
 BST_PARAMS = {
     "objective": "multi:softmax",
     "num_class": 3,
-    "eta": 0.05,  # Reduced learning rate for better generalization
-    "max_depth": 8,  # Increased depth to capture more complex patterns
-    "min_child_weight": 3,  # Adjusted to balance bias/variance
-    "gamma": 0.3,  # Minimum loss reduction for split
-    "subsample": 0.8,  # Sample fraction per tree to prevent overfitting
-    "colsample_bytree": 0.7,  # Feature sampling per tree
-    "colsample_bylevel": 0.7,  # Feature sampling per level
+    "eta": 0.05,  # Reduced learning rate to prevent overfitting
+    "max_depth": 3,  # Reduced max_depth to prevent memorization
+    "min_child_weight": 10,  # Increased to prevent fitting to small samples
+    "gamma": 1.0,  # Increased minimum loss reduction for split
+    "subsample": 0.7,  # Sample fewer rows per iteration
+    "colsample_bytree": 0.6,  # Sample fewer features per tree
+    "colsample_bylevel": 0.6,  # Sample fewer features per level
     "nthread": 16,
     "tree_method": "hist",
     "eval_metric": ["mlogloss", "merror"],
-    "max_delta_step": 2,
-    "reg_alpha": 0.5,  # L1 regularization
-    "reg_lambda": 1.5,  # L2 regularization
-    "base_score": 0.5,
-    # Adjusting class weights to give more importance to dns_tunneling which has lowest recall
-    "scale_pos_weight": [1.0, 2.5, 1.5],  # Higher weight for dns_tunneling class
-    "random_state": 42,  # For reproducibility
-    # Early stopping to prevent overfitting
-    "early_stopping_rounds": 10
+    "max_delta_step": 5,
+    "reg_alpha": 2.0,  # Increased L1 regularization
+    "reg_lambda": 5.0,  # Increased L2 regularization
+    "base_score": 0.5,  # Neutral starting point
+    "scale_pos_weight": [1.0, 3.0, 1.0],  # Adjusted weights: boost dns_tunneling (class index 1)
+    "grow_policy": "lossguide",  # Alternative tree growing policy
+    "normalize_type": "tree",  # Helps with interpretability
+    "random_state": 42  # Fixed seed for reproducibility
 }
 
 

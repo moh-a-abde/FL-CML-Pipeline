@@ -99,185 +99,68 @@ class FeatureProcessor:
 
         self.is_fitted = True
 
-    def transform(self, data, is_training=False):
-        """
-        Transform the data using encoding for categorical features and scaling for numerical features.
+    def transform(self, df: pd.DataFrame, is_training: bool = False) -> pd.DataFrame:
+        """Transform data using fitted parameters."""
+        if not self.is_fitted and is_training:
+            self.fit(df)
+        elif not self.is_fitted:
+            raise ValueError("FeatureProcessor must be fitted before transform")
+
+        df = df.copy()
         
-        Args:
-            data (pd.DataFrame): Input data
-            is_training (bool): Whether this is training data
-            
-        Returns:
-            pd.DataFrame: Transformed data
-        """
-        if not isinstance(data, pd.DataFrame):
-            data = data.to_pandas()
+        # Drop object columns since they might be causing data leakage
+        object_columns_to_remove = ['uid', 'client_initial_dcid', 'server_scid']
+        columns_dropped = []
+        for col in object_columns_to_remove:
+            if col in df.columns:
+                df.drop(columns=[col], inplace=True)
+                columns_dropped.append(col)
         
-        # Make a copy to avoid modifying original data
-        df = data.copy()
-        
-        # Generate derived features for better tunneling detection
-        df = self._add_derived_features(df)
-        
-        # Apply categorical encoding
+        if columns_dropped and not is_training:
+            log(INFO, "Dropped potential leakage columns: %s", columns_dropped)
+
+        # Transform categorical features
         for col in self.categorical_features:
-            if col in df.columns:
-                if is_training or not self.is_fitted:
-                    # For training or first-time fitting, learn the encoding
-                    if col not in self.categorical_encoders:
-                        # Simple label encoding - for production would use more robust approaches
-                        unique_values = df[col].astype(str).unique()
-                        self.categorical_encoders[col] = {val: i for i, val in enumerate(unique_values)}
-                
-                # Apply the encoding
-                if col in self.categorical_encoders:
-                    df[col] = df[col].astype(str).map(self.categorical_encoders[col]).fillna(-1).astype(int)
-                else:
-                    # Fallback for columns not seen during training
-                    df[col] = -1
-        
-        # Apply numerical scaling
+            if col in df.columns and col in self.categorical_encoders:
+                # Map known categories, set unknown to -1
+                df[col] = df[col].map(self.categorical_encoders[col]).fillna(-1)
+
+        # Handle numerical features with added noise for validation data
         for col in self.numerical_features:
-            if col in df.columns:
-                if is_training or not self.is_fitted:
-                    # For training, compute statistics
-                    self.numerical_stats[col] = {
-                        'mean': df[col].mean(),
-                        'std': df[col].std() if df[col].std() > 0 else 1.0  # Avoid division by zero
-                    }
+            if col in df.columns and col in self.numerical_stats:
+                # Replace infinities
+                df[col] = df[col].replace([np.inf, -np.inf], np.nan)
                 
-                # Apply the scaling
-                if col in self.numerical_stats:
-                    mean = self.numerical_stats[col]['mean']
+                # Add noise to all numerical features for validation data
+                # This ensures validation is a truly independent test
+                if not is_training:
+                    # Add noise proportional to the standard deviation of each feature
                     std = self.numerical_stats[col]['std']
-                    df[col] = (df[col] - mean) / std
-                else:
-                    # For columns not seen during training
-                    df[col] = 0.0
-        
-        # Mark as fitted after first training pass
-        if is_training and not self.is_fitted:
-            self.is_fitted = True
-        
+                    # If std is 0 or NaN, use a small default value
+                    noise_scale = max(std, 0.1) * 0.05  # 5% of standard deviation
+                    noise = np.random.normal(0, noise_scale, size=df.shape[0])
+                    df[col] = df[col] + noise
+                    
+                # Cap outliers using 99th percentile
+                q99 = self.numerical_stats[col]['q99']
+                df.loc[df[col] > q99, col] = q99  # Re-enabled outlier capping
+                
+                # Fill NaN with median plus small noise
+                median = self.numerical_stats[col]['median']
+                # Find NaN positions
+                nan_mask = df[col].isna()
+                
+                # First fill with median value
+                df[col] = df[col].fillna(median)
+                
+                # Then add noise only to the previously NaN positions if not training
+                if not is_training and nan_mask.any():
+                    # Add a tiny bit of noise to medians for previously NaN values
+                    noise_scale = median * 0.01 if median != 0 else 0.001
+                    noise = np.random.normal(0, noise_scale, size=nan_mask.sum())
+                    df.loc[nan_mask, col] += noise
+
         return df
-    
-    def _add_derived_features(self, df):
-        """
-        Add derived features to improve classification performance.
-        These features specifically target distinguishing tunneling traffic, especially DNS tunneling.
-        
-        Args:
-            df (pd.DataFrame): Input DataFrame
-            
-        Returns:
-            pd.DataFrame: DataFrame with added features
-        """
-        # Create a copy to avoid modifying the original
-        result = df.copy()
-        
-        # 1. Ratio of outgoing to incoming bytes/packets (asymmetry detection)
-        if 'orig_bytes' in result.columns and 'resp_bytes' in result.columns:
-            # Safe division handling zeros
-            result['bytes_ratio'] = result.apply(
-                lambda x: x['orig_bytes'] / max(1, x['resp_bytes']) 
-                if pd.notnull(x['orig_bytes']) and pd.notnull(x['resp_bytes']) 
-                else 0, axis=1
-            )
-        
-        if 'orig_pkts' in result.columns and 'resp_pkts' in result.columns:
-            # Safe division for packet ratio
-            result['pkts_ratio'] = result.apply(
-                lambda x: x['orig_pkts'] / max(1, x['resp_pkts'])
-                if pd.notnull(x['orig_pkts']) and pd.notnull(x['resp_pkts'])
-                else 0, axis=1
-            )
-        
-        # 2. Average bytes per packet (indicative of tunneling patterns)
-        if 'orig_bytes' in result.columns and 'orig_pkts' in result.columns:
-            result['avg_bytes_per_orig_pkt'] = result.apply(
-                lambda x: x['orig_bytes'] / max(1, x['orig_pkts'])
-                if pd.notnull(x['orig_bytes']) and pd.notnull(x['orig_pkts'])
-                else 0, axis=1
-            )
-        
-        if 'resp_bytes' in result.columns and 'resp_pkts' in result.columns:
-            result['avg_bytes_per_resp_pkt'] = result.apply(
-                lambda x: x['resp_bytes'] / max(1, x['resp_pkts'])
-                if pd.notnull(x['resp_bytes']) and pd.notnull(x['resp_pkts'])
-                else 0, axis=1
-            )
-        
-        # 3. Entropy features for DNS tunneling detection
-        # DNS tunneling often uses unusual domain lengths and patterns
-        if 'query' in result.columns:
-            # Query length is often a good indicator for DNS tunneling
-            result['query_length'] = result['query'].fillna('').astype(str).apply(len)
-            
-            # Number of subdomains - more subdomains often indicate tunneling
-            result['subdomain_count'] = result['query'].fillna('').astype(str).apply(
-                lambda x: x.count('.') if x else 0
-            )
-            
-            # Character diversity in query - encoded data has high entropy
-            from collections import Counter
-            import math
-            
-            def entropy(s):
-                """Calculate Shannon entropy of a string."""
-                if not s:
-                    return 0
-                counts = Counter(s)
-                probabilities = [float(c) / len(s) for c in counts.values()]
-                return -sum(p * math.log(p, 2) for p in probabilities)
-            
-            result['query_entropy'] = result['query'].fillna('').astype(str).apply(entropy)
-        
-        # 4. Duration-based features
-        if 'duration' in result.columns:
-            # Binary indicators for different duration ranges
-            result['is_short_duration'] = (result['duration'] <= 1.0).astype(int)
-            result['is_medium_duration'] = ((result['duration'] > 1.0) & (result['duration'] <= 10.0)).astype(int)
-            result['is_long_duration'] = (result['duration'] > 10.0).astype(int)
-        
-        # 5. Traffic intensity metrics
-        if 'duration' in result.columns and 'orig_bytes' in result.columns:
-            result['bytes_per_second'] = result.apply(
-                lambda x: x['orig_bytes'] / max(0.1, x['duration']) 
-                if pd.notnull(x['orig_bytes']) and pd.notnull(x['duration']) and x['duration'] > 0
-                else 0, axis=1
-            )
-        
-        # 6. Port-based features specifically for DNS tunneling
-        if 'id.resp_p' in result.columns:
-            # Is DNS port (53)? - Important for DNS tunneling detection
-            result['is_dns_port'] = (result['id.resp_p'] == 53).astype(int)
-            
-            # Is HTTPS port (443)? - Often used in comparisons
-            result['is_https_port'] = (result['id.resp_p'] == 443).astype(int)
-            
-            # Is HTTP port (80)? - Often used in comparisons
-            result['is_http_port'] = (result['id.resp_p'] == 80).astype(int)
-        
-        # 7. Protocol-specific features
-        if 'proto' in result.columns:
-            # One-hot encoding for important protocols
-            result['is_udp'] = (result['proto'] == 'udp').astype(int)
-            result['is_tcp'] = (result['proto'] == 'tcp').astype(int)
-            result['is_icmp'] = (result['proto'] == 'icmp').astype(int)
-        
-        # Add these derived features to the numerical_features list
-        new_numerical_features = [
-            'bytes_ratio', 'pkts_ratio', 'avg_bytes_per_orig_pkt', 
-            'avg_bytes_per_resp_pkt', 'query_length', 'subdomain_count',
-            'query_entropy', 'is_short_duration', 'is_medium_duration', 
-            'is_long_duration', 'bytes_per_second', 'is_dns_port',
-            'is_https_port', 'is_http_port', 'is_udp', 'is_tcp', 'is_icmp'
-        ]
-        
-        # Add only the features that were successfully created
-        self.numerical_features.extend([f for f in new_numerical_features if f in result.columns])
-        
-        return result
 
 def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_training: bool = False):
     """
@@ -297,17 +180,6 @@ def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_t
     
     # Process features
     df = processor.transform(data, is_training)
-    
-    # Explicitly drop object columns that cause XGBoost errors
-    object_columns_to_drop = ['uid', 'client_initial_dcid', 'server_scid']
-    columns_dropped = []
-    for col in object_columns_to_drop:
-        if col in df.columns:
-            df = df.drop(columns=[col])
-            columns_dropped.append(col)
-    
-    if columns_dropped:
-        log(INFO, "Dropped object columns for XGBoost compatibility: %s", columns_dropped)
     
     # Handle labels
     if 'label' in df.columns:
