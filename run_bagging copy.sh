@@ -6,13 +6,10 @@ echo "Starting server"
 python3 server.py --pool-size=2 --num-rounds=20 --num-clients-per-round=2 &
 sleep 30  # Sleep for 30s to give the server enough time to start
 
-# Start regular client (partition 0)
-echo "Starting regular client (partition 0)"
-python3 client.py --partition-id=0 --num-partitions=2 --partitioner-type=exponential &
-
-# Start SMOTE-enhanced client (partition 1)
-echo "Starting SMOTE-enhanced client (partition 1)"
-python3 smote_client.py --partition-id=1 --num-partitions=2 --partitioner-type=exponential &
+for i in `seq 0 1`; do
+    echo "Starting client $i"
+    python3 client.py --partition-id=$i --num-partitions=2 --partitioner-type=exponential &
+done
 
 # Enable CTRL+C to stop all background processes
 trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM
