@@ -112,7 +112,7 @@ jobs:
           mkdir -p tune_results
           
           # Run Ray Tune with reduced samples for CI/CD pipeline
-          bash run_ray_tune.sh --data-file "$SAMPLE_DATA" --num-samples 3 --cpus-per-trial 1 --output-dir "./tune_results"
+          bash run_ray_tune.sh --train-file "$SAMPLE_DATA_TRAIN" --test-file "$SAMPLE_DATA_TEST" --num-samples 3 --cpus-per-trial 1 --output-dir "./tune_results" 
           
           # Apply the tuned parameters to the federated learning system
           if [ -f "tune_results/best_params.json" ]; then
