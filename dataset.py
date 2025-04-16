@@ -481,19 +481,6 @@ def train_test_split(
         else:
             log(INFO, "Good: Train and test sets have completely separate UIDs (no overlap).")
     
-    # Add dataset-specific noise to test set to make it more challenging
-    # This helps prevent the model from simply memorizing patterns
-    for col in train_data.columns:
-        if col.startswith('id.') or col in ['proto', 'conn_state', 'duration', 'bytes']:
-            continue  # Skip these columns
-        if pd.api.types.is_numeric_dtype(train_data[col]):
-            # Add noise only to numerical columns in test set
-            col_std = test_data[col].std()
-            if col_std > 0 and not pd.isna(col_std):
-                noise_scale = col_std * 0.05  # 5% of standard deviation (reduced from 10%)
-                test_data[col] = test_data[col] + np.random.normal(0, noise_scale, size=test_data.shape[0])
-                log(INFO, "Added noise to test column: %s", col)
-    
     # Initialize feature processor
     processor = FeatureProcessor()
     
