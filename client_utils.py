@@ -288,8 +288,11 @@ class XgbClient(fl.client.Client):
         mlogloss = -np.mean(np.sum(y_true_one_hot * np.log(y_pred_proba_softmax + epsilon), axis=1))
         
         # Compute confusion matrix
-        conf_matrix = confusion_matrix(y_true, y_pred_labels)
-        
+        try:
+            conf_matrix = confusion_matrix(y_true, y_pred_labels)
+        except Exception:
+            conf_matrix = np.zeros((3, 3), dtype=int)
+
         # Generate detailed classification report
         class_report = classification_report(y_true, y_pred_labels, target_names=class_names)
         
@@ -330,6 +333,7 @@ class XgbClient(fl.client.Client):
             "conf_20": int(conf_matrix[2][0]),  # icmp misclassified as benign
             "conf_21": int(conf_matrix[2][1]),  # icmp misclassified as dns
             "conf_22": int(conf_matrix[2][2]),  # icmp correct
+            "confusion_matrix": conf_matrix.tolist() if conf_matrix is not None else None
         }
         
         return EvaluateRes(
