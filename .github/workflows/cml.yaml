@@ -91,28 +91,45 @@ jobs:
           # Check if data directory exists, create if not
           mkdir -p data/sample
           
-          # Download or use sample data for hyperparameter tuning
-          # If data is already available, use it; otherwise use a sample dataset
-          SAMPLE_DATA=""
-          for csv_file in $(find data -name "*.csv" | head -n 1); do
-            SAMPLE_DATA="$csv_file"
-            break
-          done
+          # Define train and test file paths
+          TRAIN_FILE="received/network_train_60.csv"
+          TEST_FILE="received/network_test_40_nolabel.csv"
           
-          if [ -z "$SAMPLE_DATA" ]; then
-            echo "No CSV data found, creating a sample dataset for tuning"
-            # Generate or download a sample dataset
-            python -c "import pandas as pd; import numpy as np; np.random.seed(42); n = 1000; df = pd.DataFrame({'feature1': np.random.normal(0, 1, n), 'feature2': np.random.normal(0, 1, n), 'feature3': np.random.normal(0, 1, n), 'feature4': np.random.normal(0, 1, n), 'feature5': np.random.normal(0, 1, n), 'label': np.random.choice([0, 1, 2], n)}); df.to_csv('data/sample/synthetic_data.csv', index=False)"
-            SAMPLE_DATA="data/sample/synthetic_data.csv"
+          # Check if the files exist, otherwise use sample data
+          if [ -f "$TRAIN_FILE" ] && [ -f "$TEST_FILE" ]; then
+            echo "Using network data files for hyperparameter tuning"
+          else
+            echo "Network data files not found, checking for any CSV data"
+            
+            # Try to find any CSV file to use as a fallback
+            SAMPLE_DATA=""
+            for csv_file in $(find data -name "*.csv" | head -n 1); do
+              SAMPLE_DATA="$csv_file"
+              break
+            done
+            
+            if [ -z "$SAMPLE_DATA" ]; then
+              echo "No CSV data found, creating a sample dataset for tuning"
+              # Generate synthetic data for train and test
+              python -c "import pandas as pd; import numpy as np; np.random.seed(42); n = 1000; df = pd.DataFrame({'feature1': np.random.normal(0, 1, n), 'feature2': np.random.normal(0, 1, n), 'feature3': np.random.normal(0, 1, n), 'feature4': np.random.normal(0, 1, n), 'feature5': np.random.normal(0, 1, n), 'label': np.random.choice([0, 1, 2], n)}); train = df.sample(frac=0.8, random_state=42); test = df.drop(train.index); train.to_csv('data/sample/synthetic_train.csv', index=False); test.to_csv('data/sample/synthetic_test.csv', index=False)"
+              TRAIN_FILE="data/sample/synthetic_train.csv"
+              TEST_FILE="data/sample/synthetic_test.csv"
+            else
+              # If we have a single file, create train/test split
+              python -c "import pandas as pd; from sklearn.model_selection import train_test_split; df = pd.read_csv('$SAMPLE_DATA'); train, test = train_test_split(df, test_size=0.2, random_state=42); train.to_csv('data/sample/split_train.csv', index=False); test.to_csv('data/sample/split_test.csv', index=False)"
+              TRAIN_FILE="data/sample/split_train.csv"
+              TEST_FILE="data/sample/split_test.csv"
+            fi
           fi
           
-          echo "Using dataset: $SAMPLE_DATA for hyperparameter tuning"
+          echo "Using train file: $TRAIN_FILE"
+          echo "Using test file: $TEST_FILE"
           
           # Create output directory for Ray Tune results
           mkdir -p tune_results
           
           # Run Ray Tune with reduced samples for CI/CD pipeline
-          bash run_ray_tune.sh --train-file "$SAMPLE_DATA_TRAIN" --test-file "$SAMPLE_DATA_TEST" --num-samples 3 --cpus-per-trial 1 --output-dir "./tune_results" 
+          bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples 3 --cpus-per-trial 1 --output-dir "./tune_results" 
           
           # Apply the tuned parameters to the federated learning system
           if [ -f "tune_results/best_params.json" ]; then
