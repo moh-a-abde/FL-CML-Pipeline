@@ -48,10 +48,27 @@ if centralised_eval:
 def custom_eval_config(rnd: int):
     return eval_config(rnd, output_dir)
 
+class CustomFedXgbBagging(FedXgbBagging):
+    def aggregate_evaluate(self, server_round, results, failures):
+        # Use the provided aggregation function if available
+        if self.evaluate_metrics_aggregation_fn is not None:
+            aggregated_result = self.evaluate_metrics_aggregation_fn([
+                (r.num_examples, r.metrics) for r in results
+            ])
+            # Ensure the result is a tuple (loss, dict)
+            if not (isinstance(aggregated_result, tuple) and len(aggregated_result) == 2):
+                raise TypeError("aggregate_evaluate must return (loss, dict)")
+            loss, metrics = aggregated_result
+            if not isinstance(metrics, dict):
+                raise TypeError("Metrics returned from aggregation must be a dictionary.")
+            return loss, metrics
+        # Fallback to super if no aggregation function is provided
+        return super().aggregate_evaluate(server_round, results, failures)
+
 # Define strategy
 if train_method == "bagging":
     # Bagging training
-    strategy = FedXgbBagging(
+    strategy = CustomFedXgbBagging(
         evaluate_function=get_evaluate_fn(test_dmatrix) if centralised_eval else None,
         fraction_fit=(float(num_clients_per_round) / pool_size),
         min_fit_clients=num_clients_per_round,
