@@ -64,6 +64,14 @@ class CustomFedXgbBagging(FedXgbBagging):
                     and isinstance(r[1], dict)
                 ):
                     eval_metrics.append(r)
+                # Case 3: Tuple of (client_proxy, EvaluateRes)
+                elif (
+                    isinstance(r, tuple)
+                    and len(r) == 2
+                    and hasattr(r[1], "num_examples")
+                    and hasattr(r[1], "metrics")
+                ):
+                    eval_metrics.append((r[1].num_examples, r[1].metrics))
                 else:
                     raise TypeError(
                         f"aggregate_evaluate: Unexpected result format: {type(r)}, value: {r}"
