@@ -136,20 +136,16 @@ def evaluate_metrics_aggregation(eval_metrics):
     Returns:
         tuple: (loss, aggregated_metrics)
     """
-    log(INFO, "[DEBUG] evaluate_metrics_aggregation called with eval_metrics type: %s", type(eval_metrics))
     total_num = sum([num for num, _ in eval_metrics])
-    
     # Log the raw metrics received from clients
     log(INFO, "Received metrics from %d clients", len(eval_metrics))
     for i, (num, metrics) in enumerate(eval_metrics):
         log(INFO, "Client %d metrics: %s", i+1, metrics.keys())
         if "mlogloss" in metrics:
             log(INFO, "Client %d mlogloss: %f", i+1, metrics["mlogloss"])
-    
     # Initialize aggregated metrics dictionary
     metrics_to_aggregate = ['precision', 'recall', 'f1', 'accuracy']
     aggregated_metrics = {}
-    
     # Aggregate weighted metrics
     for metric in metrics_to_aggregate:
         if all(metric in metrics for _, metrics in eval_metrics):
@@ -158,7 +154,6 @@ def evaluate_metrics_aggregation(eval_metrics):
         else:
             aggregated_metrics[metric] = 0.0
             log(INFO, "Metric %s not available in all client metrics", metric)
-    
     # Aggregate loss (using mlogloss)
     if all("mlogloss" in metrics for _, metrics in eval_metrics):
         client_losses = [metrics["mlogloss"] for _, metrics in eval_metrics]
@@ -169,10 +164,8 @@ def evaluate_metrics_aggregation(eval_metrics):
     else:
         loss = 0.0
         log(INFO, "Mlogloss not available in all client metrics")
-    
     aggregated_metrics["loss"] = loss  # Keep as "loss" for compatibility
     aggregated_metrics["mlogloss"] = loss  # Also store as mlogloss
-    
     # Aggregate confusion matrix
     aggregated_conf_matrix = None
     for num, metrics in eval_metrics:
@@ -180,20 +173,16 @@ def evaluate_metrics_aggregation(eval_metrics):
             conf_matrix = metrics["confusion_matrix"]
             if aggregated_conf_matrix is None:
                 aggregated_conf_matrix = [[0 for _ in range(len(conf_matrix[0]))] for _ in range(len(conf_matrix))]
-            
             # Add weighted confusion matrix
             for i in range(len(conf_matrix)):
                 for j in range(len(conf_matrix[0])):
                     aggregated_conf_matrix[i][j] += conf_matrix[i][j] * num
-    
     # Normalize confusion matrix by total examples
     if aggregated_conf_matrix is not None:
         for i in range(len(aggregated_conf_matrix)):
             for j in range(len(aggregated_conf_matrix[0])):
                 aggregated_conf_matrix[i][j] /= total_num
-    
     aggregated_metrics["confusion_matrix"] = aggregated_conf_matrix
-    
     # Log aggregated metrics
     log(INFO, "Aggregated metrics:")
     log(INFO, "  Precision (weighted): %f", aggregated_metrics["precision"])
@@ -203,12 +192,8 @@ def evaluate_metrics_aggregation(eval_metrics):
     log(INFO, "  Loss (mlogloss): %f", aggregated_metrics["loss"])
     if aggregated_conf_matrix is not None:
         log(INFO, "  Confusion Matrix:\n%s", aggregated_conf_matrix)
-    
     # Save aggregated results
     save_evaluation_results(aggregated_metrics, "aggregated")
-    
-    log(INFO, "[DEBUG] evaluate_metrics_aggregation returning loss type: %s, value: %s", type(loss), loss)
-    log(INFO, "[DEBUG] evaluate_metrics_aggregation returning aggregated_metrics type: %s, keys: %s", type(aggregated_metrics), list(aggregated_metrics.keys()))
     if not (isinstance(loss, (int, float)) and isinstance(aggregated_metrics, dict)):
         log(INFO, "[ERROR] Output of evaluate_metrics_aggregation is not (loss, dict): %s, %s", type(loss), type(aggregated_metrics))
         raise TypeError("evaluate_metrics_aggregation must return (loss, dict)")
