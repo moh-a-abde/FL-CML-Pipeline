@@ -4,6 +4,8 @@
 
 # Default values
 DATA_FILE=""
+TRAIN_FILE=""
+TEST_FILE=""
 NUM_SAMPLES=10
 CPUS_PER_TRIAL=1
 GPU_FRACTION=""
@@ -14,6 +16,14 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --data-file)
       DATA_FILE="$2"
+      shift 2
+      ;;
+    --train-file)
+      TRAIN_FILE="$2"
+      shift 2
+      ;;
+    --test-file)
+      TEST_FILE="$2"
       shift 2
       ;;
     --num-samples)
@@ -39,16 +49,21 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Check if data file is provided
-if [ -z "$DATA_FILE" ]; then
-  echo "Error: --data-file is required"
-  echo "Usage: $0 --data-file <path_to_csv_file> [--num-samples <number>] [--cpus-per-trial <number>] [--gpu-fraction <float>] [--output-dir <path>]"
+# Check if proper data sources are provided
+if [ -z "$DATA_FILE" ] && [ -z "$TRAIN_FILE" -o -z "$TEST_FILE" ]; then
+  echo "Error: Either --data-file or both --train-file and --test-file must be provided"
+  echo "Usage: $0 [--data-file <path_to_csv_file>] [--train-file <path_to_train_csv>] [--test-file <path_to_test_csv>] [--num-samples <number>] [--cpus-per-trial <number>] [--gpu-fraction <float>] [--output-dir <path>]"
   exit 1
 fi
 
 # Print hyperparameter tuning settings
 echo "===== XGBoost Hyperparameter Tuning with Ray Tune ====="
-echo "Data file: $DATA_FILE"
+if [ -n "$DATA_FILE" ]; then
+  echo "Data file: $DATA_FILE"
+else
+  echo "Training file: $TRAIN_FILE"
+  echo "Testing file: $TEST_FILE"
+fi
 echo "Number of hyperparameter samples: $NUM_SAMPLES"
 echo "CPUs per trial: $CPUS_PER_TRIAL"
 if [ -n "$GPU_FRACTION" ]; then
@@ -60,12 +75,22 @@ echo "Output directory: $OUTPUT_DIR"
 echo "======================================================="
 
 # Run the Ray Tune script
-python ray_tune_xgboost.py \
-  --data-file "$DATA_FILE" \
-  --num-samples "$NUM_SAMPLES" \
-  --cpus-per-trial "$CPUS_PER_TRIAL" \
-  $GPU_FRACTION \
-  --output-dir "$OUTPUT_DIR"
+if [ -n "$DATA_FILE" ]; then
+  python ray_tune_xgboost.py \
+    --data-file "$DATA_FILE" \
+    --num-samples "$NUM_SAMPLES" \
+    --cpus-per-trial "$CPUS_PER_TRIAL" \
+    $GPU_FRACTION \
+    --output-dir "$OUTPUT_DIR"
+else
+  python ray_tune_xgboost.py \
+    --train-file "$TRAIN_FILE" \
+    --test-file "$TEST_FILE" \
+    --num-samples "$NUM_SAMPLES" \
+    --cpus-per-trial "$CPUS_PER_TRIAL" \
+    $GPU_FRACTION \
+    --output-dir "$OUTPUT_DIR"
+fi
 
 # Check if the tuning completed successfully
 if [ $? -eq 0 ]; then
