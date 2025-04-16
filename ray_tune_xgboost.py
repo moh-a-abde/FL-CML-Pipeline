@@ -174,6 +174,7 @@ def train_xgboost_ray(config):
         'colsample_bytree': config['colsample_bytree'],
         'reg_alpha': config['reg_alpha'],
         'reg_lambda': config['reg_lambda'],
+        'gamma': config['gamma'],
         'seed': seed
     }
     if config.get('tree_method') == 'gpu_hist':
@@ -318,7 +319,10 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         "colsample_bytree": tune.uniform(0.5, 1.0),
         
         # Number of rounds
-        "num_boost_round": tune.randint(50, 200)
+        "num_boost_round": tune.randint(50, 200),
+        
+        # Add gamma for min split loss regularization
+        "gamma": tune.loguniform(1e-3, 5.0)
     }
     
     # Add GPU-specific parameter if GPU fraction is specified
@@ -419,6 +423,7 @@ def train_final_model(config, train_features, train_labels, test_features, test_
         'colsample_bytree': config['colsample_bytree'],
         'reg_alpha': config['reg_alpha'],
         'reg_lambda': config['reg_lambda'],
+        'gamma': config['gamma'],
         
         # Set the seed for reproducibility
         'seed': 42
