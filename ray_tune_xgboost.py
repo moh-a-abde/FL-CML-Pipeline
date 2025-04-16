@@ -25,7 +25,7 @@ from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_sc
 import logging
 
 # Import existing data processing code
-from dataset import load_csv_data, transform_dataset_to_dmatrix
+from dataset import load_csv_data, train_test_split, transform_dataset_to_dmatrix
 from utils import BST_PARAMS
 
 # Configure logging
@@ -108,13 +108,12 @@ def train_xgboost(config, train_data, test_data):
     
     return bst
 
-def tune_xgboost(train_file, test_file, num_samples=10, cpus_per_trial=1, gpu_fraction=None, output_dir="./tune_results"):
+def tune_xgboost(data_file, num_samples=10, cpus_per_trial=1, gpu_fraction=None, output_dir="./tune_results"):
     """
     Run hyperparameter tuning for XGBoost using Ray Tune.
     
     Args:
-        train_file (str): Path to the CSV training data file
-        test_file (str): Path to the CSV test data file
+        data_file (str): Path to the CSV data file
         num_samples (int): Number of hyperparameter combinations to try
         cpus_per_trial (int): CPUs to allocate per trial
         gpu_fraction (float): Fraction of GPU to use per trial (if None, no GPU is used)
@@ -127,18 +126,14 @@ def tune_xgboost(train_file, test_file, num_samples=10, cpus_per_trial=1, gpu_fr
     os.makedirs(output_dir, exist_ok=True)
     
     # Load and prepare data
-    logger.info("Loading training data from %s", train_file)
-    train_data = load_csv_data(train_file)["train"].to_pandas()
+    logger.info(f"Loading data from {data_file}")
+    data = load_csv_data(data_file)["train"].to_pandas()
     
-    logger.info("Loading test data from %s", test_file)
-    test_data = load_csv_data(test_file)["test"].to_pandas()
+    # Split the data and create DMatrix objects
+    train_dmatrix, valid_dmatrix, _ = train_test_split(data, test_fraction=0.2)
     
-    # Transform to DMatrix objects
-    train_dmatrix = transform_dataset_to_dmatrix(train_data, is_training=True)
-    valid_dmatrix = transform_dataset_to_dmatrix(test_data, is_training=False)
-    
-    logger.info("Training data size: %s", train_dmatrix.num_row())
-    logger.info("Validation data size: %s", valid_dmatrix.num_row())
+    logger.info(f"Training data size: {train_dmatrix.num_row()}")
+    logger.info(f"Validation data size: {valid_dmatrix.num_row()}")
     
     # Define the search space
     search_space = {
@@ -214,18 +209,18 @@ def tune_xgboost(train_file, test_file, num_samples=10, cpus_per_trial=1, gpu_fr
     logger.info("Best hyperparameters found:")
     logger.info(json.dumps(best_config, indent=2))
     logger.info("Best metrics:")
-    logger.info("  mlogloss: %.4f", best_metrics['mlogloss'])
-    logger.info("  merror: %.4f", best_metrics['merror'])
-    logger.info("  precision: %.4f", best_metrics['precision'])
-    logger.info("  recall: %.4f", best_metrics['recall'])
-    logger.info("  f1: %.4f", best_metrics['f1'])
-    logger.info("  accuracy: %.4f", best_metrics['accuracy'])
+    logger.info(f"  mlogloss: {best_metrics['mlogloss']:.4f}")
+    logger.info(f"  merror: {best_metrics['merror']:.4f}")
+    logger.info(f"  precision: {best_metrics['precision']:.4f}")
+    logger.info(f"  recall: {best_metrics['recall']:.4f}")
+    logger.info(f"  f1: {best_metrics['f1']:.4f}")
+    logger.info(f"  accuracy: {best_metrics['accuracy']:.4f}")
     
     # Save the best hyperparameters to a file
     best_params_file = os.path.join(output_dir, "best_params.json")
-    with open(best_params_file, 'w', encoding='utf-8') as f:
+    with open(best_params_file, 'w') as f:
         json.dump(best_config, f, indent=2)
-    logger.info("Best parameters saved to %s", best_params_file)
+    logger.info(f"Best parameters saved to {best_params_file}")
     
     # Train a final model with the best parameters
     train_final_model(best_config, train_dmatrix, valid_dmatrix, output_dir)
@@ -279,7 +274,7 @@ def train_final_model(config, train_data, test_data, output_dir):
     # Save the model
     model_path = os.path.join(output_dir, "best_model.json")
     final_model.save_model(model_path)
-    logger.info("Final model saved to %s", model_path)
+    logger.info(f"Final model saved to {model_path}")
     
     # Evaluate the model
     y_pred = final_model.predict(test_data)
@@ -293,18 +288,17 @@ def train_final_model(config, train_data, test_data, output_dir):
     
     # Log final performance
     logger.info("Final model performance:")
-    logger.info("  Precision: %.4f", precision)
-    logger.info("  Recall: %.4f", recall)
-    logger.info("  F1 Score: %.4f", f1)
-    logger.info("  Accuracy: %.4f", accuracy)
+    logger.info(f"  Precision: {precision:.4f}")
+    logger.info(f"  Recall: {recall:.4f}")
+    logger.info(f"  F1 Score: {f1:.4f}")
+    logger.info(f"  Accuracy: {accuracy:.4f}")
     
     return final_model
 
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Ray Tune for XGBoost hyperparameter optimization")
-    parser.add_argument("--train-file", type=str, required=True, help="Path to CSV training data file")
-    parser.add_argument("--test-file", type=str, required=True, help="Path to CSV test data file")
+    parser.add_argument("--data-file", type=str, required=True, help="Path to CSV data file")
     parser.add_argument("--num-samples", type=int, default=10, help="Number of hyperparameter combinations to try")
     parser.add_argument("--cpus-per-trial", type=int, default=1, help="CPUs per trial")
     parser.add_argument("--gpu-fraction", type=float, default=None, help="GPU fraction per trial (0.1 for 10%)")
@@ -313,8 +307,7 @@ def main():
     
     # Run the hyperparameter tuning
     tune_xgboost(
-        train_file=args.train_file,
-        test_file=args.test_file,
+        data_file=args.data_file,
         num_samples=args.num_samples,
         cpus_per_trial=args.cpus_per_trial,
         gpu_fraction=args.gpu_fraction,
