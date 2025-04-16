@@ -59,6 +59,9 @@ if __name__ == "__main__":
     #labeled_dataset = load_csv_data(latest_csv_path)
     #unlabeled_dataset = load_csv_data(latest_csv_path)
     
+    # Ensure data/received/ directory exists
+    os.makedirs("data/received", exist_ok=True)
+    
     # Load labeled data for training
     labeled_csv_path = "data/received/network_train_60.csv"
     labeled_dataset = load_csv_data(labeled_csv_path)

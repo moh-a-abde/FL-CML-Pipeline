@@ -468,6 +468,8 @@ def train_final_model(config, train_features, train_labels, test_features, test_
     return final_model
 
 def main():
+    # Ensure data/received/ directory exists
+    os.makedirs("data/received", exist_ok=True)
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Ray Tune for XGBoost hyperparameter optimization")
     parser.add_argument("--data-file", type=str, help="Path to single CSV data file (optional if train and test files are provided)")
