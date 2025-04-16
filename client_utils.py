@@ -33,6 +33,7 @@ import numpy as np
 import pandas as pd
 import os
 from server_utils import save_predictions_to_csv
+import importlib.util
 
 # Default XGBoost parameters for multi-class classification
 BST_PARAMS = {
@@ -46,6 +47,25 @@ BST_PARAMS = {
     'colsample_bytree': 0.8,
     'scale_pos_weight': [1.0, 2.0, 1.0]  # More moderate weight adjustment for dns_tunneling
 }
+
+# Try to import tuned parameters if available
+try:
+    # Check if tuned_params.py exists
+    tuned_params_path = os.path.join(os.path.dirname(__file__), "tuned_params.py")
+    if os.path.exists(tuned_params_path):
+        # Dynamically import the tuned parameters
+        spec = importlib.util.spec_from_file_location("tuned_params", tuned_params_path)
+        tuned_params_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tuned_params_module)
+        
+        # Use the tuned parameters
+        TUNED_PARAMS = tuned_params_module.TUNED_PARAMS
+        log(INFO, "Using tuned XGBoost parameters from Ray Tune optimization")
+    else:
+        TUNED_PARAMS = BST_PARAMS.copy()
+except Exception as e:
+    log(INFO, f"Could not load tuned parameters: {str(e)}")
+    TUNED_PARAMS = BST_PARAMS.copy()
 
 class XgbClient(fl.client.Client):
     """
@@ -76,7 +96,8 @@ class XgbClient(fl.client.Client):
         params=None,
         train_method="cyclic",
         is_prediction_only=False,
-        unlabeled_dmatrix=None
+        unlabeled_dmatrix=None,
+        use_tuned_params=True
     ):
         """
         Initialize the XGBoost Flower client.
@@ -91,13 +112,23 @@ class XgbClient(fl.client.Client):
             train_method (str): Training method ('bagging' or 'cyclic')
             is_prediction_only (bool): Flag indicating if the client is used for prediction only
             unlabeled_dmatrix: Unlabeled data in DMatrix format
+            use_tuned_params (bool): Whether to use tuned parameters if available
         """
         self.train_dmatrix = train_dmatrix
         self.valid_dmatrix = valid_dmatrix
         self.num_train = num_train
         self.num_val = num_val
         self.num_local_round = num_local_round
-        self.params = params if params is not None else BST_PARAMS.copy()
+        
+        # Use tuned parameters if available and requested
+        if params is not None:
+            self.params = params
+        elif use_tuned_params:
+            self.params = TUNED_PARAMS.copy()
+            log(INFO, "Using tuned parameters for XGBoost training")
+        else:
+            self.params = BST_PARAMS.copy()
+            
         self.train_method = train_method
         self.is_prediction_only = is_prediction_only
         self.unlabeled_dmatrix = unlabeled_dmatrix

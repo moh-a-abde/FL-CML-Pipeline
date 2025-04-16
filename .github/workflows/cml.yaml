@@ -43,9 +43,82 @@ jobs:
           pip install hydra-core
           pip install imbalanced-learn
           pip install -r requirements.txt
-          #python sim.py
+      
+      - name: Run Ray Tune hyperparameter optimization
+        run: |
+          source venv/bin/activate
+          # Check if data directory exists, create if not
+          mkdir -p data/sample
+          
+          # Download or use sample data for hyperparameter tuning
+          # If data is already available, use it; otherwise use a sample dataset
+          SAMPLE_DATA=""
+          for csv_file in $(find data -name "*.csv" | head -n 1); do
+            SAMPLE_DATA="$csv_file"
+            break
+          done
+          
+          if [ -z "$SAMPLE_DATA" ]; then
+            echo "No CSV data found, creating a sample dataset for tuning"
+            # Generate or download a sample dataset
+            python -c "import pandas as pd; import numpy as np; np.random.seed(42); n = 1000; df = pd.DataFrame({'feature1': np.random.normal(0, 1, n), 'feature2': np.random.normal(0, 1, n), 'feature3': np.random.normal(0, 1, n), 'feature4': np.random.normal(0, 1, n), 'feature5': np.random.normal(0, 1, n), 'label': np.random.choice([0, 1, 2], n)}); df.to_csv('data/sample/synthetic_data.csv', index=False)"
+            SAMPLE_DATA="data/sample/synthetic_data.csv"
+          fi
+          
+          echo "Using dataset: $SAMPLE_DATA for hyperparameter tuning"
+          
+          # Create output directory for Ray Tune results
+          mkdir -p tune_results
+          
+          # Run Ray Tune with reduced samples for CI/CD pipeline
+          bash run_ray_tune.sh --data-file "$SAMPLE_DATA" --num-samples 3 --cpus-per-trial 1 --output-dir "./tune_results"
+          
+          # Apply the tuned parameters to the federated learning system
+          if [ -f "tune_results/best_params.json" ]; then
+            python use_tuned_params.py --params-file "./tune_results/best_params.json"
+            echo "Successfully applied tuned parameters to federated learning"
+          else
+            echo "Warning: No tuned parameters found, will use default parameters"
+          fi
+      
+      - name: Run federated learning pipeline
+        run: |
+          source venv/bin/activate
+          # Run the federated learning with tuned parameters
           ./run_bagging.sh
-          #python use_saved_model.py --model_path outputs/2025-02-27/04-38-36/final_model.json --data_path data/received/data/received/network_traffic_20250226_200827.csv --output_path outputs/pretrained/predictions_pretrained_model.csv
+      
+      - name: Evaluate model performance
+        run: |
+          source venv/bin/activate
+          # Compare model performance with and without tuned parameters
+          echo "## XGBoost Model Performance" > model_performance.md
+          echo "" >> model_performance.md
+          
+          # Extract metrics from the results directory
+          if [ -d "results" ]; then
+            echo "### Federated Learning Results" >> model_performance.md
+            echo "" >> model_performance.md
+            echo "| Metric | Value |" >> model_performance.md
+            echo "| ------ | ----- |" >> model_performance.md
+            
+            # Extract and add key metrics if available
+            for metric_file in $(find results -name "*.txt" | grep -i "metrics\|accuracy\|f1\|precision\|recall"); do
+              metric_name=$(basename "$metric_file" .txt)
+              metric_value=$(cat "$metric_file" | head -n 1)
+              echo "| $metric_name | $metric_value |" >> model_performance.md
+            done
+          fi
+          
+          # Add Ray Tune optimization results
+          if [ -f "tune_results/best_params.json" ]; then
+            echo "" >> model_performance.md
+            echo "### Hyperparameter Optimization Results" >> model_performance.md
+            echo "" >> model_performance.md
+            echo "Best hyperparameters:" >> model_performance.md
+            echo '```json' >> model_performance.md
+            cat tune_results/best_params.json >> model_performance.md
+            echo '```' >> model_performance.md
+          fi
 
       - name: Commit results file
         run: |
@@ -53,14 +126,20 @@ jobs:
           git config --local user.name "moh-a-abde"
 
           git checkout multi-class-predictions
+          # Add Ray Tune results
+          git add tune_results/
+          
           # Add aggegrated results files
           git add results/
+          
+          # Add model performance report
+          git add model_performance.md
           
           # Add new files in outputs directory
           git add outputs/
           
           # Commit all changes
-          git commit -m "workflow in action🚀"
+          git commit -m "workflow with Ray Tune optimization in action🚀"
 
       - name: Push changes
         uses: ad-m/github-push-action@master
