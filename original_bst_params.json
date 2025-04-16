@@ -1,0 +1,29 @@
+{
+  "objective": "multi:softmax",
+  "num_class": 3,
+  "eta": 0.05,
+  "max_depth": 3,
+  "min_child_weight": 10,
+  "gamma": 1.0,
+  "subsample": 0.7,
+  "colsample_bytree": 0.6,
+  "colsample_bylevel": 0.6,
+  "nthread": 16,
+  "tree_method": "hist",
+  "eval_metric": [
+    "mlogloss",
+    "merror"
+  ],
+  "max_delta_step": 5,
+  "reg_alpha": 2.0,
+  "reg_lambda": 5.0,
+  "base_score": 0.5,
+  "scale_pos_weight": [
+    1.0,
+    2.0,
+    1.0
+  ],
+  "grow_policy": "lossguide",
+  "normalize_type": "tree",
+  "random_state": 42
+}
