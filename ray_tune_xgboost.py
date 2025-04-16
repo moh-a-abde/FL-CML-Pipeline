@@ -471,8 +471,8 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Ray Tune for XGBoost hyperparameter optimization")
     parser.add_argument("--data-file", type=str, help="Path to single CSV data file (optional if train and test files are provided)")
-    parser.add_argument("--train-file", type=str, help="Path to training CSV data file")
-    parser.add_argument("--test-file", type=str, help="Path to testing CSV data file")
+    parser.add_argument("--train-file", type=str, default="data/received/network_train_60.csv", help="Path to training CSV data file")
+    parser.add_argument("--test-file", type=str, default="data/received/network_test_40_nolabel.csv", help="Path to testing CSV data file")
     parser.add_argument("--num-samples", type=int, default=10, help="Number of hyperparameter combinations to try")
     parser.add_argument("--cpus-per-trial", type=int, default=1, help="CPUs per trial")
     parser.add_argument("--gpu-fraction", type=float, default=None, help="GPU fraction per trial (0.1 for 10%)")
