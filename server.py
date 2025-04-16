@@ -70,60 +70,21 @@ if train_method == "bagging":
     
     def patched_aggregate_evaluate(server_round, eval_results, failures):
         log(INFO, "Aggregating evaluation results for round %s", server_round)
-        
         # Call the original function
         aggregated_result = original_aggregate_evaluate(server_round, eval_results, failures)
-        
-        # Check the format of the result
+        log(INFO, "[DEBUG] aggregate_evaluate received aggregated_result type: %s, value: %s", type(aggregated_result), aggregated_result)
+        # Expect (loss, metrics_dict)
         if isinstance(aggregated_result, tuple) and len(aggregated_result) == 2:
-            # The result is already in the correct format (loss, metrics)
             loss, metrics = aggregated_result
-            
             log(INFO, "Aggregated loss for round %s: %s", server_round, loss)
-            
-            # Check if metrics is a dictionary before trying to access keys
             if isinstance(metrics, dict):
                 log(INFO, "Metrics for round %s: %s", server_round, metrics.keys())
             else:
-                log(INFO, "Metrics for round %s is not a dictionary: %s", server_round, type(metrics))
-                
-                # If metrics is not a dictionary, create a new dictionary
-                if metrics is None:
-                    metrics = {}
-                elif not isinstance(metrics, dict):
-                    # Try to convert to dictionary if possible
-                    try:
-                        metrics = dict(metrics)
-                    except (TypeError, ValueError):
-                        # If conversion fails, create a new dictionary with the original metrics as a value
-                        metrics = {"original_metrics": metrics}
-                
-                log(INFO, "Created new metrics dictionary: %s", metrics)
-            
-            # Return the result in the correct format
+                log(INFO, "[ERROR] Metrics for round %s is not a dictionary: %s", server_round, type(metrics))
+                raise TypeError("Metrics returned from aggregation must be a dictionary.")
             return loss, metrics
-        
-        # The result is not in the expected format
-        log(INFO, "Unexpected format from original_aggregate_evaluate: %s", type(aggregated_result))
-        
-        # Try to extract loss and metrics
-        if isinstance(aggregated_result, (int, float)):
-            # Only loss was returned
-            loss = aggregated_result
-            metrics = {}
-        elif isinstance(aggregated_result, dict):
-            # Only metrics were returned
-            loss = aggregated_result.get("loss", 0.0)
-            metrics = aggregated_result
-        else:
-            # Unknown format, use defaults
-            loss = 0.0
-            metrics = {}
-        
-        log(INFO, "Extracted loss: %s, metrics: %s", loss, metrics)
-        
-        # Return in the correct format
-        return loss, metrics
+        log(INFO, "[ERROR] Unexpected format from aggregate_evaluate: %s", type(aggregated_result))
+        raise TypeError("aggregate_evaluate must return (loss, dict)")
     
     strategy.aggregate_evaluate = patched_aggregate_evaluate
 else:
