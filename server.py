@@ -50,19 +50,20 @@ def custom_eval_config(rnd: int):
 
 class CustomFedXgbBagging(FedXgbBagging):
     def aggregate_evaluate(self, server_round, results, failures):
-        # Use the provided aggregation function if available
+        # Support both object and tuple result formats
         if self.evaluate_metrics_aggregation_fn is not None:
-            aggregated_result = self.evaluate_metrics_aggregation_fn([
-                (r.num_examples, r.metrics) for r in results
-            ])
-            # Ensure the result is a tuple (loss, dict)
+            try:
+                eval_metrics = [(r.num_examples, r.metrics) for r in results]
+            except AttributeError:
+                # Fallback: assume results is already a list of tuples
+                eval_metrics = results
+            aggregated_result = self.evaluate_metrics_aggregation_fn(eval_metrics)
             if not (isinstance(aggregated_result, tuple) and len(aggregated_result) == 2):
                 raise TypeError("aggregate_evaluate must return (loss, dict)")
             loss, metrics = aggregated_result
             if not isinstance(metrics, dict):
                 raise TypeError("Metrics returned from aggregation must be a dictionary.")
             return loss, metrics
-        # Fallback to super if no aggregation function is provided
         return super().aggregate_evaluate(server_round, results, failures)
 
 # Define strategy
