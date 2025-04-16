@@ -34,6 +34,7 @@ import pandas as pd
 import os
 from server_utils import save_predictions_to_csv
 import importlib.util
+from sklearn.utils.class_weight import compute_sample_weight
 
 # Default XGBoost parameters for multi-class classification
 BST_PARAMS = {
@@ -186,6 +187,17 @@ class XgbClient(fl.client.Client):
         """
         Perform local model training.
         """
+        # --- PHASE 1: Aggressive Regularization (Overrides any loaded/tuned params) ---
+        self.params.update({
+            'max_depth': 3,
+            'reg_lambda': 10.0,  # L2
+            'reg_alpha': 2.0,    # L1
+            'min_child_weight': 5,
+            'subsample': 0.8,
+            'colsample_bytree': 0.8,
+            'eta': 0.1
+        })
+
         y_train = self.train_dmatrix.get_label()
         class_counts = np.bincount(y_train.astype(int))
         
@@ -195,15 +207,21 @@ class XgbClient(fl.client.Client):
             class_name = class_names[i] if i < len(class_names) else f'unknown_{i}'
             log(INFO, f"Training data class {class_name}: {count}")
         
+        # Compute sample weights for class imbalance
+        sample_weights = compute_sample_weight('balanced', y_train)
+        # Create a new DMatrix with weights for training
+        dtrain_weighted = xgb.DMatrix(self.train_dmatrix.get_data(), label=y_train, weight=sample_weights, feature_names=self.train_dmatrix.feature_names)
+
         global_round = int(ins.config["global_round"])
         
         if global_round == 1:
-            # First round: train from scratch
+            # First round: train from scratch with sample weights
             bst = xgb.train(
                 self.params,
-                self.train_dmatrix,
+                dtrain_weighted,
                 num_boost_round=self.num_local_round,
-                evals=[(self.valid_dmatrix, "validate"), (self.train_dmatrix, "train")],
+                evals=[(self.valid_dmatrix, "validate"), (dtrain_weighted, "train")],
+                early_stopping_rounds=20,
                 verbose_eval=True
             )
         else:
