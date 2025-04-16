@@ -136,6 +136,7 @@ def evaluate_metrics_aggregation(eval_metrics):
     Returns:
         tuple: (loss, aggregated_metrics)
     """
+    log(INFO, "[DEBUG] evaluate_metrics_aggregation called with eval_metrics type: %s", type(eval_metrics))
     total_num = sum([num for num, _ in eval_metrics])
     
     # Log the raw metrics received from clients
@@ -206,6 +207,11 @@ def evaluate_metrics_aggregation(eval_metrics):
     # Save aggregated results
     save_evaluation_results(aggregated_metrics, "aggregated")
     
+    log(INFO, "[DEBUG] evaluate_metrics_aggregation returning loss type: %s, value: %s", type(loss), loss)
+    log(INFO, "[DEBUG] evaluate_metrics_aggregation returning aggregated_metrics type: %s, keys: %s", type(aggregated_metrics), list(aggregated_metrics.keys()))
+    if not (isinstance(loss, (int, float)) and isinstance(aggregated_metrics, dict)):
+        log(INFO, "[ERROR] Output of evaluate_metrics_aggregation is not (loss, dict): %s, %s", type(loss), type(aggregated_metrics))
+        raise TypeError("evaluate_metrics_aggregation must return (loss, dict)")
     return loss, aggregated_metrics
 
 def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None, true_labels=None, prediction_types=None):
