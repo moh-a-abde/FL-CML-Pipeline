@@ -50,13 +50,24 @@ def custom_eval_config(rnd: int):
 
 class CustomFedXgbBagging(FedXgbBagging):
     def aggregate_evaluate(self, server_round, results, failures):
-        # Support both object and tuple result formats
         if self.evaluate_metrics_aggregation_fn is not None:
-            try:
-                eval_metrics = [(r.num_examples, r.metrics) for r in results]
-            except AttributeError:
-                # Fallback: assume results is already a list of tuples
-                eval_metrics = results
+            eval_metrics = []
+            for r in results:
+                # Case 1: Object with num_examples and metrics
+                if hasattr(r, "num_examples") and hasattr(r, "metrics"):
+                    eval_metrics.append((r.num_examples, r.metrics))
+                # Case 2: Tuple of (num_examples, metrics_dict)
+                elif (
+                    isinstance(r, tuple)
+                    and len(r) == 2
+                    and isinstance(r[0], (int, float))
+                    and isinstance(r[1], dict)
+                ):
+                    eval_metrics.append(r)
+                else:
+                    raise TypeError(
+                        f"aggregate_evaluate: Unexpected result format: {type(r)}, value: {r}"
+                    )
             aggregated_result = self.evaluate_metrics_aggregation_fn(eval_metrics)
             if not (isinstance(aggregated_result, tuple) and len(aggregated_result) == 2):
                 raise TypeError("aggregate_evaluate must return (loss, dict)")
