@@ -332,8 +332,7 @@ class XgbClient(fl.client.Client):
             "conf_12": int(conf_matrix[1][2]),  # dns misclassified as icmp
             "conf_20": int(conf_matrix[2][0]),  # icmp misclassified as benign
             "conf_21": int(conf_matrix[2][1]),  # icmp misclassified as dns
-            "conf_22": int(conf_matrix[2][2]),  # icmp correct
-            "confusion_matrix": conf_matrix.tolist() if conf_matrix is not None else None
+            "conf_22": int(conf_matrix[2][2])   # icmp correct
         }
         
         return EvaluateRes(
