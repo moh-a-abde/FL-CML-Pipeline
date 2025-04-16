@@ -24,10 +24,9 @@ from ray.tune.search.basic_variant import BasicVariantGenerator
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, log_loss
 import logging
 from ray.air.config import RunConfig
-from sklearn.utils.class_weight import compute_sample_weight
 
 # Import existing data processing code
-from dataset import load_csv_data, transform_dataset_to_dmatrix, FeatureProcessor
+from dataset import load_csv_data, transform_dataset_to_dmatrix
 from utils import BST_PARAMS
 
 # Configure logging
@@ -114,104 +113,6 @@ def train_xgboost(config, train_features, train_labels, test_features, test_labe
         "accuracy": accuracy
     }
 
-def train_xgboost_ray(config):
-    """
-    Ray Tune objective function: fully self-contained, matches client logic, ensures reproducibility and no data leakage.
-    """
-    import random
-    import numpy as np
-    import pandas as pd
-    import xgboost as xgb
-    from sklearn.utils.class_weight import compute_sample_weight
-    from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, log_loss
-    from dataset import load_csv_data, FeatureProcessor
-    import os
-    from ray import tune
-
-    # Set seeds for reproducibility
-    seed = config.get('seed', 42)
-    random.seed(seed)
-    np.random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-
-    # Data loading and splitting (Option B: split train file into train/val)
-    train_file = config.get('train_file')
-    assert train_file is not None, "train_file must be provided in config"
-    data = load_csv_data(train_file)["train"].to_pandas()
-    if 'label' not in data.columns and 'Label' in data.columns:
-        data['label'] = data['Label']
-    from sklearn.model_selection import train_test_split
-    train_df, val_df = train_test_split(data, test_size=0.2, random_state=seed, stratify=data['label'])
-
-    # FeatureProcessor: fit on train, transform both
-    processor = FeatureProcessor()
-    processor.fit(train_df)
-    train_processed = processor.transform(train_df, is_training=True)
-    val_processed = processor.transform(val_df, is_training=False)
-
-    # Extract features/labels
-    X_train = train_processed.drop(columns=['label'])
-    y_train = train_processed['label'].astype(int)
-    X_val = val_processed.drop(columns=['label'])
-    y_val = val_processed['label'].astype(int)
-
-    # Sample weighting for class imbalance
-    sample_weights = compute_sample_weight('balanced', y_train)
-
-    # DMatrix creation
-    dtrain = xgb.DMatrix(X_train, label=y_train, weight=sample_weights)
-    dval = xgb.DMatrix(X_val, label=y_val)
-
-    # Prepare XGBoost params
-    params = {
-        'objective': 'multi:softmax',
-        'num_class': 3,
-        'eval_metric': ['mlogloss', 'merror'],
-        'max_depth': config['max_depth'],
-        'min_child_weight': config['min_child_weight'],
-        'eta': config['eta'],
-        'subsample': config['subsample'],
-        'colsample_bytree': config['colsample_bytree'],
-        'reg_alpha': config['reg_alpha'],
-        'reg_lambda': config['reg_lambda'],
-        'gamma': config['gamma'],
-        'seed': seed
-    }
-    if config.get('tree_method') == 'gpu_hist':
-        params['tree_method'] = 'gpu_hist'
-
-    # Train with early stopping
-    evals_result = {}
-    bst = xgb.train(
-        params,
-        dtrain,
-        num_boost_round=config['num_boost_round'],
-        evals=[(dval, 'eval'), (dtrain, 'train')],
-        early_stopping_rounds=20,
-        evals_result=evals_result,
-        verbose_eval=False
-    )
-    best_iter = bst.best_iteration if hasattr(bst, 'best_iteration') else len(evals_result['eval']['mlogloss']) - 1
-
-    # Metrics
-    y_pred = bst.predict(dval)
-    precision = precision_score(y_val, y_pred, average='weighted')
-    recall = recall_score(y_val, y_pred, average='weighted')
-    f1 = f1_score(y_val, y_pred, average='weighted')
-    accuracy = accuracy_score(y_val, y_pred)
-    mlogloss = evals_result['eval']['mlogloss'][best_iter]
-    merror = evals_result['eval']['merror'][best_iter]
-
-    # Report to Ray Tune
-    tune.report(
-        mlogloss=mlogloss,
-        merror=merror,
-        precision=precision,
-        recall=recall,
-        f1=f1,
-        accuracy=accuracy
-    )
-
 def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10, cpus_per_trial=1, gpu_fraction=None, output_dir="./tune_results"):
     """
     Run hyperparameter tuning for XGBoost using Ray Tune.
@@ -254,6 +155,9 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
             test_data['label'] = 0
                 
         # Create feature processor and fit it on training data
+        from dataset import FeatureProcessor
+        
+        # Create and fit the feature processor
         processor = FeatureProcessor()
         processor.fit(train_data)
         
@@ -319,10 +223,7 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         "colsample_bytree": tune.uniform(0.5, 1.0),
         
         # Number of rounds
-        "num_boost_round": tune.randint(50, 200),
-        
-        # Add gamma for min split loss regularization
-        "gamma": tune.loguniform(1e-3, 5.0)
+        "num_boost_round": tune.randint(50, 200)
     }
     
     # Add GPU-specific parameter if GPU fraction is specified
@@ -341,9 +242,7 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
     
     # Create a wrapper function that includes the data
     def _train_with_data(config):
-        config = dict(config)
-        config['train_file'] = train_file if train_file else data_file
-        return train_xgboost_ray(config)
+        return train_xgboost(config, train_features, train_labels, test_features, test_labels)
     
     # Run the tuning with updated API
     tuner = tune.Tuner(
@@ -423,7 +322,6 @@ def train_final_model(config, train_features, train_labels, test_features, test_
         'colsample_bytree': config['colsample_bytree'],
         'reg_alpha': config['reg_alpha'],
         'reg_lambda': config['reg_lambda'],
-        'gamma': config['gamma'],
         
         # Set the seed for reproducibility
         'seed': 42
@@ -468,13 +366,11 @@ def train_final_model(config, train_features, train_labels, test_features, test_
     return final_model
 
 def main():
-    # Ensure data/received/ directory exists
-    os.makedirs("data/received", exist_ok=True)
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Ray Tune for XGBoost hyperparameter optimization")
     parser.add_argument("--data-file", type=str, help="Path to single CSV data file (optional if train and test files are provided)")
-    parser.add_argument("--train-file", type=str, default="data/received/network_train_60.csv", help="Path to training CSV data file")
-    parser.add_argument("--test-file", type=str, default="data/received/network_test_40_nolabel.csv", help="Path to testing CSV data file")
+    parser.add_argument("--train-file", type=str, help="Path to training CSV data file")
+    parser.add_argument("--test-file", type=str, help="Path to testing CSV data file")
     parser.add_argument("--num-samples", type=int, default=10, help="Number of hyperparameter combinations to try")
     parser.add_argument("--cpus-per-trial", type=int, default=1, help="CPUs per trial")
     parser.add_argument("--gpu-fraction", type=float, default=None, help="GPU fraction per trial (0.1 for 10%)")
