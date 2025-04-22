@@ -29,7 +29,7 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from flwr.common.logger import log
-from logging import INFO, WARNING
+from logging import INFO, WARNING, ERROR
 
 # Mapping between partitioning strategy names and their implementations
 CORRELATION_TO_PARTITIONER = {
@@ -165,33 +165,55 @@ def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_t
     if processor is None:
         processor = FeatureProcessor()
     
-    # Process features
-    df = processor.transform(data, is_training)
+    # --- Handle labels FIRST --- 
+    labels = None
+    if 'attack_cat' in data.columns:
+        # Extract 'attack_cat' before transforming features
+        attack_labels = data['attack_cat'].copy()
+        
+        # Ensure label encoder is fitted if needed (during training)
+        if is_training and not hasattr(processor.label_encoder, 'classes_'):
+             log(INFO, "Fitting label encoder during training preprocessing.")
+             processor.label_encoder.fit(attack_labels)
+        elif not hasattr(processor.label_encoder, 'classes_') or processor.label_encoder.classes_.size == 0:
+            # If not training but encoder isn't fitted, can't proceed reliably
+            log(WARNING, "Label encoder not fitted, cannot transform attack_cat labels.")
+            # Try fitting on the current chunk, might be incomplete
+            try:
+                 processor.label_encoder.fit(attack_labels)
+                 log(WARNING, "Fitted label encoder on non-training data chunk.")
+            except Exception as fit_err:
+                 log(ERROR, f"Could not fit label encoder on non-training data: {fit_err}")
+                 labels = np.zeros(len(data)) # Fallback to zeros
+
+        # Transform labels if encoder is ready
+        if hasattr(processor.label_encoder, 'classes_') and processor.label_encoder.classes_.size > 0:
+            try:
+                # Handle unseen labels during transform by mapping them to a default class (e.g., -1 or max_class_index + 1)
+                # For now, let's assume fit handled all expected labels, or handle error
+                labels = processor.label_encoder.transform(attack_labels)
+            except ValueError as e:
+                log(ERROR, f"Error transforming labels: {e}. Unseen labels might exist.")
+                # Fallback: assign a default value like -1 or try to refit/update encoder
+                labels = np.zeros(len(data)) # Simple fallback for now
+        elif labels is None: # If fitting failed or wasn't possible
+             labels = np.zeros(len(data))
+
+    elif 'label' in data.columns:
+        # If only binary label, we might still want to return it, but tune script expects multi-class
+        log(WARNING, "Only binary 'label' column found, but multi-class 'attack_cat' expected for tuning/training.")
+        # Return None for labels as it's not the expected format
+        labels = None 
+    else:
+        # No label column found
+        log(INFO, "No 'attack_cat' or 'label' column found in data.")
+        labels = None
+
+    # --- Process features AFTER handling labels --- 
+    # The processor's transform method will drop 'attack_cat' and 'label' if they exist
+    features = processor.transform(data, is_training)
     
-    # Handle labels - use attack_cat for multi-class classification
-    if 'attack_cat' in df.columns:
-        features = df.drop(columns=['attack_cat'])
-        
-        # For binary label column, also drop it if it exists
-        if 'label' in features.columns:
-            features = features.drop(columns=['label'])
-        
-        # Encode the attack categories
-        if is_training or processor.label_encoder.classes_.size > 0:
-            if processor.label_encoder.classes_.size == 0:
-                processor.label_encoder.fit(df['attack_cat'])
-            labels = processor.label_encoder.transform(df['attack_cat'])
-        else:
-            # For prediction only, provide dummy labels
-            labels = np.zeros(len(df))
-        
-        return features, labels
-    elif 'label' in df.columns:
-        # If only binary label column is present, remove it and return features only
-        features = df.drop(columns=['label'])
-        return features, None
-    
-    return df, None
+    return features, labels
 
 def load_csv_data(file_path: str) -> DatasetDict:
     """
