@@ -69,7 +69,7 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
     # Prepare the XGBoost parameters
     params = {
         # Fixed parameters
-        'objective': 'multi:softmax',
+        'objective': 'multi:softprob',
         'num_class': 10,  # UNSW_NB15 has 10 classes
         'eval_metric': ['mlogloss', 'merror'],
         
@@ -287,7 +287,7 @@ def train_final_model(config: dict,
     # Prepare the XGBoost parameters
     params = {
         # Fixed parameters
-        'objective': 'multi:softmax',
+        'objective': 'multi:softprob',
         'num_class': 10,  # UNSW_NB15 has 10 classes
         'eval_metric': ['mlogloss', 'merror'],
         

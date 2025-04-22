@@ -1,6 +1,6 @@
 from typing import Dict, List, Optional
-from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
-from logging import INFO
+from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix, log_loss, accuracy_score
+from logging import INFO, WARNING
 import xgboost as xgb
 import pandas as pd
 from flwr.common.logger import log
@@ -14,6 +14,14 @@ import json
 import shutil
 from datetime import datetime
 import pickle
+import numpy as np
+# Assuming visualization_utils.py is in the same directory or accessible via PYTHONPATH
+from visualization_utils import (
+    plot_confusion_matrix,
+    plot_roc_curves,
+    plot_precision_recall_curves,
+    plot_class_distribution
+)
 
 def setup_output_directory():
     """
@@ -164,8 +172,8 @@ def evaluate_metrics_aggregation(eval_metrics):
     else:
         loss = 0.0
         log(INFO, "Mlogloss not available in all client metrics")
-    aggregated_metrics["loss"] = loss  # Keep as "loss" for compatibility
-    aggregated_metrics["mlogloss"] = loss  # Also store as mlogloss
+    # aggregated_metrics["loss"] = loss  # REMOVED - Keep as "loss" for compatibility
+    aggregated_metrics["mlogloss"] = loss  # Store as mlogloss
     # Aggregate confusion matrix
     aggregated_conf_matrix = None
     for num, metrics in eval_metrics:
@@ -345,7 +353,7 @@ def predict_with_saved_model(model_path, dmatrix, output_path):
 def get_evaluate_fn(test_data):
     """Return a function for centralised evaluation."""
 
-    def evaluate_fn(
+    def evaluate_model(
         server_round: int, parameters: Parameters, config: Dict[str, Scalar]
     ):
         if server_round == 0:
@@ -367,32 +375,109 @@ def get_evaluate_fn(test_data):
             # Save dataset with predictions to results directory
             output_path = save_predictions_to_csv(test_data, y_pred_labels, server_round, "results", y_true)
             
-            # Compute metrics
-            precision = precision_score(y_true, y_pred_labels, average='weighted')
-            recall = recall_score(y_true, y_pred_labels, average='weighted')
-            f1 = f1_score(y_true, y_pred_labels, average='weighted')
-            
-            # Generate confusion matrix
-            conf_matrix = confusion_matrix(y_true, y_pred_labels)
-            
-            # Create metrics dictionary
-            metrics = {
-                "precision": float(precision),
-                "recall": float(recall),
-                "f1": float(f1),
-                "true_negatives": int(conf_matrix[0][0]),
-                "false_positives": int(conf_matrix[0][1]),
-                "false_negatives": int(conf_matrix[1][0]),
-                "true_positives": int(conf_matrix[1][1]),
-                "predictions_file": output_path
-            }
+            # Evaluate
+            predictions = bst.predict(test_data)
+            pred_proba = bst.predict(test_data, output_margin=False) # Need probabilities for ROC/PR
 
-            log(INFO, f"Precision = {precision}, Recall = {recall}, F1 Score = {f1} at round {server_round}")
-            log(INFO, f"Dataset with predictions saved to: {output_path}")
+            # Ensure pred_proba has the correct shape for multi-class
+            if len(pred_proba.shape) == 1 or pred_proba.shape[1] == 1:
+                 # If predict gives labels or single class proba, try predict_proba if available
+                 try:
+                     # Note: XGBoost predict() with multi:softmax directly gives labels.
+                     # To get probabilities, the objective might need to be multi:softprob
+                     log(WARNING, "Predict output seems 1D, attempting to handle for multi-class probability plots...")
+                     if BST_PARAMS.get('objective') == 'multi:softmax':
+                         # Create dummy probabilities centered around the predicted class
+                         num_classes = BST_PARAMS.get('num_class', 10) # Default to 10 if not set
+                         pred_proba = np.zeros((len(predictions), num_classes))
+                         for i, label in enumerate(predictions):
+                             if 0 <= int(label) < num_classes: # Check bounds
+                                pred_proba[i, int(label)] = 0.9 # Assign high prob to predicted
+                                other_prob = 0.1 / max(1, (num_classes - 1))
+                                for j in range(num_classes):
+                                    if j != int(label):
+                                        pred_proba[i,j] = other_prob
+                             else:
+                                 log(WARNING, f"Prediction label {label} out of bounds [0, {num_classes-1}]")
+                                 # Assign uniform probability as fallback if label is invalid
+                                 pred_proba[i, :] = 1.0 / num_classes
+                         log(WARNING, "Reconstructed dummy probabilities for multi:softmax. Plots may be inaccurate. Consider using 'multi:softprob' objective for better probability estimates.")
+                     else: # Cannot determine probabilities
+                         pred_proba = None
+                 except AttributeError:
+                     log(WARNING, "Could not get probabilities, ROC and PR curves will not be generated.")
+                     pred_proba = None
+                 except Exception as e:
+                     log(WARNING, f"Error processing probabilities: {e}. ROC/PR plots skipped.")
+                     pred_proba = None
+            elif pred_proba.shape[1] != BST_PARAMS.get('num_class', 10):
+                 log(WARNING, f"Probability shape mismatch ({pred_proba.shape[1]} columns vs {BST_PARAMS.get('num_class', 10)} classes). Plots may fail.")
+                 # Attempt to proceed, but plots requiring probabilities might error out
 
-            return 0, metrics
+            # Calculate metrics
+            # Ensure y_test is integer type for log_loss if using one-hot encoding
+            y_test_int = y_true.astype(int)
+            num_classes_actual = BST_PARAMS.get('num_class', 10)
 
-    return evaluate_fn
+            if pred_proba is not None and pred_proba.shape[1] == num_classes_actual:
+                 try:
+                     loss = log_loss(y_test_int, pred_proba, eps=1e-15, labels=range(num_classes_actual))
+                 except ValueError as e:
+                     log(WARNING, f"ValueError during log_loss calculation: {e}. Setting loss to high value.")
+                     loss = 100.0 # Assign a high loss value
+                     log(WARNING, f"y_test unique: {np.unique(y_test_int)}, shape: {y_test_int.shape}")
+                     log(WARNING, f"pred_proba shape: {pred_proba.shape}")
+                     log(WARNING, f"pred_proba sample: {pred_proba[:5]}")
+            else:
+                 log(WARNING, "Calculating log_loss using one-hot encoding due to missing/invalid probabilities.")
+                 try:
+                     loss = log_loss(y_test_int, np.eye(num_classes_actual)[predictions.astype(int)], eps=1e-15, labels=range(num_classes_actual))
+                 except ValueError as e:
+                     log(WARNING, f"ValueError during one-hot log_loss calculation: {e}. Setting loss to high value.")
+                     loss = 100.0 # Assign a high loss value
+                     log(WARNING, f"y_test unique: {np.unique(y_test_int)}, shape: {y_test_int.shape}")
+                     log(WARNING, f"predictions unique: {np.unique(predictions.astype(int))}, shape: {predictions.shape}")
+
+
+            accuracy = accuracy_score(y_true, predictions)
+            precision = precision_score(y_true, predictions, average='weighted', zero_division=0)
+            recall = recall_score(y_true, predictions, average='weighted', zero_division=0)
+            f1 = f1_score(y_true, predictions, average='weighted', zero_division=0)
+            cm = confusion_matrix(y_true, predictions, labels=range(num_classes_actual)) # Ensure labels match num_classes
+
+            log(INFO, f"Centralized eval round {server_round} - Loss: {loss:.4f}, Accuracy: {accuracy:.4f}, F1: {f1:.4f}")
+
+            # --- Generate and Save Plots ---
+            output_dir = config.get("output_dir", "results") # Get output dir from config or default
+            plots_dir = os.path.join(output_dir, "plots", f"round_{server_round}")
+            os.makedirs(plots_dir, exist_ok=True)
+            log(INFO, f"Saving evaluation plots to: {plots_dir}")
+
+            class_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic'] # Make sure this matches your data
+
+            # Plot Confusion Matrix
+            cm_path = os.path.join(plots_dir, "confusion_matrix.png")
+            plot_confusion_matrix(cm, class_names[:num_classes_actual], cm_path) # Use actual num_classes
+
+            # Plot Class Distribution
+            dist_path = os.path.join(plots_dir, "class_distribution.png")
+            plot_class_distribution(y_test_int, predictions.astype(int), class_names[:num_classes_actual], dist_path)
+
+            # Plot ROC and Precision-Recall Curves (only if probabilities are available and valid)
+            if pred_proba is not None and pred_proba.shape[1] == num_classes_actual:
+                roc_path = os.path.join(plots_dir, "roc_curves.png")
+                plot_roc_curves(y_test_int, pred_proba, class_names[:num_classes_actual], roc_path)
+
+                pr_path = os.path.join(plots_dir, "precision_recall_curves.png")
+                plot_precision_recall_curves(y_test_int, pred_proba, class_names[:num_classes_actual], pr_path)
+            else:
+                 log(WARNING, f"Skipping ROC and PR curve generation due to unavailable/invalid probabilities (shape: {pred_proba.shape if pred_proba is not None else 'None'}).")
+            # --- End Plot Generation ---
+
+            # Return metrics
+            return loss, {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1}
+
+    return evaluate_model
 
 
 

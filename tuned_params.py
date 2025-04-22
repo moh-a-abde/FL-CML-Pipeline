@@ -9,7 +9,7 @@ Note: These are starter parameters that should be refined using ray_tune_xgboost
 
 # Tuned parameters for UNSW-NB15 multi-class classification
 TUNED_PARAMS = {
-    "objective": "multi:softmax",
+    "objective": "multi:softprob",
     "num_class": 10,  # Classes: Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic
     "eta": 0.03,
     "max_depth": 5,

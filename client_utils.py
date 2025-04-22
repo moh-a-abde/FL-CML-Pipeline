@@ -381,14 +381,6 @@ class XgbClient(fl.client.Client):
             "mlogloss": float(mlogloss)
         }
         
-        # Add confusion matrix elements as individual metrics (up to 10x10 for UNSW-NB15)
-        for i in range(min(10, conf_matrix.shape[0])):
-            for j in range(min(10, conf_matrix.shape[1])):
-                if i < conf_matrix.shape[0] and j < conf_matrix.shape[1]:
-                    metrics[f"conf_{i}{j}"] = int(conf_matrix[i][j])
-                else:
-                    metrics[f"conf_{i}{j}"] = 0
-        
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
             loss=float(mlogloss),  # Use mlogloss as the primary loss metric

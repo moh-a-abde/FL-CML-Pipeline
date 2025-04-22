@@ -4,7 +4,7 @@ import argparse
 # Hyper-parameters for xgboost training
 NUM_LOCAL_ROUND = 1
 BST_PARAMS = {
-    "objective": "multi:softmax",
+    "objective": "multi:softprob",
     "num_class": 10,  # 10 classes for UNSW_NB15: Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic
     "eta": 0.05,  # Reduced learning rate to prevent overfitting
     "max_depth": 3,  # Reduced max_depth to prevent memorization
