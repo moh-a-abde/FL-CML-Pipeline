@@ -199,7 +199,10 @@ class XgbClient(fl.client.Client):
         })
 
         y_train = self.train_dmatrix.get_label()
-        class_counts = np.bincount(y_train.astype(int))
+        # Ensure labels are integers for compute_sample_weight
+        y_train_int = y_train.astype(int)
+
+        class_counts = np.bincount(y_train_int)
         
         # Log class distribution for all classes
         class_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic']
@@ -211,7 +214,7 @@ class XgbClient(fl.client.Client):
             log(INFO, f"Training data class {class_name}: {count}")
         
         # Compute sample weights for class imbalance
-        sample_weights = compute_sample_weight('balanced', y_train)
+        sample_weights = compute_sample_weight('balanced', y_train_int) # Use integer labels
         # Create a new DMatrix with weights for training
         dtrain_weighted = xgb.DMatrix(self.train_dmatrix.get_data(), label=y_train, weight=sample_weights, feature_names=self.train_dmatrix.feature_names)
 

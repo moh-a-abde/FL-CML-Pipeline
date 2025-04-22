@@ -22,13 +22,12 @@ from ray import tune
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune.search.hyperopt import HyperOptSearch
 from hyperopt import hp
-from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, log_loss
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 import logging
 from ray.air.config import RunConfig
 
 # Import existing data processing code
-from dataset import load_csv_data, transform_dataset_to_dmatrix, preprocess_data, FeatureProcessor
-from utils import BST_PARAMS
+from dataset import load_csv_data, preprocess_data, FeatureProcessor
 
 # Configure logging
 logging.basicConfig(
@@ -45,7 +44,7 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
         train_df (pd.DataFrame): Training data as DataFrame
         test_df (pd.DataFrame): Test data as DataFrame
     """
-    logger.info(f"Starting trial with config: {config}")
+    logger.info("Starting trial with config: %s", config)
     
     # Use preprocess_data to get features and encoded labels
     processor = FeatureProcessor()
@@ -129,99 +128,49 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
         "accuracy": accuracy
     }
 
-def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=100, cpus_per_trial=1, gpu_fraction=None, output_dir="./tune_results"):
+def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, gpu_fraction: float = None, output_dir: str = "./tune_results"):
     """
     Run hyperparameter tuning for XGBoost using Ray Tune.
     
     Args:
-        train_file (str): Path to the training CSV data file (required for HPO)
-        test_file (str): Path to the testing CSV data file (ignored for HPO validation split)
-        data_file (str): Path to a single CSV data file (fallback if train_file not provided, will be split)
-        num_samples (int): Number of hyperparameter combinations to try (default: 100)
-        cpus_per_trial (int): CPUs to allocate per trial
-        gpu_fraction (float): Fraction of GPU to use per trial (if None, no GPU is used)
-        output_dir (str): Directory to save results
+        train_file (str): Path to the training CSV data file.
+        test_file (str): Path to the testing CSV data file.
+        num_samples (int): Number of hyperparameter combinations to try.
+        gpu_fraction (float): Fraction of GPU to use per trial (if None, no GPU is used).
+        output_dir (str): Directory to save results.
         
     Returns:
-        dict: Best hyperparameters found
+        dict: Best hyperparameters found.
     """
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
-    # Load and prepare data
-    if train_file and test_file:
-        logger.info(f"Loading training data from {train_file}")
-        train_data = load_csv_data(train_file)["train"].to_pandas()
-        
-        logger.info(f"Loading testing data from {test_file}")
-        test_data = load_csv_data(test_file)["train"].to_pandas()
-        
-        # Ensure label column is correctly handled - case insensitive check
-        for df in [train_data]:
-            if 'label' not in df.columns and 'Label' in df.columns:
-                df['label'] = df['Label']
-                
-        # Check if test data has a label column
-        if 'label' not in test_data.columns and 'Label' in test_data.columns:
-            test_data['label'] = test_data['Label']
-            
-        # If test data doesn't have a label column, create a dummy one
-        if 'label' not in test_data.columns:
-            logger.warning("Test data doesn't have a label column. Creating a dummy label column with zeros.")
-            test_data['label'] = 0
-                
-        # Create feature processor and fit it on training data
-        from dataset import FeatureProcessor
-        
-        # Create and fit the feature processor
-        processor = FeatureProcessor()
-        processor.fit(train_data)
-        
-        # Process the data, but don't create DMatrix yet (to avoid pickling issues)
-        train_processed = processor.transform(train_data, is_training=True)
-        test_processed = processor.transform(test_data, is_training=False)
-        
-        # Extract features and labels
-        train_features = train_processed.drop(columns=['label'])
-        train_labels = train_processed['label'].astype(int)
-        
-        test_features = test_processed.drop(columns=['label'])
-        test_labels = test_processed['label'].astype(int)
-        
-        logger.info(f"Training data size: {len(train_features)}")
-        logger.info(f"Validation data size: {len(test_features)}")
+    # Load and prepare data *once* before tuning starts
+    logger.info("Loading training data from %s", train_file)
+    train_df = load_csv_data(train_file)["train"].to_pandas()
+    
+    logger.info("Loading testing data from %s", test_file)
+    test_df = load_csv_data(test_file)["train"].to_pandas() # Use train split of test file for validation
+
+    # Preprocess data *once* to get features/labels for the final model training
+    # and to fit the processor
+    logger.info("Preprocessing data for final model training and fitting processor...")
+    processor = FeatureProcessor()
+    # We need the original dataframes (train_df, test_df) to pass to the trial wrapper
+    # But we also need the processed features/labels for the final model training step
+    final_train_features, final_train_labels = preprocess_data(train_df, processor=processor, is_training=True)
+    final_test_features, final_test_labels = preprocess_data(test_df, processor=processor, is_training=False)
+    
+    # Handle potential missing labels in the test set for final model evaluation
+    if final_test_labels is None:
+        logger.warning("Test data has no labels. Using zeros for final model evaluation.")
+        final_test_labels = np.zeros(len(final_test_features))
     else:
-        # Fall back to original behavior with single file and splitting
-        logger.info(f"Loading data from {data_file}")
-        data = load_csv_data(data_file)["train"].to_pandas()
-        
-        # Ensure label column is correctly handled - case insensitive check
-        if 'label' not in data.columns and 'Label' in data.columns:
-            data['label'] = data['Label']
-            
-        # Import this function only if needed
-        from dataset import train_test_split
-        
-        # Split the data, but use pandas directly
-        from sklearn.model_selection import train_test_split as sklearn_split
-        train_processed, test_processed = sklearn_split(data, test_size=0.2, random_state=42)
-        
-        # Process with feature processor
-        processor = FeatureProcessor()
-        processor.fit(train_processed)
-        
-        train_processed = processor.transform(train_processed, is_training=True)
-        test_processed = processor.transform(test_processed, is_training=False)
-        
-        # Extract features and labels
-        train_features = train_processed.drop(columns=['label'])
-        train_labels = train_processed['label'].astype(int)
-        
-        test_features = test_processed.drop(columns=['label'])
-        test_labels = test_processed['label'].astype(int)
-        
-        logger.info(f"Training data size: {len(train_features)}")
-        logger.info(f"Validation data size: {len(test_features)}")
+        final_test_labels = final_test_labels.astype(int) # Ensure labels are integers
+    final_train_labels = final_train_labels.astype(int)
+
+    logger.info("Training data size for final model: %d", len(final_train_features))
+    logger.info("Validation data size for final model: %d", len(final_test_features))
     
     # Define the search space using hyperopt's hp module
     search_space = {
@@ -235,11 +184,15 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         "num_boost_round": hp.quniform("num_boost_round", 50, 200, 1)
     }
     if gpu_fraction is not None and gpu_fraction > 0:
+        # NOTE: Ray Tune handles GPU allocation via resources_per_trial typically
+        # Setting tree_method here might be sufficient, but review Ray Tune docs if issues persist
         search_space["tree_method"] = hp.choice("tree_method", ["gpu_hist"])
     
-    # Create a wrapper function that includes the data DataFrames
+    # Create a wrapper function that includes the *original* data DataFrames
+    # The train_xgboost function inside the trial will handle preprocessing
     def _train_with_data_wrapper(config):
-        return train_xgboost(config, train_data.copy(), test_data.copy()) # Pass copies of FULL DataFrames with labels
+        # Pass copies of the original dataframes to the training function
+        return train_xgboost(config, train_df.copy(), test_df.copy()) 
 
     # Set up HyperOptSearch
     algo = HyperOptSearch(
@@ -248,7 +201,7 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         mode="min"
     )
     scheduler = ASHAScheduler(
-        max_t=200,
+        max_t=200, # Corresponds roughly to num_boost_round max
         grace_period=10,
         reduction_factor=2,
         metric="mlogloss",
@@ -258,6 +211,14 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
     # Initialize the tuner
     logger.info("Starting hyperparameter tuning")
     
+    # Define resources per trial if GPU is requested
+    resources_per_trial = None
+    if gpu_fraction is not None and gpu_fraction > 0:
+        # Allocate a fraction of GPU resources per trial
+        resources_per_trial = {"gpu": gpu_fraction}
+        # Ensure Ray is initialized with GPU visibility if needed (usually automatic)
+        # ray.init(num_gpus=...) # Might be needed depending on setup
+
     # Run the tuning with updated API
     tuner = tune.Tuner(
         _train_with_data_wrapper,
@@ -269,7 +230,8 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         param_space={},  # search space is handled by HyperOptSearch
         run_config=RunConfig(
             local_dir=output_dir,
-            name="xgboost_tune"
+            name="xgboost_tune",
+            # resources_per_trial=resources_per_trial # Pass resource requests here - causing issues, let Ray manage?
         )
     )
     
@@ -285,34 +247,38 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
     logger.info("Best hyperparameters found:")
     logger.info(json.dumps(best_config, indent=2))
     logger.info("Best metrics:")
-    logger.info(f"  mlogloss: {best_metrics['mlogloss']:.4f}")
-    logger.info(f"  merror: {best_metrics['merror']:.4f}")
-    logger.info(f"  precision: {best_metrics['precision']:.4f}")
-    logger.info(f"  recall: {best_metrics['recall']:.4f}")
-    logger.info(f"  f1: {best_metrics['f1']:.4f}")
-    logger.info(f"  accuracy: {best_metrics['accuracy']:.4f}")
+    logger.info("  mlogloss: %.4f", best_metrics['mlogloss'])
+    logger.info("  merror: %.4f", best_metrics['merror'])
+    logger.info("  precision: %.4f", best_metrics['precision'])
+    logger.info("  recall: %.4f", best_metrics['recall'])
+    logger.info("  f1: %.4f", best_metrics['f1'])
+    logger.info("  accuracy: %.4f", best_metrics['accuracy'])
     
     # Save the best hyperparameters to a file
     best_params_file = os.path.join(output_dir, "best_params.json")
-    with open(best_params_file, 'w') as f:
+    # Use utf-8 encoding when writing JSON
+    with open(best_params_file, 'w', encoding='utf-8') as f:
         json.dump(best_config, f, indent=2)
-    logger.info(f"Best parameters saved to {best_params_file}")
+    logger.info("Best parameters saved to %s", best_params_file)
     
-    # Train a final model with the best parameters
-    train_final_model(best_config, train_features, train_labels, test_features, test_labels, output_dir)
+    # Train a final model with the best parameters using the preprocessed data
+    train_final_model(best_config, final_train_features, final_train_labels, final_test_features, final_test_labels, output_dir)
     
     return best_config
 
-def train_final_model(config, train_features, train_labels, test_features, test_labels, output_dir):
+def train_final_model(config: dict, 
+                      train_features: pd.DataFrame, train_labels: pd.Series, 
+                      test_features: pd.DataFrame, test_labels: pd.Series, 
+                      output_dir: str):
     """
     Train a final model using the best hyperparameters found.
     
     Args:
         config (dict): Best hyperparameters
         train_features (pd.DataFrame): Training features
-        train_labels (pd.Series): Training labels
+        train_labels (pd.Series): Training labels (encoded)
         test_features (pd.DataFrame): Test features
-        test_labels (pd.Series): Test labels
+        test_labels (pd.Series): Test labels (encoded)
         output_dir (str): Directory to save the model
     """
     # Create DMatrix objects
@@ -350,13 +316,13 @@ def train_final_model(config, train_features, train_labels, test_features, test_
         train_data,
         num_boost_round=int(config['num_boost_round']),
         evals=[(test_data, 'eval'), (train_data, 'train')],
-        verbose_eval=True
+        verbose_eval=True # Show progress for final model
     )
     
     # Save the model
     model_path = os.path.join(output_dir, "best_model.json")
     final_model.save_model(model_path)
-    logger.info(f"Final model saved to {model_path}")
+    logger.info("Final model saved to %s", model_path)
     
     # Evaluate the model
     y_pred = final_model.predict(test_data)
@@ -370,39 +336,42 @@ def train_final_model(config, train_features, train_labels, test_features, test_
     
     # Log final performance
     logger.info("Final model performance:")
-    logger.info(f"  Precision: {precision:.4f}")
-    logger.info(f"  Recall: {recall:.4f}")
-    logger.info(f"  F1 Score: {f1:.4f}")
-    logger.info(f"  Accuracy: {accuracy:.4f}")
+    logger.info("  Precision: %.4f", precision)
+    logger.info("  Recall: %.4f", recall)
+    logger.info("  F1 Score: %.4f", f1)
+    logger.info("  Accuracy: %.4f", accuracy)
     
     return final_model
 
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Ray Tune for XGBoost hyperparameter optimization")
-    parser.add_argument("--data-file", type=str, help="Path to single CSV data file (optional if train and test files are provided)")
-    parser.add_argument("--train-file", type=str, help="Path to training CSV data file")
-    parser.add_argument("--test-file", type=str, help="Path to testing CSV data file")
-    parser.add_argument("--num-samples", type=int, default=10, help="Number of hyperparameter combinations to try")
-    parser.add_argument("--cpus-per-trial", type=int, default=1, help="CPUs per trial")
-    parser.add_argument("--gpu-fraction", type=float, default=None, help="GPU fraction per trial (0.1 for 10%)")
+    # Removed --data-file as it complicates logic, require train/test
+    parser.add_argument("--train-file", type=str, required=True, help="Path to training CSV data file")
+    parser.add_argument("--test-file", type=str, required=True, help="Path to testing CSV data file")
+    parser.add_argument("--num-samples", type=int, default=50, help="Number of hyperparameter combinations to try") # Increased default based on workflow
+    # Removed --cpus-per-trial, let Ray manage CPU allocation
+    parser.add_argument("--gpu-fraction", type=float, default=None, help="GPU fraction per trial (e.g., 0.25 for 25%%)")
     parser.add_argument("--output-dir", type=str, default="./tune_results", help="Output directory for results")
     args = parser.parse_args()
     
-    # Validate arguments
-    if not args.data_file and not (args.train_file and args.test_file):
-        parser.error("Either --data-file or both --train-file and --test-file must be provided")
+    # Validate arguments (simplified)
+    # ... (train/test file existence checks could be added) ...
     
     # Run the hyperparameter tuning
-    tune_xgboost(
-        train_file=args.train_file,
-        test_file=args.test_file,
-        data_file=args.data_file,
-        num_samples=args.num_samples,
-        cpus_per_trial=args.cpus_per_trial,
-        gpu_fraction=args.gpu_fraction,
-        output_dir=args.output_dir
-    )
+    try:
+        tune_xgboost(
+            train_file=args.train_file,
+            test_file=args.test_file,
+            num_samples=args.num_samples,
+            gpu_fraction=args.gpu_fraction,
+            output_dir=args.output_dir
+        )
+        logger.info("===== Hyperparameter tuning completed successfully ====")
+    except Exception as e:
+        logger.error("===== Hyperparameter tuning failed =====", exc_info=True)
+        # Potentially re-raise or exit differently depending on CI requirements
+        raise e 
 
 if __name__ == "__main__":
     main() 
