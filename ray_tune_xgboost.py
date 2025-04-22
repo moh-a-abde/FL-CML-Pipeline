@@ -20,7 +20,8 @@ import pandas as pd
 import numpy as np
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
-from ray.tune.search.basic_variant import BasicVariantGenerator
+from ray.tune.search.hyperopt import HyperOptSearch
+from hyperopt import hp
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, log_loss
 import logging
 from ray.air.config import RunConfig
@@ -216,38 +217,36 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         logger.info(f"Training data size: {len(train_features)}")
         logger.info(f"Validation data size: {len(test_features)}")
     
-    # Define the search space
+    # Define the search space using hyperopt's hp module
     search_space = {
-        # Tree structure parameters
-        "max_depth": tune.randint(3, 10),
-        "min_child_weight": tune.randint(1, 20),
-        
-        # Regularization parameters
-        "reg_alpha": tune.loguniform(1e-3, 10.0),
-        "reg_lambda": tune.loguniform(1e-3, 10.0),
-        
-        # Learning parameters
-        "eta": tune.loguniform(1e-3, 0.3),
-        "subsample": tune.uniform(0.5, 1.0),
-        "colsample_bytree": tune.uniform(0.5, 1.0),
-        
-        # Number of rounds
-        "num_boost_round": tune.randint(50, 200)
+        "max_depth": hp.quniform("max_depth", 3, 10, 1),
+        "min_child_weight": hp.quniform("min_child_weight", 1, 20, 1),
+        "reg_alpha": hp.loguniform("reg_alpha", np.log(1e-3), np.log(10.0)),
+        "reg_lambda": hp.loguniform("reg_lambda", np.log(1e-3), np.log(10.0)),
+        "eta": hp.loguniform("eta", np.log(1e-3), np.log(0.3)),
+        "subsample": hp.uniform("subsample", 0.5, 1.0),
+        "colsample_bytree": hp.uniform("colsample_bytree", 0.5, 1.0),
+        "num_boost_round": hp.quniform("num_boost_round", 50, 200, 1)
     }
-    
-    # Add GPU-specific parameter if GPU fraction is specified
     if gpu_fraction is not None and gpu_fraction > 0:
-        search_space["tree_method"] = "gpu_hist"
+        search_space["tree_method"] = hp.choice("tree_method", ["gpu_hist"])
     
     # Create a wrapper function that includes the data DataFrames
     def _train_with_data_wrapper(config):
         return train_xgboost(config, train_features.copy(), test_features.copy()) # Pass copies to ensure isolation
 
-    # Create the scheduler for early stopping
+    # Set up HyperOptSearch
+    algo = HyperOptSearch(
+        search_space,
+        metric="mlogloss",
+        mode="min"
+    )
     scheduler = ASHAScheduler(
-        max_t=200,  # Maximum number of training iterations (should be >= max num_boost_round)
-        grace_period=10,  # Minimum iterations before pruning
-        reduction_factor=2
+        max_t=200,
+        grace_period=10,
+        reduction_factor=2,
+        metric="mlogloss",
+        mode="min"
     )
     
     # Initialize the tuner
@@ -257,12 +256,11 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
     tuner = tune.Tuner(
         _train_with_data_wrapper,
         tune_config=tune.TuneConfig(
-            metric="mlogloss",
             scheduler=scheduler,
             num_samples=num_samples,
-            search_alg=BasicVariantGenerator()
+            search_alg=algo
         ),
-        param_space=search_space,
+        param_space={},  # search space is handled by HyperOptSearch
         run_config=RunConfig(
             local_dir=output_dir,
             name="xgboost_tune"
