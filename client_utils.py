@@ -11,7 +11,7 @@ Key Components:
 - Metrics computation (precision, recall, F1)
 """
 
-from logging import INFO, ERROR
+from logging import INFO, ERROR, WARNING
 import xgboost as xgb
 from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix, classification_report, accuracy_score
 import flwr as fl
@@ -306,8 +306,10 @@ class XgbClient(fl.client.Client):
         log(INFO, f"Evaluating on labeled dataset with {self.num_val} samples")
         
         # Generate predictions for multi-class classification
-        y_pred_proba = bst.predict(self.valid_dmatrix, output_margin=True)  # Get raw predictions for mlogloss
-        y_pred_labels = bst.predict(self.valid_dmatrix)  # Get class predictions
+        # Since objective is multi:softprob, predict() outputs probabilities
+        y_pred_proba = bst.predict(self.valid_dmatrix)
+        # Get class labels from probabilities
+        y_pred_labels = np.argmax(y_pred_proba, axis=1)
         
         # Get ground truth labels
         y_true = self.valid_dmatrix.get_label()
@@ -315,6 +317,7 @@ class XgbClient(fl.client.Client):
         # Log ground truth distribution
         true_counts = np.bincount(y_true.astype(int))
         class_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic']
+        num_classes_actual = len(class_names) # Or get from self.params if needed
         for i, count in enumerate(true_counts):
             if i < len(class_names):
                 class_name = class_names[i]
@@ -322,36 +325,63 @@ class XgbClient(fl.client.Client):
                 class_name = f'unknown_{i}'
             log(INFO, f"Ground truth {class_name}: {count}")
         
-        # Compute multi-class metrics
-        precision = precision_score(y_true, y_pred_labels, average='weighted')
-        recall = recall_score(y_true, y_pred_labels, average='weighted')
-        f1 = f1_score(y_true, y_pred_labels, average='weighted')
+        # Compute multi-class metrics using predicted labels
+        # Add zero_division=0 to handle cases where a class might not be predicted
+        precision = precision_score(y_true, y_pred_labels, average='weighted', zero_division=0)
+        recall = recall_score(y_true, y_pred_labels, average='weighted', zero_division=0)
+        f1 = f1_score(y_true, y_pred_labels, average='weighted', zero_division=0)
         accuracy = accuracy_score(y_true, y_pred_labels)
         
-        # Calculate mlogloss manually
+        # Calculate mlogloss using probabilities
         epsilon = 1e-15  # Small constant to avoid log(0)
-        y_pred_proba_softmax = np.exp(y_pred_proba) / np.sum(np.exp(y_pred_proba), axis=1, keepdims=True)
-        y_true_one_hot = np.zeros_like(y_pred_proba_softmax)
-        for i in range(len(y_true)):
-            if y_true[i] < y_true_one_hot.shape[1]:
-                y_true_one_hot[i, int(y_true[i])] = 1
-        mlogloss = -np.mean(np.sum(y_true_one_hot * np.log(y_pred_proba_softmax + epsilon), axis=1))
+        y_true_int = y_true.astype(int)
+        # Ensure y_true_int does not contain labels outside the expected range [0, num_classes-1]
+        valid_indices = (y_true_int >= 0) & (y_true_int < num_classes_actual)
+        if not np.all(valid_indices):
+            log(WARNING, f"Found {np.sum(~valid_indices)} labels outside expected range [0, {num_classes_actual-1}]. Clamping for mlogloss calculation.")
+            y_true_int = np.clip(y_true_int, 0, num_classes_actual - 1)
+            # Optionally filter data if clamping is not desired:
+            # y_true_int = y_true_int[valid_indices]
+            # y_pred_proba = y_pred_proba[valid_indices]
+            
+        y_true_one_hot = np.eye(num_classes_actual)[y_true_int]
         
-        # Compute confusion matrix
-        try:
-            conf_matrix = confusion_matrix(y_true, y_pred_labels)
-        except Exception as e:
-            log(INFO, f"Error computing confusion matrix: {str(e)}")
-            # Create empty confusion matrix
-            num_classes = 10  # UNSW_NB15 has 10 classes
-            conf_matrix = np.zeros((num_classes, num_classes), dtype=int)
+        # Ensure y_pred_proba has the correct shape and handle potential issues
+        if y_pred_proba.shape == (len(y_true_int), num_classes_actual):
+            # Clip probabilities to avoid log(0)
+            y_pred_proba_clipped = np.clip(y_pred_proba, epsilon, 1 - epsilon)
+            mlogloss = -np.mean(np.sum(y_true_one_hot * np.log(y_pred_proba_clipped), axis=1))
+        else:
+            log(WARNING, f"Shape mismatch for mlogloss: y_pred_proba shape {y_pred_proba.shape}, expected ({len(y_true_int)}, {num_classes_actual}). Skipping mlogloss.")
+            mlogloss = -1.0 # Indicate failure to calculate
 
-        # Generate detailed classification report
+        # Compute confusion matrix using predicted labels
         try:
-            class_report = classification_report(y_true, y_pred_labels, target_names=class_names[:len(np.unique(np.concatenate([y_true, y_pred_labels])))])
+            # Explicitly provide labels to ensure consistent matrix size
+            conf_matrix = confusion_matrix(y_true, y_pred_labels, labels=range(num_classes_actual))
+        except Exception as e:
+            log(WARNING, f"Error computing confusion matrix: {str(e)}")
+            # Create empty confusion matrix with the correct size
+            conf_matrix = np.zeros((num_classes_actual, num_classes_actual), dtype=int)
+
+        # Generate detailed classification report using predicted labels
+        try:
+            # Ensure target_names matches the actual number of classes
+            unique_labels = np.unique(np.concatenate((y_true.astype(int), y_pred_labels))) # Get labels present in data
+            target_names_filtered = [class_names[i] for i in range(num_classes_actual) if i in unique_labels]
+            # Ensure we use labels consistent with target_names_filtered
+            labels_for_report = [i for i in range(num_classes_actual) if i in unique_labels]
+
+            class_report = classification_report(
+                y_true, 
+                y_pred_labels, 
+                labels=labels_for_report, 
+                target_names=target_names_filtered, 
+                zero_division=0
+            )
             log(INFO, f"Classification Report:\n{class_report}")
         except Exception as e:
-            log(INFO, f"Error generating classification report: {str(e)}")
+            log(WARNING, f"Error generating classification report: {str(e)}")
         
         # Log evaluation metrics
         log(INFO, f"Precision (weighted): {precision:.4f}")
