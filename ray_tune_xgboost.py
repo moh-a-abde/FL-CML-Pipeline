@@ -68,9 +68,9 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
         'num_class': 3,  # benign (0), dns_tunneling (1), icmp_tunneling (2)
         'eval_metric': ['mlogloss', 'merror'],
         
-        # Tunable parameters from config
-        'max_depth': config['max_depth'],
-        'min_child_weight': config['min_child_weight'],
+        # Tunable parameters from config - convert float values to integers where needed
+        'max_depth': int(config['max_depth']),
+        'min_child_weight': int(config['min_child_weight']),
         'eta': config['eta'],
         'subsample': config['subsample'],
         'colsample_bytree': config['colsample_bytree'],
@@ -320,9 +320,9 @@ def train_final_model(config, train_features, train_labels, test_features, test_
         'num_class': 3,
         'eval_metric': ['mlogloss', 'merror'],
         
-        # Best parameters from tuning
-        'max_depth': config['max_depth'],
-        'min_child_weight': config['min_child_weight'],
+        # Best parameters from tuning - convert float values to integers where needed
+        'max_depth': int(config['max_depth']),
+        'min_child_weight': int(config['min_child_weight']),
         'eta': config['eta'],
         'subsample': config['subsample'],
         'colsample_bytree': config['colsample_bytree'],
