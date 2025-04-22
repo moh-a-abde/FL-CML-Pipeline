@@ -379,4 +379,24 @@ def main():
     parser.add_argument("--test-file", type=str, help="Path to testing CSV data file")
     parser.add_argument("--num-samples", type=int, default=10, help="Number of hyperparameter combinations to try")
     parser.add_argument("--cpus-per-trial", type=int, default=1, help="CPUs per trial")
-    parser.add_argument("--gpu-fraction", type=float, default=None, help="GP
+    parser.add_argument("--gpu-fraction", type=float, default=None, help="GPU fraction per trial (0.1 for 10%)")
+    parser.add_argument("--output-dir", type=str, default="./tune_results", help="Output directory for results")
+    args = parser.parse_args()
+    
+    # Validate arguments
+    if not args.data_file and not (args.train_file and args.test_file):
+        parser.error("Either --data-file or both --train-file and --test-file must be provided")
+    
+    # Run the hyperparameter tuning
+    tune_xgboost(
+        train_file=args.train_file,
+        test_file=args.test_file,
+        data_file=args.data_file,
+        num_samples=args.num_samples,
+        cpus_per_trial=args.cpus_per_trial,
+        gpu_fraction=args.gpu_fraction,
+        output_dir=args.output_dir
+    )
+
+if __name__ == "__main__":
+    main() 
