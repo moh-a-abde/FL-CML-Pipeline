@@ -191,20 +191,11 @@ class XgbClient(fl.client.Client):
         """
         Perform local model training.
         """
-        # --- PHASE 1: Aggressive Regularization (Overrides any loaded/tuned params) ---
-        self.params.update({
-            'max_depth': 3,
-            'reg_lambda': 10.0,  # L2
-            'reg_alpha': 2.0,    # L1
-            'min_child_weight': 5,
-            'subsample': 0.8,
-            'colsample_bytree': 0.8,
-            'eta': 0.1
-        })
+        # --- PHASE 1: Aggressive Regularization (Overrides any loaded/tuned params) --- REMOVED
 
         y_train = self.train_dmatrix.get_label()
 
-        # --- Check if labels are empty --- 
+        # --- Check if labels are empty ---
         if y_train.size == 0:
             log(ERROR, f"Client {self.cid}: Training DMatrix has no labels. Cannot proceed with fit.")
             return FitRes(
