@@ -247,9 +247,7 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
     scheduler = ASHAScheduler(
         max_t=200,  # Maximum number of training iterations (should be >= max num_boost_round)
         grace_period=10,  # Minimum iterations before pruning
-        reduction_factor=2,
-        metric="mlogloss",
-        mode="min"
+        reduction_factor=2
     )
     
     # Initialize the tuner
@@ -260,7 +258,6 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         _train_with_data_wrapper,
         tune_config=tune.TuneConfig(
             metric="mlogloss",
-            mode="min",
             scheduler=scheduler,
             num_samples=num_samples,
             search_alg=BasicVariantGenerator()
