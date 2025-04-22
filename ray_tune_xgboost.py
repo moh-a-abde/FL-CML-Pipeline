@@ -36,17 +36,26 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def train_xgboost(config, train_features, train_labels, test_features, test_labels):
+def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
     """
     Training function for XGBoost that can be used with Ray Tune.
-    
     Args:
         config (dict): Hyperparameters to use for training
-        train_features (pd.DataFrame): Training features 
-        train_labels (pd.Series): Training labels
-        test_features (pd.DataFrame): Test features
-        test_labels (pd.Series): Test labels
+        train_df (pd.DataFrame): Training data as DataFrame
+        test_df (pd.DataFrame): Test data as DataFrame
     """
+    logger.info(f"Starting trial with config: {config}")
+    # Instantiate FeatureProcessor inside the trial
+    from dataset import FeatureProcessor
+    processor = FeatureProcessor()
+    processor.fit(train_df)
+    train_processed = processor.transform(train_df, is_training=True)
+    test_processed = processor.transform(test_df, is_training=False)
+    train_features = train_processed.drop(columns=['label'])
+    train_labels = train_processed['label'].astype(int)
+    test_features = test_processed.drop(columns=['label'])
+    test_labels = test_processed['label'].astype(int)
+    
     # Create DMatrix objects inside the function to avoid pickling issues
     train_data = xgb.DMatrix(train_features, label=train_labels, missing=np.nan)
     test_data = xgb.DMatrix(test_features, label=test_labels, missing=np.nan)
@@ -113,15 +122,15 @@ def train_xgboost(config, train_features, train_labels, test_features, test_labe
         "accuracy": accuracy
     }
 
-def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10, cpus_per_trial=1, gpu_fraction=None, output_dir="./tune_results"):
+def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=100, cpus_per_trial=1, gpu_fraction=None, output_dir="./tune_results"):
     """
     Run hyperparameter tuning for XGBoost using Ray Tune.
     
     Args:
-        train_file (str): Path to the training CSV data file
-        test_file (str): Path to the testing CSV data file
-        data_file (str): Path to a single CSV data file (used if train_file and test_file are not provided)
-        num_samples (int): Number of hyperparameter combinations to try
+        train_file (str): Path to the training CSV data file (required for HPO)
+        test_file (str): Path to the testing CSV data file (ignored for HPO validation split)
+        data_file (str): Path to a single CSV data file (fallback if train_file not provided, will be split)
+        num_samples (int): Number of hyperparameter combinations to try (default: 100)
         cpus_per_trial (int): CPUs to allocate per trial
         gpu_fraction (float): Fraction of GPU to use per trial (if None, no GPU is used)
         output_dir (str): Directory to save results
@@ -230,23 +239,25 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
     if gpu_fraction is not None and gpu_fraction > 0:
         search_space["tree_method"] = "gpu_hist"
     
+    # Create a wrapper function that includes the data DataFrames
+    def _train_with_data_wrapper(config):
+        return train_xgboost(config, train_features.copy(), test_features.copy()) # Pass copies to ensure isolation
+
     # Create the scheduler for early stopping
     scheduler = ASHAScheduler(
-        max_t=200,  # Maximum number of training iterations
+        max_t=200,  # Maximum number of training iterations (should be >= max num_boost_round)
         grace_period=10,  # Minimum iterations before pruning
-        reduction_factor=2
+        reduction_factor=2,
+        metric="mlogloss",
+        mode="min"
     )
     
     # Initialize the tuner
     logger.info("Starting hyperparameter tuning")
     
-    # Create a wrapper function that includes the data
-    def _train_with_data(config):
-        return train_xgboost(config, train_features, train_labels, test_features, test_labels)
-    
     # Run the tuning with updated API
     tuner = tune.Tuner(
-        _train_with_data,
+        _train_with_data_wrapper,
         tune_config=tune.TuneConfig(
             metric="mlogloss",
             mode="min",
