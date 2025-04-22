@@ -103,9 +103,7 @@ class FeatureProcessor:
 
     def transform(self, df: pd.DataFrame, is_training: bool = False) -> pd.DataFrame:
         """Transform data using fitted parameters."""
-        if not self.is_fitted and is_training:
-            self.fit(df)
-        elif not self.is_fitted:
+        if not self.is_fitted:
             raise ValueError("FeatureProcessor must be fitted before transform")
 
         df = df.copy()
