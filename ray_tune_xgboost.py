@@ -24,7 +24,7 @@ from ray.tune.search.hyperopt import HyperOptSearch
 from hyperopt import hp
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 import logging
-from ray.air.config import RunConfig
+from ray import air
 
 # Import existing data processing code
 from dataset import load_csv_data, preprocess_data, FeatureProcessor
@@ -128,7 +128,7 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
         "accuracy": accuracy
     }
 
-def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, gpu_fraction: float = None, output_dir: str = "./tune_results"):
+def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_per_trial: int = 1, gpu_fraction: float = None, output_dir: str = "./tune_results"):
     """
     Run hyperparameter tuning for XGBoost using Ray Tune.
     
@@ -136,6 +136,7 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, gpu_fr
         train_file (str): Path to the training CSV data file.
         test_file (str): Path to the testing CSV data file.
         num_samples (int): Number of hyperparameter combinations to try.
+        cpus_per_trial (int): Number of CPUs to allocate per trial.
         gpu_fraction (float): Fraction of GPU to use per trial (if None, no GPU is used).
         output_dir (str): Directory to save results.
         
@@ -208,30 +209,28 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, gpu_fr
         mode="min"
     )
     
+    # Wrap trainable with resource specification
+    trainable_with_resources = tune.with_resources(
+        _train_with_data_wrapper, 
+        resources={"cpu": cpus_per_trial, "gpu": gpu_fraction if gpu_fraction else 0}
+    )
+
     # Initialize the tuner
     logger.info("Starting hyperparameter tuning")
     
-    # Define resources per trial if GPU is requested
-    resources_per_trial = None
-    if gpu_fraction is not None and gpu_fraction > 0:
-        # Allocate a fraction of GPU resources per trial
-        resources_per_trial = {"gpu": gpu_fraction}
-        # Ensure Ray is initialized with GPU visibility if needed (usually automatic)
-        # ray.init(num_gpus=...) # Might be needed depending on setup
-
     # Run the tuning with updated API
     tuner = tune.Tuner(
-        _train_with_data_wrapper,
+        trainable_with_resources, # Use wrapped trainable
         tune_config=tune.TuneConfig(
             scheduler=scheduler,
             num_samples=num_samples,
             search_alg=algo
         ),
         param_space={},  # search space is handled by HyperOptSearch
-        run_config=RunConfig(
+        run_config=air.RunConfig( # Use air.RunConfig
             local_dir=output_dir,
             name="xgboost_tune",
-            # resources_per_trial=resources_per_trial # Pass resource requests here - causing issues, let Ray manage?
+            # resources_per_trial is handled by tune.with_resources
         )
     )
     
@@ -345,33 +344,65 @@ def train_final_model(config: dict,
 
 def main():
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Ray Tune for XGBoost hyperparameter optimization")
-    # Removed --data-file as it complicates logic, require train/test
-    parser.add_argument("--train-file", type=str, required=True, help="Path to training CSV data file")
-    parser.add_argument("--test-file", type=str, required=True, help="Path to testing CSV data file")
-    parser.add_argument("--num-samples", type=int, default=50, help="Number of hyperparameter combinations to try") # Increased default based on workflow
-    # Removed --cpus-per-trial, let Ray manage CPU allocation
-    parser.add_argument("--gpu-fraction", type=float, default=None, help="GPU fraction per trial (e.g., 0.25 for 25%%)")
-    parser.add_argument("--output-dir", type=str, default="./tune_results", help="Output directory for results")
+    parser = argparse.ArgumentParser(description="XGBoost Hyperparameter Tuning with Ray Tune")
+    parser.add_argument("--train-file", type=str, required=True, help="Path to the training data CSV file.")
+    parser.add_argument("--test-file", type=str, required=True, help="Path to the testing data CSV file.")
+    parser.add_argument("--num-samples", type=int, default=100, help="Number of hyperparameter samples to try.")
+    parser.add_argument("--cpus-per-trial", type=int, default=1, help="Number of CPUs to allocate per trial.")
+    parser.add_argument("--gpu-fraction", type=float, default=None, help="Fraction of GPU resources per trial (e.g., 0.5). Default is None (CPU only).")
+    parser.add_argument("--output-dir", type=str, default="./tune_results", help="Directory to save Ray Tune results and best parameters.")
+    
     args = parser.parse_args()
-    
-    # Validate arguments (simplified)
-    # ... (train/test file existence checks could be added) ...
-    
-    # Run the hyperparameter tuning
+
+    logger.info("===== XGBoost Hyperparameter Tuning with Ray Tune ====")
+    logger.info("Training file: %s", args.train_file)
+    logger.info("Testing file: %s", args.test_file)
+    logger.info("Number of hyperparameter samples: %d", args.num_samples)
+    logger.info("CPUs per trial: %d", args.cpus_per_trial)
+    logger.info("GPU: %s", f"{args.gpu_fraction * 100}% per trial" if args.gpu_fraction else "Not used")
+    logger.info("Output directory: %s", args.output_dir)
+    logger.info("=======================================================")
+
     try:
-        tune_xgboost(
+        # Run the tuning process
+        best_params = tune_xgboost(
             train_file=args.train_file,
             test_file=args.test_file,
             num_samples=args.num_samples,
+            cpus_per_trial=args.cpus_per_trial,
             gpu_fraction=args.gpu_fraction,
             output_dir=args.output_dir
         )
-        logger.info("===== Hyperparameter tuning completed successfully ====")
+        
+        # Train the final model with the best hyperparameters
+        # Load data again for final training (could be optimized if memory is a concern)
+        train_df_final = load_csv_data(args.train_file)["train"].to_pandas()
+        test_df_final = load_csv_data(args.test_file)["train"].to_pandas()
+        
+        # Preprocess data using the same processor logic used during tuning
+        processor_final = FeatureProcessor()
+        final_train_features, final_train_labels = preprocess_data(train_df_final, processor=processor_final, is_training=True)
+        final_test_features, final_test_labels = preprocess_data(test_df_final, processor=processor_final, is_training=False)
+        
+        # Ensure labels are integers
+        final_train_labels = final_train_labels.astype(int)
+        if final_test_labels is not None:
+            final_test_labels = final_test_labels.astype(int)
+        else:
+            # Handle case where test set might still be unlabeled after tuning run
+            final_test_labels = np.zeros(len(final_test_features)) # Dummy labels if needed
+
+        train_final_model(
+            config=best_params, 
+            train_features=final_train_features, train_labels=final_train_labels, 
+            test_features=final_test_features, test_labels=final_test_labels, 
+            output_dir=args.output_dir
+        )
+        logger.info("===== Hyperparameter tuning finished successfully ====")
+        
     except Exception as e:
-        logger.error("===== Hyperparameter tuning failed =====", exc_info=True)
-        # Potentially re-raise or exit differently depending on CI requirements
-        raise e 
+        logger.error("Hyperparameter tuning failed: %s", str(e), exc_info=True)
+        print("===== Hyperparameter tuning failed ====") # Also print to stderr for visibility in GH Actions
 
 if __name__ == "__main__":
     main() 

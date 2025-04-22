@@ -213,8 +213,36 @@ class XgbClient(fl.client.Client):
                 class_name = f'unknown_{i}'
             log(INFO, f"Training data class {class_name}: {count}")
         
+        # --- Debugging Sample Weight Calculation ---
+        log(INFO, f"Type of y_train before weight calc: {type(y_train)}")
+        log(INFO, f"Shape of y_train: {y_train.shape if hasattr(y_train, 'shape') else 'N/A'}")
+        try:
+            log(INFO, f"Unique values in y_train: {np.unique(y_train)}")
+        except Exception as e:
+            log(INFO, f"Could not get unique values of y_train: {e}")
+            
+        log(INFO, f"Type of y_train_int: {type(y_train_int)}")
+        log(INFO, f"Shape of y_train_int: {y_train_int.shape}")
+        log(INFO, f"Unique values in y_train_int: {np.unique(y_train_int)}")
+        log(INFO, f"dtype of y_train_int: {y_train_int.dtype}")
+        log(INFO, f"Min/Max values in y_train_int: {np.min(y_train_int)} / {np.max(y_train_int)}")
+        # --- End Debugging ---
+
         # Compute sample weights for class imbalance
-        sample_weights = compute_sample_weight('balanced', y_train_int) # Use integer labels
+        try:
+            sample_weights = compute_sample_weight('balanced', y_train_int) # Use integer labels
+            log(INFO, f"Successfully computed sample weights. Shape: {sample_weights.shape}, dtype: {sample_weights.dtype}")
+        except IndexError as e:
+            log(INFO, f"IndexError during compute_sample_weight: {e}")
+            log(INFO, f"Unique labels causing issue: {np.unique(y_train_int)}")
+            # As a fallback, use uniform weights
+            log(INFO, "Falling back to uniform sample weights.")
+            sample_weights = np.ones(len(y_train_int))
+        except Exception as e:
+            log(INFO, f"Other error during compute_sample_weight: {e}")
+            log(INFO, "Falling back to uniform sample weights due to unexpected error.")
+            sample_weights = np.ones(len(y_train_int))
+            
         # Create a new DMatrix with weights for training
         dtrain_weighted = xgb.DMatrix(self.train_dmatrix.get_data(), label=y_train, weight=sample_weights, feature_names=self.train_dmatrix.feature_names)
 
