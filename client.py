@@ -172,6 +172,7 @@ if __name__ == "__main__":
         num_train=num_train,
         num_val=num_val,
         num_local_round=num_local_round,
+        cid=args.partition_id,
         params=params,
         train_method=args.train_method,
         is_prediction_only=False,  # Set to False for training

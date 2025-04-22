@@ -184,7 +184,8 @@ def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_t
                  log(WARNING, "Fitted label encoder on non-training data chunk.")
             except Exception as fit_err:
                  log(ERROR, f"Could not fit label encoder on non-training data: {fit_err}")
-                 labels = np.zeros(len(data)) # Fallback to zeros
+                 # Use a specific value like -1 or np.nan if XGBoost handles it, else zeros
+                 labels = np.full(len(data), -1, dtype=int) # Fallback to -1
 
         # Transform labels if encoder is ready
         if hasattr(processor.label_encoder, 'classes_') and processor.label_encoder.classes_.size > 0:
@@ -195,9 +196,13 @@ def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_t
             except ValueError as e:
                 log(ERROR, f"Error transforming labels: {e}. Unseen labels might exist.")
                 # Fallback: assign a default value like -1 or try to refit/update encoder
-                labels = np.zeros(len(data)) # Simple fallback for now
-        elif labels is None: # If fitting failed or wasn't possible
-             labels = np.zeros(len(data))
+                # Ensure fallback has same length as data
+                log(ERROR, f"Assigning fallback labels due to transform error.")
+                labels = np.full(len(data), -1, dtype=int) # Simple fallback for now
+        elif labels is None: # If fitting failed or wasn't possible earlier
+             # Ensure fallback has same length as data
+             log(WARNING, "Assigning fallback labels because fitting failed or was not possible.")
+             labels = np.full(len(data), -1, dtype=int)
 
     elif 'label' in data.columns:
         # If only binary label, we might still want to return it, but tune script expects multi-class
@@ -272,119 +277,12 @@ def instantiate_partitioner(partitioner_type: str, num_partitions: int):
     )
     return partitioner
 
-def preprocess_data_deprec2(data):
-    """/
-    Preprocess the data by encoding categorical features and separating features and labels.
-    
-    Args:
-        data (pd.DataFrame): Input DataFrame
-        
-    Returns:
-        tuple: (features DataFrame, labels Series or None if unlabeled)
-    """
-    # Define categorical and numerical features
-    categorical_features = ['id.orig_h', 'id.resp_h', 'proto', 'conn_state', 'history']
-    numerical_features = ['id.orig_p', 'id.resp_p', 'duration', 'orig_bytes', 'resp_bytes',
-                         'local_orig', 'local_resp', 'missed_bytes', 'orig_pkts', 
-                         'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes']
-    
-    # Create a copy to avoid modifying original data
-    df = data.copy()
-    
-    # Convert categorical features to category type
-    for col in categorical_features:
-        df[col] = df[col].astype('category')
-        # Get numerical codes for categories
-        df[col] = df[col].cat.codes
-    
-    # Ensure numerical features are float type
-    for col in numerical_features:
-        df[col] = df[col].astype(float)
-    
-    # Check if this is labeled or unlabeled data
-    if 'label' in df.columns:
-        # For labeled data
-        features = df.drop(columns=['label'])
-        labels = df['label'].astype(float)
-        return features, labels
-    # For unlabeled data
-    return df, None
-
-def preprocess_data_deprec(data):
-    """
-    Preprocess the static_data.csv dataset by:
-      - Dropping the 'Timestamp' column.
-      - Converting 'Dst Port' and 'Protocol' to categorical features.
-      - Converting remaining features (except 'Label') to numerical (float).
-      - Separating features and target (Label), and encoding the target if necessary.
-    
-    Args:
-        filepath (str): Path to the static_data.csv file.
-    
-    Returns:
-        tuple: (features DataFrame, labels Series or None if unlabeled)
-    """
-    # Create a copy to avoid modifying original data
-    df = data.copy()
-
-    # Drop 'Timestamp' as it is not used for training directly
-    if 'Timestamp' in df.columns:
-        df.drop(columns=['Timestamp'], inplace=True)
-    
-    # Define which columns to treat as categorical based on domain knowledge
-    categorical_features = []
-    if 'Dst Port' in df.columns:
-        categorical_features.append('Dst Port')
-    if 'Protocol' in df.columns:
-        categorical_features.append('Protocol')
-    
-    # Convert categorical features to type 'category' and then to numerical codes
-    for col in categorical_features:
-        df[col] = df[col].astype('category').cat.codes
-    
-    # The numerical features are all columns except the ones we have categorized or the target
-    numerical_features = [col for col in df.columns if col not in categorical_features + ['Label']]
-    
-    # Convert these numerical features to float
-    for col in numerical_features:
-        df[col] = df[col].astype(float)
-
-    # Replace inf with NaN and cap large values
-    df.replace([np.inf, -np.inf], np.nan, inplace=True)
-    for col in numerical_features:
-        max_val = 1e15  # Example max value, adjust as needed
-        df[col] = np.where(df[col] > max_val, np.nan, df[col])
-
-    # Process the target variable if present
-    if 'Label' in df.columns:
-        # If the label column is non-numeric (object), encode it as categorical codes.
-        if df['Label'].dtype == object:
-            labels = df['Label'].astype('category').cat.codes
-        else:
-            labels = df['Label']
-        features = df.drop(columns=['Label'])
-        return features, labels
-    # If no label column, return the processed DataFrame and None for labels
-    return df, None
-        
-def separate_xy(data):
-    """
-    Separate features and labels from the dataset.
-    
-    Args:
-        data: Input dataset
-        
-    Returns:
-        tuple: (features, labels or None if unlabeled)
-    """
-    return preprocess_data(data.to_pandas())
-
 def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_training: bool = False):
     """
     Transform dataset to DMatrix format.
     
     Args:
-        data: Input dataset
+        data: Input dataset (should be pandas DataFrame)
         processor (FeatureProcessor): Feature processor instance for consistent preprocessing
         is_training (bool): Whether this is training data
         
@@ -394,9 +292,20 @@ def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_tr
     # The input 'data' should already be a pandas DataFrame in this context
     x, y = preprocess_data(data, processor=processor, is_training=is_training)
     
+    # --- Logging before DMatrix creation ---
+    log(INFO, f"[transform_dataset_to_dmatrix] is_training={is_training}")
+    log(INFO, f"[transform_dataset_to_dmatrix] Features shape: {x.shape}")
+    if y is not None:
+        log(INFO, f"[transform_dataset_to_dmatrix] Labels type: {type(y)}")
+        log(INFO, f"[transform_dataset_to_dmatrix] Labels shape: {y.shape if hasattr(y, 'shape') else 'N/A'}")
+        log(INFO, f"[transform_dataset_to_dmatrix] Labels head: {y[:5] if hasattr(y, '__len__') and len(y) > 0 else 'N/A'}")
+    else:
+        log(INFO, "[transform_dataset_to_dmatrix] Labels are None.")
+    # --- End Logging ---
+
     # Handle case where preprocess_data might return None for labels (e.g., unlabeled data)
     if y is None:
-        log(INFO, "No labels found in data. This appears to be unlabeled data for prediction only.")
+        log(INFO, "No labels found in data. Creating DMatrix without labels.")
         return xgb.DMatrix(x, missing=np.nan)
     
     # For validation data, log label distribution to help identify issues
@@ -519,7 +428,8 @@ def train_test_split(
     log(INFO, "Train DMatrix has %d rows, Test DMatrix has %d rows", 
         train_dmatrix.num_row(), test_dmatrix.num_row())
     
-    return train_dmatrix, test_dmatrix, processor # Return the fitted processor
+    # Return the fitted processor along with DMatrices
+    return train_dmatrix, test_dmatrix, processor
 
 def resplit(dataset: DatasetDict) -> DatasetDict:
     """
@@ -559,31 +469,32 @@ def resplit(dataset: DatasetDict) -> DatasetDict:
         }
     )
 
-class ModelPredictor:
-    """
-    Handles model prediction and dataset labeling
-    """
-    def __init__(self, model_path: str):
-        self.model = xgb.Booster()
-        self.model.load_model(model_path)
+# Comment out or remove ModelPredictor if not used or complete
+# class ModelPredictor:
+#     """
+#     Handles model prediction and dataset labeling
+#     """
+#     def __init__(self, model_path: str):
+#         self.model = xgb.Booster()
+#         self.model.load_model(model_path)
     
-    def predict_and_save(
-        self,
-        input_data: Union[str, pd.DataFrame],
-        output_path: str,
-        include_confidence: bool = True
-    ):
-        """
-        Predict on new data and save labeled dataset
-        """
-        # Load/preprocess input data
-        data = self._prepare_data(input_data)
+#     def predict_and_save(
+#         self,
+#         input_data: Union[str, pd.DataFrame],
+#         output_path: str,
+#         include_confidence: bool = True
+#     ):
+#         """
+#         Predict on new data and save labeled dataset
+#         """
+#         # Load/preprocess input data
+#         # data = self._prepare_data(input_data) # Requires _prepare_data method
         
-        # Generate predictions
-        predictions = self.model.predict(data)
-        confidence = None
-        if include_confidence:
-            confidence = self.model.predict(data, output_margin=True)
+#         # Generate predictions
+#         # predictions = self.model.predict(data)
+#         # confidence = None
+#         # if include_confidence:
+#         #     confidence = self.model.predict(data, output_margin=True)
         
-        # Save labeled dataset
-        self._save_output(data, predictions, confidence, output_path)
+#         # Save labeled dataset
+#         # self._save_output(data, predictions, confidence, output_path) # Requires _save_output method

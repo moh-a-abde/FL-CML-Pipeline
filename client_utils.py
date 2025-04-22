@@ -11,7 +11,7 @@ Key Components:
 - Metrics computation (precision, recall, F1)
 """
 
-from logging import INFO
+from logging import INFO, ERROR
 import xgboost as xgb
 from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix, classification_report, accuracy_score
 import flwr as fl
@@ -85,6 +85,7 @@ class XgbClient(fl.client.Client):
         train_method (str): Training method ('bagging' or 'cyclic')
         is_prediction_only (bool): Flag indicating if the client is used for prediction only
         unlabeled_dmatrix: Unlabeled data in XGBoost's DMatrix format
+        cid: Client ID for logging purposes
     """
 
     def __init__(
@@ -94,6 +95,7 @@ class XgbClient(fl.client.Client):
         num_train,
         num_val,
         num_local_round,
+        cid,
         params=None,
         train_method="cyclic",
         is_prediction_only=False,
@@ -109,6 +111,7 @@ class XgbClient(fl.client.Client):
             num_train (int): Number of training samples
             num_val (int): Number of validation samples
             num_local_round (int): Number of local training rounds
+            cid: Client ID for logging purposes
             params (dict): XGBoost parameters (defaults to BST_PARAMS if None)
             train_method (str): Training method ('bagging' or 'cyclic')
             is_prediction_only (bool): Flag indicating if the client is used for prediction only
@@ -120,6 +123,7 @@ class XgbClient(fl.client.Client):
         self.num_train = num_train
         self.num_val = num_val
         self.num_local_round = num_local_round
+        self.cid = cid
         
         # Use tuned parameters if available and requested
         if params is not None:
@@ -199,6 +203,18 @@ class XgbClient(fl.client.Client):
         })
 
         y_train = self.train_dmatrix.get_label()
+
+        # --- Check if labels are empty --- 
+        if y_train.size == 0:
+            log(ERROR, f"Client {self.cid}: Training DMatrix has no labels. Cannot proceed with fit.")
+            return FitRes(
+                status=Status(code=Code.FIT_NOT_IMPLEMENTED, message="Training data is missing labels."),
+                parameters=Parameters(tensor_type="", tensors=[]), # Return empty params
+                num_examples=0,
+                metrics={}
+            )
+        # --- End Check ---
+        
         # Ensure labels are integers for compute_sample_weight
         y_train_int = y_train.astype(int)
 
@@ -225,7 +241,11 @@ class XgbClient(fl.client.Client):
         log(INFO, f"Shape of y_train_int: {y_train_int.shape}")
         log(INFO, f"Unique values in y_train_int: {np.unique(y_train_int)}")
         log(INFO, f"dtype of y_train_int: {y_train_int.dtype}")
-        log(INFO, f"Min/Max values in y_train_int: {np.min(y_train_int)} / {np.max(y_train_int)}")
+        # Only log min/max if array is not empty
+        if y_train_int.size > 0:
+            log(INFO, f"Min/Max values in y_train_int: {np.min(y_train_int)} / {np.max(y_train_int)}")
+        else:
+            log(INFO, "y_train_int is empty, cannot calculate Min/Max.")
         # --- End Debugging ---
 
         # Compute sample weights for class imbalance
