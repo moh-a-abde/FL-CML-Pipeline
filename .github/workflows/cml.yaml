@@ -97,8 +97,8 @@ jobs:
           mkdir -p data/sample
           
           # Define train and test file paths for UNSW_NB15
-          TRAIN_FILE="received/UNSW_NB15_training-set.csv"
-          TEST_FILE="received/UNSW_NB15_testing-set.csv"
+          TRAIN_FILE="data/received/UNSW_NB15_training-set.csv"
+          TEST_FILE="data/received/UNSW_NB15_testing-set.csv"
           
           # Check if the UNSW_NB15 files exist, otherwise use sample data
           if [ -f "$TRAIN_FILE" ] && [ -f "$TEST_FILE" ]; then
