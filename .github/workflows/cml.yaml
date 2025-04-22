@@ -134,7 +134,7 @@ jobs:
           mkdir -p tune_results
           
           # Use a small number of samples in CI for speed; default is 100 for local runs
-          bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples 5 --cpus-per-trial 4 --output-dir "./tune_results"
+          bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples 100 --cpus-per-trial 4 --output-dir "./tune_results"
           
           # Apply the tuned parameters to the federated learning system
           if [ -f "tune_results/best_params.json" ]; then

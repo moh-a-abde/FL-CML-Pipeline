@@ -246,7 +246,6 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
             num_samples=num_samples,
             search_alg=algo
         ),
-        param_space=search_space,  # Pass the hyperparameter search space here
         run_config=air.RunConfig( # Use air.RunConfig
             local_dir=output_dir,
             name="xgboost_tune",
@@ -277,7 +276,7 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
         
         # Save the best hyperparameters to a JSON file
         best_params_path = os.path.join(output_dir, "best_params.json")
-        with open(best_params_path, 'w') as f:
+        with open(best_params_path, 'w', encoding='utf-8') as f:
             # Convert numpy types to native Python types for JSON serialization
             serializable_config = {k: (int(v) if isinstance(v, np.integer) else float(v) if isinstance(v, np.floating) else v) for k, v in best_config.items()}
             json.dump(serializable_config, f, indent=2)
