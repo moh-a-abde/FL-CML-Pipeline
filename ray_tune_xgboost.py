@@ -109,14 +109,15 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
     eval_merror = results['eval']['merror'][final_iteration]
     
     # Make predictions for more detailed metrics
-    y_pred = bst.predict(test_data)
+    y_pred_proba = bst.predict(test_data) # Renamed from y_pred
+    y_pred_labels = np.argmax(y_pred_proba, axis=1) # Get predicted labels from probabilities
     y_true = test_data.get_label()
     
-    # Compute multi-class metrics
-    precision = precision_score(y_true, y_pred, average='weighted')
-    recall = recall_score(y_true, y_pred, average='weighted')
-    f1 = f1_score(y_true, y_pred, average='weighted')
-    accuracy = accuracy_score(y_true, y_pred)
+    # Compute multi-class metrics using predicted labels
+    precision = precision_score(y_true, y_pred_labels, average='weighted', zero_division=0)
+    recall = recall_score(y_true, y_pred_labels, average='weighted', zero_division=0)
+    f1 = f1_score(y_true, y_pred_labels, average='weighted', zero_division=0)
+    accuracy = accuracy_score(y_true, y_pred_labels)
     
     # Return metrics to Ray Tune instead of using tune.report
     return {
@@ -324,14 +325,15 @@ def train_final_model(config: dict,
     logger.info("Final model saved to %s", model_path)
     
     # Evaluate the model
-    y_pred = final_model.predict(test_data)
+    y_pred_proba = final_model.predict(test_data) # Renamed from y_pred
+    y_pred_labels = np.argmax(y_pred_proba, axis=1) # Get predicted labels from probabilities
     y_true = test_data.get_label()
     
     # Generate performance metrics
-    precision = precision_score(y_true, y_pred, average='weighted')
-    recall = recall_score(y_true, y_pred, average='weighted')
-    f1 = f1_score(y_true, y_pred, average='weighted')
-    accuracy = accuracy_score(y_true, y_pred)
+    precision = precision_score(y_true, y_pred_labels, average='weighted', zero_division=0)
+    recall = recall_score(y_true, y_pred_labels, average='weighted', zero_division=0)
+    f1 = f1_score(y_true, y_pred_labels, average='weighted', zero_division=0)
+    accuracy = accuracy_score(y_true, y_pred_labels)
     
     # Log final performance
     logger.info("Final model performance:")
