@@ -209,7 +209,7 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
         round_num (int): Round number
         output_dir (str, optional): Directory to save results to. If None, uses the default results directory.
         true_labels (array, optional): True labels if available
-        prediction_types (list, optional): List of prediction type strings (e.g., 'benign', 'dns_tunneling', etc.)
+        prediction_types (list, optional): List of prediction type strings (e.g., 'Normal', 'Reconnaissance', etc.)
         
     Returns:
         str: Path to the saved CSV file
@@ -229,8 +229,19 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     if prediction_types is not None:
         predictions_dict['prediction_type'] = prediction_types
     else:
-        # Default mapping for multi-class predictions
-        label_mapping = {0: 'benign', 1: 'dns_tunneling', 2: 'icmp_tunneling'}
+        # Default mapping for UNSW_NB15 multi-class predictions
+        label_mapping = {
+            0: 'Normal', 
+            1: 'Reconnaissance', 
+            2: 'Backdoor', 
+            3: 'DoS', 
+            4: 'Exploits', 
+            5: 'Analysis', 
+            6: 'Fuzzers', 
+            7: 'Worms', 
+            8: 'Shellcode', 
+            9: 'Generic'
+        }
         predictions_dict['prediction_type'] = [label_mapping.get(int(p), 'unknown') for p in predictions]
     
     # Add true labels if available

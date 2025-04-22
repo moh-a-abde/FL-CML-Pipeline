@@ -1,25 +1,32 @@
-# This file is generated automatically by use_tuned_params.py
-# It contains optimized XGBoost parameters found by Ray Tune
+"""
+tuned_params.py
 
+This file contains tuned hyperparameters for the XGBoost model when using the UNSW_NB15 dataset.
+These parameters are automatically loaded by client_utils.py when available.
+
+Note: These are starter parameters that should be refined using ray_tune_xgboost.py
+"""
+
+# Tuned parameters for UNSW-NB15 multi-class classification
 TUNED_PARAMS = {
-    'objective': 'multi:softmax',
-    'num_class': 3,
-    'eta': 0.0017574056471531343,
-    'max_depth': 5,
-    'min_child_weight': 19,
-    'gamma': 1.0,
-    'subsample': 0.7626600174065583,
-    'colsample_bytree': 0.5836140774820693,
-    'colsample_bylevel': 0.6,
-    'nthread': 16,
-    'tree_method': 'hist',
-    'eval_metric': ['mlogloss', 'merror'],
-    'max_delta_step': 5,
-    'reg_alpha': 4.000877452784171,
-    'reg_lambda': 6.121688592715271,
-    'base_score': 0.5,
-    'scale_pos_weight': [1.0, 2.0, 1.0],
-    'grow_policy': 'lossguide',
-    'normalize_type': 'tree',
-    'random_state': 42,
+    "objective": "multi:softmax",
+    "num_class": 10,  # Classes: Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic
+    "eta": 0.03,
+    "max_depth": 5,
+    "min_child_weight": 5,
+    "gamma": 0.8,
+    "subsample": 0.8,
+    "colsample_bytree": 0.7,
+    "colsample_bylevel": 0.7,
+    "nthread": 16,
+    "tree_method": "hist",
+    "eval_metric": ["mlogloss", "merror"],
+    "max_delta_step": 3,
+    "reg_alpha": 1.5,
+    "reg_lambda": 3.0,
+    "base_score": 0.5,
+    "scale_pos_weight": 1.0,
+    "grow_policy": "lossguide",
+    "normalize_type": "tree",
+    "random_state": 42
 }

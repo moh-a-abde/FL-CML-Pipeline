@@ -5,7 +5,7 @@ import argparse
 NUM_LOCAL_ROUND = 1
 BST_PARAMS = {
     "objective": "multi:softmax",
-    "num_class": 3,
+    "num_class": 10,  # 10 classes for UNSW_NB15: Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic
     "eta": 0.05,  # Reduced learning rate to prevent overfitting
     "max_depth": 3,  # Reduced max_depth to prevent memorization
     "min_child_weight": 10,  # Increased to prevent fitting to small samples
@@ -20,7 +20,7 @@ BST_PARAMS = {
     "reg_alpha": 2.0,  # Increased L1 regularization
     "reg_lambda": 5.0,  # Increased L2 regularization
     "base_score": 0.5,  # Neutral starting point
-    "scale_pos_weight": [1.0, 2.0, 1.0],  # More moderate weight adjustment for dns_tunneling
+    "scale_pos_weight": 1.0,  # Simplified for multi-class with >3 classes
     "grow_policy": "lossguide",  # Alternative tree growing policy
     "normalize_type": "tree",  # Helps with interpretability
     "random_state": 42  # Fixed seed for reproducibility

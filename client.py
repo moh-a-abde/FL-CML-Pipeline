@@ -63,11 +63,11 @@ if __name__ == "__main__":
     os.makedirs("data/received", exist_ok=True)
     
     # Load labeled data for training
-    labeled_csv_path = "data/received/network_train_60.csv"
+    labeled_csv_path = "data/received/UNSW_NB15_training-set.csv"
     labeled_dataset = load_csv_data(labeled_csv_path)
     
     # Load unlabeled data for prediction
-    unlabeled_csv_path = "data/received/network_test_40_nolabel.csv"
+    unlabeled_csv_path = "data/received/UNSW_NB15_testing-set.csv"
     unlabeled_dataset = load_csv_data(unlabeled_csv_path)
     
     # Initialize data partitioner based on specified strategy

@@ -46,22 +46,20 @@ class FeatureProcessor:
         self.categorical_encoders = {}
         self.numerical_stats = {}
         self.is_fitted = False
+        self.label_encoder = LabelEncoder()
         
-        # Define feature groups
+        # Define feature groups for UNSW_NB15 dataset
         self.categorical_features = [
-            'id.orig_h', 'id.resp_h', 'proto', 'conn_state', 'history', 
-            'validation_status', 'method', 'status_msg', 'is_orig',
-            'local_orig', 'local_resp'
+            'proto', 'service', 'state', 'is_ftp_login', 'is_sm_ips_ports'
         ]
         self.numerical_features = [
-            'id.orig_p', 'id.resp_p', 'duration', 'orig_bytes', 'resp_bytes',
-            'missed_bytes', 'orig_pkts',
-            'orig_ip_bytes', 'resp_pkts', 'resp_ip_bytes', 'ts_delta',
-            'rtt', 'acks', 'percent_lost', 'request_body_len',
-            'response_body_len', 'seen_bytes', 'missing_bytes', 'overflow_bytes'
+            'dur', 'spkts', 'dpkts', 'sbytes', 'dbytes', 'rate', 'sttl', 'dttl', 
+            'sload', 'dload', 'sloss', 'dloss', 'sinpkt', 'dinpkt', 'sjit', 'djit', 
+            'swin', 'stcpb', 'dtcpb', 'dwin', 'tcprtt', 'synack', 'ackdat', 'smean', 
+            'dmean', 'trans_depth', 'response_body_len', 'ct_srv_src', 'ct_state_ttl', 
+            'ct_dst_ltm', 'ct_src_dport_ltm', 'ct_dst_sport_ltm', 'ct_dst_src_ltm', 
+            'ct_ftp_cmd', 'ct_flw_http_mthd', 'ct_src_ltm', 'ct_srv_dst'
         ]
-        # Removed object_columns as they may cause data leakage
-        log(INFO, "Note: Removed object_columns (uid, client_initial_dcid, server_scid) to prevent potential data leakage")
 
     def fit(self, df: pd.DataFrame) -> None:
         """Fit preprocessing parameters on training data only."""
@@ -80,9 +78,9 @@ class FeatureProcessor:
                 if len(unique_values) > 1 and len(unique_values) < 10:
                     for val in unique_values:
                         subset = df[df[col] == val]
-                        if 'label' in df.columns and len(subset) > 0:
-                            most_common_label = subset['label'].value_counts().idxmax()
-                            label_pct = subset['label'].value_counts()[most_common_label] / len(subset)
+                        if 'attack_cat' in df.columns and len(subset) > 0:
+                            most_common_label = subset['attack_cat'].value_counts().idxmax()
+                            label_pct = subset['attack_cat'].value_counts()[most_common_label] / len(subset)
                             if label_pct > 0.9:  # If >90% of rows with this value have the same label
                                 log(WARNING, "Potential data leakage detected: Feature '%s' value '%s' is highly predictive of label %s (%.1f%% match)",
                                     col, val, most_common_label, label_pct * 100)
@@ -96,6 +94,10 @@ class FeatureProcessor:
                     'median': df[col].median(),
                     'q99': df[col].quantile(0.99)
                 }
+        
+        # Fit label encoder for attack_cat if present
+        if 'attack_cat' in df.columns:
+            self.label_encoder.fit(df['attack_cat'])
 
         self.is_fitted = True
 
@@ -108,17 +110,10 @@ class FeatureProcessor:
 
         df = df.copy()
         
-        # Drop object columns since they might be causing data leakage
-        object_columns_to_remove = ['uid', 'client_initial_dcid', 'server_scid']
-        columns_dropped = []
-        for col in object_columns_to_remove:
-            if col in df.columns:
-                df.drop(columns=[col], inplace=True)
-                columns_dropped.append(col)
+        # Drop id column since it's just an identifier
+        if 'id' in df.columns:
+            df.drop(columns=['id'], inplace=True)
         
-        if columns_dropped and not is_training:
-            log(INFO, "Dropped potential leakage columns: %s", columns_dropped)
-
         # Transform categorical features
         for col in self.categorical_features:
             if col in df.columns and col in self.categorical_encoders:
@@ -131,35 +126,24 @@ class FeatureProcessor:
                 # Replace infinities
                 df[col] = df[col].replace([np.inf, -np.inf], np.nan)
                 
-                # Add noise to all numerical features for validation data
-                # This ensures validation is a truly independent test
-                if not is_training:
-                    # Skip noise addition as it's now handled in train_test_split only
-                    pass
-                    
                 # Cap outliers using 99th percentile
                 q99 = self.numerical_stats[col]['q99']
-                df.loc[df[col] > q99, col] = q99  # Re-enabled outlier capping
+                df.loc[df[col] > q99, col] = q99  # Cap outliers
                 
-                # Fill NaN with median plus small noise
+                # Fill NaN with median
                 median = self.numerical_stats[col]['median']
                 # Find NaN positions
                 nan_mask = df[col].isna()
                 
-                # First fill with median value
+                # Fill with median value
                 df[col] = df[col].fillna(median)
-                
-                # Then add noise only to the previously NaN positions if not training
-                if not is_training and nan_mask.any():
-                    # Skip noise addition as it's now handled in train_test_split only
-                    pass
 
         return df
 
 def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_training: bool = False):
     """
     Preprocess the data by encoding categorical features and separating features and labels.
-    Handles multi-class classification with three classes: benign (0), dns_tunneling (1), and icmp_tunneling (2).
+    Handles multi-class classification for the UNSW_NB15 dataset with 10 classes.
     
     Args:
         data (pd.DataFrame): Input DataFrame
@@ -175,18 +159,29 @@ def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_t
     # Process features
     df = processor.transform(data, is_training)
     
-    # Handle labels
-    if 'label' in df.columns:
-        features = df.drop(columns=['label'])
-        labels = df['label'].astype(int)
+    # Handle labels - use attack_cat for multi-class classification
+    if 'attack_cat' in df.columns:
+        features = df.drop(columns=['attack_cat'])
         
-        # Validate labels
-        unique_labels = labels.unique()
-        if not all(label in [0, 1, 2] for label in unique_labels):
-            print(f"Warning: Unexpected label values found: {unique_labels}")
-            labels = labels.map(lambda x: x if x in [0, 1, 2] else -1)
+        # For binary label column, also drop it if it exists
+        if 'label' in features.columns:
+            features = features.drop(columns=['label'])
+        
+        # Encode the attack categories
+        if is_training or processor.label_encoder.classes_.size > 0:
+            if processor.label_encoder.classes_.size == 0:
+                processor.label_encoder.fit(df['attack_cat'])
+            labels = processor.label_encoder.transform(df['attack_cat'])
+        else:
+            # For prediction only, provide dummy labels
+            labels = np.zeros(len(df))
         
         return features, labels
+    elif 'label' in df.columns:
+        # If only binary label column is present, remove it and return features only
+        features = df.drop(columns=['label'])
+        return features, None
+    
     return df, None
 
 def load_csv_data(file_path: str) -> DatasetDict:

@@ -36,17 +36,17 @@ from server_utils import save_predictions_to_csv
 import importlib.util
 from sklearn.utils.class_weight import compute_sample_weight
 
-# Default XGBoost parameters for multi-class classification
+# Default XGBoost parameters for UNSW_NB15 multi-class classification
 BST_PARAMS = {
     'objective': 'multi:softmax',  # Multi-class classification
-    'num_class': 3,  # Classes: benign (0), dns_tunneling (1), icmp_tunneling (2)
+    'num_class': 10,  # Classes: Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic
     'eval_metric': ['mlogloss', 'merror'],  # Multi-class metrics
-    'learning_rate': 0.05,  # Reduced to match utils.py and prevent overfitting
+    'learning_rate': 0.05,
     'max_depth': 6,
     'min_child_weight': 1,
     'subsample': 0.8,
     'colsample_bytree': 0.8,
-    'scale_pos_weight': [1.0, 2.0, 1.0]  # More moderate weight adjustment for dns_tunneling
+    'scale_pos_weight': 1.0  # Removed class-specific weights as it's not compatible with multi-class with >3 classes
 }
 
 # Try to import tuned parameters if available
@@ -201,10 +201,13 @@ class XgbClient(fl.client.Client):
         y_train = self.train_dmatrix.get_label()
         class_counts = np.bincount(y_train.astype(int))
         
-        # Log class distribution for all three classes
-        class_names = ['benign', 'dns_tunneling', 'icmp_tunneling']
+        # Log class distribution for all classes
+        class_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic']
         for i, count in enumerate(class_counts):
-            class_name = class_names[i] if i < len(class_names) else f'unknown_{i}'
+            if i < len(class_names):
+                class_name = class_names[i]
+            else:
+                class_name = f'unknown_{i}'
             log(INFO, f"Training data class {class_name}: {count}")
         
         # Compute sample weights for class imbalance
@@ -269,9 +272,12 @@ class XgbClient(fl.client.Client):
         
         # Log ground truth distribution
         true_counts = np.bincount(y_true.astype(int))
-        class_names = ['benign', 'dns_tunneling', 'icmp_tunneling']
+        class_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic']
         for i, count in enumerate(true_counts):
-            class_name = class_names[i] if i < len(class_names) else f'unknown_{i}'
+            if i < len(class_names):
+                class_name = class_names[i]
+            else:
+                class_name = f'unknown_{i}'
             log(INFO, f"Ground truth {class_name}: {count}")
         
         # Compute multi-class metrics
@@ -284,17 +290,26 @@ class XgbClient(fl.client.Client):
         epsilon = 1e-15  # Small constant to avoid log(0)
         y_pred_proba_softmax = np.exp(y_pred_proba) / np.sum(np.exp(y_pred_proba), axis=1, keepdims=True)
         y_true_one_hot = np.zeros_like(y_pred_proba_softmax)
-        y_true_one_hot[np.arange(len(y_true)), y_true.astype(int)] = 1
+        for i in range(len(y_true)):
+            if y_true[i] < y_true_one_hot.shape[1]:
+                y_true_one_hot[i, int(y_true[i])] = 1
         mlogloss = -np.mean(np.sum(y_true_one_hot * np.log(y_pred_proba_softmax + epsilon), axis=1))
         
         # Compute confusion matrix
         try:
             conf_matrix = confusion_matrix(y_true, y_pred_labels)
-        except Exception:
-            conf_matrix = np.zeros((3, 3), dtype=int)
+        except Exception as e:
+            log(INFO, f"Error computing confusion matrix: {str(e)}")
+            # Create empty confusion matrix
+            num_classes = 10  # UNSW_NB15 has 10 classes
+            conf_matrix = np.zeros((num_classes, num_classes), dtype=int)
 
         # Generate detailed classification report
-        class_report = classification_report(y_true, y_pred_labels, target_names=class_names)
+        try:
+            class_report = classification_report(y_true, y_pred_labels, target_names=class_names[:len(np.unique(np.concatenate([y_true, y_pred_labels])))])
+            log(INFO, f"Classification Report:\n{class_report}")
+        except Exception as e:
+            log(INFO, f"Error generating classification report: {str(e)}")
         
         # Log evaluation metrics
         log(INFO, f"Precision (weighted): {precision:.4f}")
@@ -302,8 +317,7 @@ class XgbClient(fl.client.Client):
         log(INFO, f"F1 Score (weighted): {f1:.4f}")
         log(INFO, f"Accuracy: {accuracy:.4f}")
         log(INFO, f"Multi-class Log Loss: {mlogloss:.4f}")
-        log(INFO, f"Confusion Matrix:\n{conf_matrix}")
-        log(INFO, f"Classification Report:\n{class_report}")
+        log(INFO, f"Confusion Matrix shape: {conf_matrix.shape}")
 
         # Save predictions for this round
         global_round = int(ins.config["global_round"])
@@ -322,18 +336,16 @@ class XgbClient(fl.client.Client):
             "recall": float(recall),
             "f1": float(f1),
             "accuracy": float(accuracy),
-            "mlogloss": float(mlogloss),
-            # Store confusion matrix elements as individual metrics
-            "conf_00": int(conf_matrix[0][0]),  # benign correct
-            "conf_01": int(conf_matrix[0][1]),  # benign misclassified as dns
-            "conf_02": int(conf_matrix[0][2]),  # benign misclassified as icmp
-            "conf_10": int(conf_matrix[1][0]),  # dns misclassified as benign
-            "conf_11": int(conf_matrix[1][1]),  # dns correct
-            "conf_12": int(conf_matrix[1][2]),  # dns misclassified as icmp
-            "conf_20": int(conf_matrix[2][0]),  # icmp misclassified as benign
-            "conf_21": int(conf_matrix[2][1]),  # icmp misclassified as dns
-            "conf_22": int(conf_matrix[2][2])   # icmp correct
+            "mlogloss": float(mlogloss)
         }
+        
+        # Add confusion matrix elements as individual metrics (up to 10x10 for UNSW-NB15)
+        for i in range(min(10, conf_matrix.shape[0])):
+            for j in range(min(10, conf_matrix.shape[1])):
+                if i < conf_matrix.shape[0] and j < conf_matrix.shape[1]:
+                    metrics[f"conf_{i}{j}"] = int(conf_matrix[i][j])
+                else:
+                    metrics[f"conf_{i}{j}"] = 0
         
         return EvaluateRes(
             status=Status(code=Code.OK, message="Success"),
