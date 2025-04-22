@@ -18,7 +18,8 @@ import json
 import xgboost as xgb
 import pandas as pd
 import numpy as np
-from ray import tune
+import ray  # Import ray
+from ray import tune, ObjectRef # Import ObjectRef for type hinting
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune.search.hyperopt import HyperOptSearch
 from hyperopt import hp
@@ -36,20 +37,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
+def train_xgboost(config, train_df: ObjectRef, test_df: ObjectRef):
     """
     Training function for XGBoost that can be used with Ray Tune.
     Args:
         config (dict): Hyperparameters to use for training
-        train_df (pd.DataFrame): Training data as DataFrame
-        test_df (pd.DataFrame): Test data as DataFrame
+        train_df (ObjectRef): Ray object reference to the training DataFrame
+        test_df (ObjectRef): Ray object reference to the test DataFrame
     """
     logger.info("Starting trial with config: %s", config)
     
-    # Use preprocess_data to get features and encoded labels
+    # Retrieve dataframes from object store
+    actual_train_df = ray.get(train_df)
+    actual_test_df = ray.get(test_df)
+    
+    # Use preprocess_data with the retrieved dataframes
     processor = FeatureProcessor()
-    train_features, train_labels = preprocess_data(train_df, processor=processor, is_training=True)
-    test_features, test_labels = preprocess_data(test_df, processor=processor, is_training=False)
+    train_features, train_labels = preprocess_data(actual_train_df, processor=processor, is_training=True)
+    test_features, test_labels = preprocess_data(actual_test_df, processor=processor, is_training=False)
     
     # Handle cases where test data might be unlabeled
     if test_labels is None:
@@ -147,6 +152,9 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
+    # Initialize Ray (needed for ray.put)
+    ray.init(ignore_reinit_error=True)
+    
     # Load and prepare data *once* before tuning starts
     logger.info("Loading training data from %s", train_file)
     train_df = load_csv_data(train_file)["train"].to_pandas()
@@ -154,8 +162,18 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     logger.info("Loading testing data from %s", test_file)
     test_df = load_csv_data(test_file)["train"].to_pandas() # Use train split of test file for validation
 
+    # Put data into Ray object store
+    logger.info("Putting dataframes into Ray object store...")
+    train_df_ref = ray.put(train_df)
+    test_df_ref = ray.put(test_df)
+    logger.info("Dataframes placed in object store.")
+
+    # Optional: Delete original dataframes to free memory if they are very large
+    # del train_df
+    # del test_df
+
     # Preprocess data *once* to get features/labels for the final model training
-    # and to fit the processor
+    # and to fit the processor (using the original dataframes before deletion/put)
     logger.info("Preprocessing data for final model training and fitting processor...")
     processor = FeatureProcessor()
     # We need the original dataframes (train_df, test_df) to pass to the trial wrapper
@@ -190,12 +208,6 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
         # Setting tree_method here might be sufficient, but review Ray Tune docs if issues persist
         search_space["tree_method"] = hp.choice("tree_method", ["gpu_hist"])
     
-    # Create a wrapper function that includes the *original* data DataFrames
-    # The train_xgboost function inside the trial will handle preprocessing
-    def _train_with_data_wrapper(config):
-        # Pass copies of the original dataframes to the training function
-        return train_xgboost(config, train_df.copy(), test_df.copy()) 
-
     # Set up HyperOptSearch
     algo = HyperOptSearch(
         search_space,
@@ -210,9 +222,16 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
         mode="min"
     )
     
+    # Use tune.with_parameters to pass the object references to the train_xgboost function
+    trainable_with_data = tune.with_parameters(
+        train_xgboost,
+        train_df=train_df_ref,
+        test_df=test_df_ref
+    )
+
     # Wrap trainable with resource specification
     trainable_with_resources = tune.with_resources(
-        _train_with_data_wrapper, 
+        trainable_with_data, # Use the trainable created with tune.with_parameters
         resources={"cpu": cpus_per_trial, "gpu": gpu_fraction if gpu_fraction else 0}
     )
 
@@ -221,13 +240,13 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     
     # Run the tuning with updated API
     tuner = tune.Tuner(
-        trainable_with_resources, # Use wrapped trainable
+        trainable_with_resources, # Use wrapped trainable with resources
         tune_config=tune.TuneConfig(
             scheduler=scheduler,
             num_samples=num_samples,
             search_alg=algo
         ),
-        param_space={},  # search space is handled by HyperOptSearch
+        param_space=search_space,  # Pass the hyperparameter search space here
         run_config=air.RunConfig( # Use air.RunConfig
             local_dir=output_dir,
             name="xgboost_tune",
@@ -240,30 +259,67 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     
     # Get the best trial
     best_result = results.get_best_result(metric="mlogloss", mode="min")
-    best_config = best_result.config
-    best_metrics = best_result.metrics
-    
-    # Log the best configuration and metrics
-    logger.info("Best hyperparameters found:")
-    logger.info(json.dumps(best_config, indent=2))
-    logger.info("Best metrics:")
-    logger.info("  mlogloss: %.4f", best_metrics['mlogloss'])
-    logger.info("  merror: %.4f", best_metrics['merror'])
-    logger.info("  precision: %.4f", best_metrics['precision'])
-    logger.info("  recall: %.4f", best_metrics['recall'])
-    logger.info("  f1: %.4f", best_metrics['f1'])
-    logger.info("  accuracy: %.4f", best_metrics['accuracy'])
-    
-    # Save the best hyperparameters to a file
-    best_params_file = os.path.join(output_dir, "best_params.json")
-    # Use utf-8 encoding when writing JSON
-    with open(best_params_file, 'w', encoding='utf-8') as f:
-        json.dump(best_config, f, indent=2)
-    logger.info("Best parameters saved to %s", best_params_file)
-    
-    # Train a final model with the best parameters using the preprocessed data
-    train_final_model(best_config, final_train_features, final_train_labels, final_test_features, final_test_labels, output_dir)
-    
+    # Check if best_result exists before accessing attributes
+    if best_result:
+        best_config = best_result.config
+        best_metrics = best_result.metrics
+        
+        # Log the best configuration and metrics
+        logger.info("Best hyperparameters found:")
+        logger.info(json.dumps(best_config, indent=2))
+        logger.info("Best metrics:")
+        logger.info("  mlogloss: %.4f", best_metrics['mlogloss'])
+        logger.info("  merror: %.4f", best_metrics['merror'])
+        logger.info("  precision: %.4f", best_metrics['precision'])
+        logger.info("  recall: %.4f", best_metrics['recall'])
+        logger.info("  f1: %.4f", best_metrics['f1'])
+        logger.info("  accuracy: %.4f", best_metrics['accuracy'])
+        
+        # Save the best hyperparameters to a JSON file
+        best_params_path = os.path.join(output_dir, "best_params.json")
+        with open(best_params_path, 'w') as f:
+            # Convert numpy types to native Python types for JSON serialization
+            serializable_config = {k: (int(v) if isinstance(v, np.integer) else float(v) if isinstance(v, np.floating) else v) for k, v in best_config.items()}
+            json.dump(serializable_config, f, indent=2)
+        logger.info("Best parameters saved to %s", best_params_path)
+        
+        # Train the final model using the best hyperparameters
+        # Note: We need the original dataframes for final model training, ensure they are still accessible
+        # If they were deleted, they need to be re-loaded or retrieved via ray.get()
+        # Re-retrieve from object store for final training
+        final_train_df = ray.get(train_df_ref)
+        final_test_df = ray.get(test_df_ref)
+
+        # Re-run preprocessing if necessary or use stored processor
+        # Assuming preprocess_data can handle dataframes directly
+        logger.info("Re-processing data for final model training...")
+        final_processor = FeatureProcessor()
+        final_train_features, final_train_labels = preprocess_data(final_train_df, processor=final_processor, is_training=True)
+        final_test_features, final_test_labels = preprocess_data(final_test_df, processor=final_processor, is_training=False)
+
+        if final_test_labels is None:
+             logger.warning("Test data has no labels. Using zeros for final model evaluation.")
+             final_test_labels = np.zeros(len(final_test_features))
+        else:
+             final_test_labels = final_test_labels.astype(int)
+        final_train_labels = final_train_labels.astype(int)
+
+        logger.info("Training final model with best parameters...")
+        train_final_model(
+            config=serializable_config, # Use the serializable config
+            train_features=final_train_features, # Pass processed features
+            train_labels=final_train_labels,     # Pass processed labels
+            test_features=final_test_features,   # Pass processed features
+            test_labels=final_test_labels,       # Pass processed labels
+            output_dir=output_dir
+        )
+    else:
+        logger.error("No best result found from tuning.")
+        best_config = {} # Return empty dict if no result
+
+    # Shutdown Ray
+    ray.shutdown()
+
     return best_config
 
 def train_final_model(config: dict, 

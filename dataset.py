@@ -312,7 +312,8 @@ def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_tr
     if not is_training:
         # Count occurrences of each label
         label_counts = np.bincount(y.astype(int))
-        label_names = ['benign', 'dns_tunneling', 'icmp_tunneling']
+        # Use the correct class names for UNSW_NB15 dataset
+        label_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic'] 
         log(INFO, "Label distribution in validation data:")
         for i, count in enumerate(label_counts):
             class_name = label_names[i] if i < len(label_names) else f'unknown_{i}'
