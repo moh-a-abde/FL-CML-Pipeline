@@ -37,19 +37,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def train_xgboost(config, train_df: ObjectRef, test_df: ObjectRef):
+def train_xgboost(config):
     """
     Training function for XGBoost that can be used with Ray Tune.
     Args:
-        config (dict): Hyperparameters to use for training
-        train_df (ObjectRef): Ray object reference to the training DataFrame
-        test_df (ObjectRef): Ray object reference to the test DataFrame
+        config (dict): Hyperparameters and data references
     """
     logger.info("Starting trial with config: %s", config)
-    
-    # Retrieve dataframes from object store
-    actual_train_df = ray.get(train_df)
-    actual_test_df = ray.get(test_df)
+
+    # Retrieve object references from config, then get dataframes
+    train_df_ref = config["train_df_ref"]
+    test_df_ref = config["test_df_ref"]
+    actual_train_df = ray.get(train_df_ref)
+    actual_test_df = ray.get(test_df_ref)
     
     # Use preprocess_data with the retrieved dataframes
     processor = FeatureProcessor()
@@ -208,7 +208,13 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
         # Setting tree_method here might be sufficient, but review Ray Tune docs if issues persist
         search_space["tree_method"] = hp.choice("tree_method", ["gpu_hist"])
     
-    # Set up HyperOptSearch
+    # Define fixed parameters (our object refs)
+    fixed_params = {
+        "train_df_ref": train_df_ref,
+        "test_df_ref": test_df_ref
+    }
+
+    # Set up HyperOptSearch with only tunable space
     algo = HyperOptSearch(
         search_space,
         metric="mlogloss",
@@ -222,16 +228,9 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
         mode="min"
     )
     
-    # Use tune.with_parameters to pass the object references to the train_xgboost function
-    trainable_with_data = tune.with_parameters(
-        train_xgboost,
-        train_df=train_df_ref,
-        test_df=test_df_ref
-    )
-
-    # Wrap trainable with resource specification
+    # Wrap the original train_xgboost function (now taking only config) with resources
     trainable_with_resources = tune.with_resources(
-        trainable_with_data, # Use the trainable created with tune.with_parameters
+        train_xgboost, # Use the original function
         resources={"cpu": cpus_per_trial, "gpu": gpu_fraction if gpu_fraction else 0}
     )
 
@@ -240,12 +239,13 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     
     # Run the tuning with updated API
     tuner = tune.Tuner(
-        trainable_with_resources, # Use wrapped trainable with resources
+        trainable_with_resources, # Use wrapped trainable
         tune_config=tune.TuneConfig(
             scheduler=scheduler,
             num_samples=num_samples,
-            search_alg=algo
+            search_alg=algo # Algo handles tunable search space
         ),
+        param_space=fixed_params,  # Pass fixed object references here
         run_config=air.RunConfig( # Use air.RunConfig
             local_dir=output_dir,
             name="xgboost_tune",
@@ -260,8 +260,11 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     best_result = results.get_best_result(metric="mlogloss", mode="min")
     # Check if best_result exists before accessing attributes
     if best_result:
-        best_config = best_result.config
+        best_config_from_tune = best_result.config
         best_metrics = best_result.metrics
+        
+        # Remove the data refs from the config before saving/using for final model
+        best_config = {k: v for k, v in best_config_from_tune.items() if k not in ["train_df_ref", "test_df_ref"]}
         
         # Log the best configuration and metrics
         logger.info("Best hyperparameters found:")
@@ -278,7 +281,7 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
         best_params_path = os.path.join(output_dir, "best_params.json")
         with open(best_params_path, 'w', encoding='utf-8') as f:
             # Convert numpy types to native Python types for JSON serialization
-            serializable_config = {k: (int(v) if isinstance(v, np.integer) else float(v) if isinstance(v, np.floating) else v) for k, v in best_config.items()}
+            serializable_config = {k: (int(v) if isinstance(v, np.integer) else float(v) if isinstance(v, np.floating) else v) for k, v in best_config.items()} # Use filtered best_config
             json.dump(serializable_config, f, indent=2)
         logger.info("Best parameters saved to %s", best_params_path)
         
@@ -305,7 +308,7 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
 
         logger.info("Training final model with best parameters...")
         train_final_model(
-            config=serializable_config, # Use the serializable config
+            config=best_config, # Use the filtered best_config
             train_features=final_train_features, # Pass processed features
             train_labels=final_train_labels,     # Pass processed labels
             test_features=final_test_features,   # Pass processed features
@@ -319,7 +322,8 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     # Shutdown Ray
     ray.shutdown()
 
-    return best_config
+    # Return only the tunable hyperparameters
+    return {k: v for k, v in best_config.items() if k not in ["train_df_ref", "test_df_ref"]}
 
 def train_final_model(config: dict, 
                       train_features: pd.DataFrame, train_labels: pd.Series, 
