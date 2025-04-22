@@ -180,7 +180,16 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     # Get dataframes back for fitting/preprocessing
     temp_train_df = ray.get(train_df_ref)
     temp_test_df = ray.get(test_df_ref)
+    
+    # Explicitly fit the processor on the training data first!
+    logger.info("Fitting the feature processor...")
+    processor.fit(temp_train_df)
+    logger.info("Feature processor fitted.")
+    
+    # Now preprocess both datasets using the fitted processor
+    logger.info("Preprocessing training data...")
     train_features, train_labels = preprocess_data(temp_train_df, processor=processor, is_training=True)
+    logger.info("Preprocessing testing data...")
     test_features, test_labels = preprocess_data(temp_test_df, processor=processor, is_training=False)
 
     # Handle potential missing labels in the test set (will be -1)
