@@ -92,7 +92,7 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
     bst = xgb.train(
         params,
         train_data,
-        num_boost_round=config['num_boost_round'],
+        num_boost_round=int(config['num_boost_round']),
         evals=[(test_data, 'eval'), (train_data, 'train')],
         evals_result=results,
         verbose_eval=False
@@ -342,7 +342,7 @@ def train_final_model(config, train_features, train_labels, test_features, test_
     final_model = xgb.train(
         params,
         train_data,
-        num_boost_round=config['num_boost_round'],
+        num_boost_round=int(config['num_boost_round']),
         evals=[(test_data, 'eval'), (train_data, 'train')],
         verbose_eval=True
     )
