@@ -85,6 +85,11 @@ jobs:
             pip install imbalanced-learn
           fi
       
+      - name: Install hyperopt
+        run: |
+          source venv/bin/activate
+          pip install hyperopt
+
       - name: Run Ray Tune hyperparameter optimization
         run: |
           source venv/bin/activate
