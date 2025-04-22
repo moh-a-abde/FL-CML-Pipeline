@@ -138,6 +138,15 @@ class FeatureProcessor:
                 # Fill with median value
                 df[col] = df[col].fillna(median)
 
+        # Explicitly drop the raw attack_cat column if it exists
+        # Label encoding is handled separately in preprocess_data
+        if 'attack_cat' in df.columns:
+            df.drop(columns=['attack_cat'], inplace=True)
+            
+        # Also drop the binary 'label' column if it exists
+        if 'label' in df.columns:
+             df.drop(columns=['label'], inplace=True)
+
         return df
 
 def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_training: bool = False):

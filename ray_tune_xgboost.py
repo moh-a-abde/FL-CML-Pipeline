@@ -27,7 +27,7 @@ import logging
 from ray.air.config import RunConfig
 
 # Import existing data processing code
-from dataset import load_csv_data, transform_dataset_to_dmatrix
+from dataset import load_csv_data, transform_dataset_to_dmatrix, preprocess_data, FeatureProcessor
 from utils import BST_PARAMS
 
 # Configure logging
@@ -46,18 +46,24 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
         test_df (pd.DataFrame): Test data as DataFrame
     """
     logger.info(f"Starting trial with config: {config}")
-    # Instantiate FeatureProcessor inside the trial
-    from dataset import FeatureProcessor
+    
+    # Use preprocess_data to get features and encoded labels
     processor = FeatureProcessor()
-    processor.fit(train_df)
-    train_processed = processor.transform(train_df, is_training=True)
-    test_processed = processor.transform(test_df, is_training=False)
-    train_features = train_processed.drop(columns=['label'])
-    train_labels = train_processed['label'].astype(int)
-    test_features = test_processed.drop(columns=['label'])
-    test_labels = test_processed['label'].astype(int)
+    train_features, train_labels = preprocess_data(train_df, processor=processor, is_training=True)
+    test_features, test_labels = preprocess_data(test_df, processor=processor, is_training=False)
+    
+    # Handle cases where test data might be unlabeled
+    if test_labels is None:
+        logger.warning("Test data has no labels. Creating dummy labels for DMatrix.")
+        test_labels = np.zeros(len(test_features))
+    else:
+        test_labels = test_labels.astype(int) # Ensure labels are integers
+        
+    # Ensure train labels are integers
+    train_labels = train_labels.astype(int)
     
     # Create DMatrix objects inside the function to avoid pickling issues
+    # FeatureProcessor already handles feature types and drops unnecessary columns
     train_data = xgb.DMatrix(train_features, label=train_labels, missing=np.nan)
     test_data = xgb.DMatrix(test_features, label=test_labels, missing=np.nan)
     
