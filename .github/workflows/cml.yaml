@@ -96,15 +96,15 @@ jobs:
           # Check if data directory exists, create if not
           mkdir -p data/sample
           
-          # Define train and test file paths
-          TRAIN_FILE="received/network_train_60.csv"
-          TEST_FILE="received/network_test_40_nolabel.csv"
+          # Define train and test file paths for UNSW_NB15
+          TRAIN_FILE="received/UNSW_NB15_training-set.csv"
+          TEST_FILE="received/UNSW_NB15_testing-set.csv"
           
-          # Check if the files exist, otherwise use sample data
+          # Check if the UNSW_NB15 files exist, otherwise use sample data
           if [ -f "$TRAIN_FILE" ] && [ -f "$TEST_FILE" ]; then
-            echo "Using network data files for hyperparameter tuning"
+            echo "Using UNSW_NB15 data files for hyperparameter tuning"
           else
-            echo "Network data files not found, checking for any CSV data"
+            echo "UNSW_NB15 data files not found, checking for any CSV data"
             
             # Try to find any CSV file to use as a fallback
             SAMPLE_DATA=""
@@ -115,12 +115,12 @@ jobs:
             
             if [ -z "$SAMPLE_DATA" ]; then
               echo "No CSV data found, creating a sample dataset for tuning"
-              # Generate synthetic data for train and test
+              # Generate synthetic data for train and test (kept as fallback)
               python -c "import pandas as pd; import numpy as np; np.random.seed(42); n = 1000; df = pd.DataFrame({'feature1': np.random.normal(0, 1, n), 'feature2': np.random.normal(0, 1, n), 'feature3': np.random.normal(0, 1, n), 'feature4': np.random.normal(0, 1, n), 'feature5': np.random.normal(0, 1, n), 'label': np.random.choice([0, 1, 2], n)}); train = df.sample(frac=0.8, random_state=42); test = df.drop(train.index); train.to_csv('data/sample/synthetic_train.csv', index=False); test.to_csv('data/sample/synthetic_test.csv', index=False)"
               TRAIN_FILE="data/sample/synthetic_train.csv"
               TEST_FILE="data/sample/synthetic_test.csv"
             else
-              # If we have a single file, create train/test split
+              # If we have a single file, create train/test split (kept as fallback)
               python -c "import pandas as pd; from sklearn.model_selection import train_test_split; df = pd.read_csv('$SAMPLE_DATA'); train, test = train_test_split(df, test_size=0.2, random_state=42); train.to_csv('data/sample/split_train.csv', index=False); test.to_csv('data/sample/split_test.csv', index=False)"
               TRAIN_FILE="data/sample/split_train.csv"
               TEST_FILE="data/sample/split_test.csv"
