@@ -197,7 +197,7 @@ def evaluate_metrics_aggregation(eval_metrics):
     log(INFO, "  Recall (weighted): %f", aggregated_metrics["recall"])
     log(INFO, "  F1 Score (weighted): %f", aggregated_metrics["f1"])
     log(INFO, "  Accuracy: %f", aggregated_metrics["accuracy"])
-    log(INFO, "  Loss (mlogloss): %f", aggregated_metrics["loss"])
+    log(INFO, "  Loss (mlogloss): %f", aggregated_metrics["mlogloss"])
     if aggregated_conf_matrix is not None:
         log(INFO, "  Confusion Matrix:\n%s", aggregated_conf_matrix)
     # Save aggregated results
