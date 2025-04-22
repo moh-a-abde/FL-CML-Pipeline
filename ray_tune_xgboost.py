@@ -18,8 +18,7 @@ import json
 import xgboost as xgb
 import pandas as pd
 import numpy as np
-import ray  # Import ray
-from ray import tune # Removed ObjectRef import
+from ray import tune
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune.search.hyperopt import HyperOptSearch
 from hyperopt import hp
@@ -37,46 +36,36 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def train_xgboost(config):
+def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
     """
     Training function for XGBoost that can be used with Ray Tune.
-    Accepts config containing ObjectRefs to *preprocessed* data.
     Args:
-        config (dict): Hyperparameters and data references
+        config (dict): Hyperparameters to use for training
+        train_df (pd.DataFrame): Training data as DataFrame
+        test_df (pd.DataFrame): Test data as DataFrame
     """
     logger.info("Starting trial with config: %s", config)
-
-    # Retrieve object references from config, then get processed data arrays
-    train_features_ref = config["train_features_ref"]
-    train_labels_ref = config["train_labels_ref"]
-    test_features_ref = config["test_features_ref"]
-    test_labels_ref = config["test_labels_ref"]
-
-    train_features = ray.get(train_features_ref)
-    train_labels = ray.get(train_labels_ref)
-    test_features = ray.get(test_features_ref)
-    test_labels = ray.get(test_labels_ref)
-
-    # Skip preprocessing step, data is already processed
-    # processor = FeatureProcessor()
-    # train_features, train_labels = preprocess_data(actual_train_df, processor=processor, is_training=True)
-    # test_features, test_labels = preprocess_data(actual_test_df, processor=processor, is_training=False)
-
-    # Handle cases where test data might be unlabeled (represented as -1 from preprocessing)
-    # XGBoost DMatrix requires labels, use zeros if needed
-    if np.all(test_labels == -1):
-        logger.warning("Test data appears unlabeled (all -1). Using zeros for DMatrix creation.")
-        test_labels_for_dmatrix = np.zeros_like(test_labels)
+    
+    # Use preprocess_data to get features and encoded labels
+    processor = FeatureProcessor()
+    train_features, train_labels = preprocess_data(train_df, processor=processor, is_training=True)
+    test_features, test_labels = preprocess_data(test_df, processor=processor, is_training=False)
+    
+    # Handle cases where test data might be unlabeled
+    if test_labels is None:
+        logger.warning("Test data has no labels. Creating dummy labels for DMatrix.")
+        test_labels = np.zeros(len(test_features))
     else:
-        test_labels_for_dmatrix = test_labels.astype(int) # Ensure int type
-
+        test_labels = test_labels.astype(int) # Ensure labels are integers
+        
     # Ensure train labels are integers
     train_labels = train_labels.astype(int)
-
-    # Create DMatrix objects from the retrieved processed data
+    
+    # Create DMatrix objects inside the function to avoid pickling issues
+    # FeatureProcessor already handles feature types and drops unnecessary columns
     train_data = xgb.DMatrix(train_features, label=train_labels, missing=np.nan)
-    test_data = xgb.DMatrix(test_features, label=test_labels_for_dmatrix, missing=np.nan)
-
+    test_data = xgb.DMatrix(test_features, label=test_labels, missing=np.nan)
+    
     # Prepare the XGBoost parameters
     params = {
         # Fixed parameters
@@ -158,9 +147,6 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
-    # Initialize Ray (needed for ray.put)
-    ray.init(ignore_reinit_error=True)
-    
     # Load and prepare data *once* before tuning starts
     logger.info("Loading training data from %s", train_file)
     train_df = load_csv_data(train_file)["train"].to_pandas()
@@ -168,58 +154,27 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     logger.info("Loading testing data from %s", test_file)
     test_df = load_csv_data(test_file)["train"].to_pandas() # Use train split of test file for validation
 
-    # Put raw data into Ray object store (temporarily, for fitting processor)
-    logger.info("Putting raw dataframes into Ray object store for initial preprocessing...")
-    train_df_ref = ray.put(train_df)
-    test_df_ref = ray.put(test_df)
-    logger.info("Raw dataframes placed in object store.")
-
-    # Fit processor and preprocess data *once* outside the loop
-    logger.info("Fitting processor and preprocessing data...")
+    # Preprocess data *once* to get features/labels for the final model training
+    # and to fit the processor
+    logger.info("Preprocessing data for final model training and fitting processor...")
     processor = FeatureProcessor()
-    # Get dataframes back for fitting/preprocessing
-    temp_train_df = ray.get(train_df_ref)
-    temp_test_df = ray.get(test_df_ref)
+    # We need the original dataframes (train_df, test_df) to pass to the trial wrapper
+    # But we also need the processed features/labels for the final model training step
+    final_train_features, final_train_labels = preprocess_data(train_df, processor=processor, is_training=True)
+    final_test_features, final_test_labels = preprocess_data(test_df, processor=processor, is_training=False)
     
-    # Explicitly fit the processor on the training data first!
-    logger.info("Fitting the feature processor...")
-    processor.fit(temp_train_df)
-    logger.info("Feature processor fitted.")
-    
-    # Now preprocess both datasets using the fitted processor
-    logger.info("Preprocessing training data...")
-    train_features, train_labels = preprocess_data(temp_train_df, processor=processor, is_training=True)
-    logger.info("Preprocessing testing data...")
-    test_features, test_labels = preprocess_data(temp_test_df, processor=processor, is_training=False)
-
-    # Handle potential missing labels in the test set (will be -1)
-    if test_labels is None:
-        logger.warning("Test data preprocessing returned None for labels. Creating array of -1.")
-        test_labels = np.full(len(test_features), -1, dtype=int)
+    # Handle potential missing labels in the test set for final model evaluation
+    if final_test_labels is None:
+        logger.warning("Test data has no labels. Using zeros for final model evaluation.")
+        final_test_labels = np.zeros(len(final_test_features))
     else:
-        # Ensure labels are numpy arrays for consistency
-        if isinstance(test_labels, pd.Series):
-            test_labels = test_labels.to_numpy()
-        if isinstance(train_labels, pd.Series):
-            train_labels = train_labels.to_numpy()
+        final_test_labels = final_test_labels.astype(int) # Ensure labels are integers
+    final_train_labels = final_train_labels.astype(int)
 
-    # Put *processed* data into Ray object store
-    logger.info("Putting processed data arrays into Ray object store...")
-    train_features_ref = ray.put(train_features)
-    train_labels_ref = ray.put(train_labels)
-    test_features_ref = ray.put(test_features)
-    test_labels_ref = ray.put(test_labels)
-    logger.info("Processed data arrays placed in object store.")
-
-    # Delete intermediate objects to free memory
-    del train_df, test_df, temp_train_df, temp_test_df
-    del train_features, train_labels, test_features, test_labels
-    del train_df_ref, test_df_ref
-
-    logger.info("Training data size (processed features): %s", ray.get(train_features_ref).shape)
-    logger.info("Validation data size (processed features): %s", ray.get(test_features_ref).shape)
-
-    # Define the search space using hyperopt's hp module (only tunable params)
+    logger.info("Training data size for final model: %d", len(final_train_features))
+    logger.info("Validation data size for final model: %d", len(final_test_features))
+    
+    # Define the search space using hyperopt's hp module
     search_space = {
         "max_depth": hp.quniform("max_depth", 3, 10, 1),
         "min_child_weight": hp.quniform("min_child_weight", 1, 20, 1),
@@ -235,15 +190,13 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
         # Setting tree_method here might be sufficient, but review Ray Tune docs if issues persist
         search_space["tree_method"] = hp.choice("tree_method", ["gpu_hist"])
     
-    # Define fixed parameters (our *processed* object refs)
-    fixed_params = {
-        "train_features_ref": train_features_ref,
-        "train_labels_ref": train_labels_ref,
-        "test_features_ref": test_features_ref,
-        "test_labels_ref": test_labels_ref,
-    }
+    # Create a wrapper function that includes the *original* data DataFrames
+    # The train_xgboost function inside the trial will handle preprocessing
+    def _train_with_data_wrapper(config):
+        # Pass copies of the original dataframes to the training function
+        return train_xgboost(config, train_df.copy(), test_df.copy()) 
 
-    # Set up HyperOptSearch with only tunable space
+    # Set up HyperOptSearch
     algo = HyperOptSearch(
         search_space,
         metric="mlogloss",
@@ -257,9 +210,9 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
         mode="min"
     )
     
-    # Wrap the original train_xgboost function (now taking only config) with resources
+    # Wrap trainable with resource specification
     trainable_with_resources = tune.with_resources(
-        train_xgboost, # Use the original function
+        _train_with_data_wrapper, 
         resources={"cpu": cpus_per_trial, "gpu": gpu_fraction if gpu_fraction else 0}
     )
 
@@ -272,9 +225,9 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
         tune_config=tune.TuneConfig(
             scheduler=scheduler,
             num_samples=num_samples,
-            search_alg=algo # Algo handles tunable search space
+            search_alg=algo
         ),
-        param_space=fixed_params,  # Pass fixed object references here
+        param_space={},  # search space is handled by HyperOptSearch
         run_config=air.RunConfig( # Use air.RunConfig
             local_dir=output_dir,
             name="xgboost_tune",
@@ -287,74 +240,31 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     
     # Get the best trial
     best_result = results.get_best_result(metric="mlogloss", mode="min")
-    # Check if best_result exists before accessing attributes
-    if best_result:
-        best_config_from_tune = best_result.config
-        best_metrics = best_result.metrics
-        
-        # Remove the data refs from the config before saving/using for final model
-        best_config = {k: v for k, v in best_config_from_tune.items() if k not in fixed_params.keys()} # Use fixed_params.keys()
-        
-        # Log the best configuration and metrics
-        logger.info("Best hyperparameters found:")
-        logger.info(json.dumps(best_config, indent=2))
-        logger.info("Best metrics:")
-        logger.info("  mlogloss: %.4f", best_metrics['mlogloss'])
-        logger.info("  merror: %.4f", best_metrics['merror'])
-        logger.info("  precision: %.4f", best_metrics['precision'])
-        logger.info("  recall: %.4f", best_metrics['recall'])
-        logger.info("  f1: %.4f", best_metrics['f1'])
-        logger.info("  accuracy: %.4f", best_metrics['accuracy'])
-        
-        # Save the best hyperparameters to a JSON file
-        best_params_path = os.path.join(output_dir, "best_params.json")
-        with open(best_params_path, 'w', encoding='utf-8') as f:
-            # Convert numpy types to native Python types for JSON serialization
-            serializable_config = {k: (int(v) if isinstance(v, np.integer) else float(v) if isinstance(v, np.floating) else v) for k, v in best_config.items()} # Use filtered best_config
-            json.dump(serializable_config, f, indent=2)
-        logger.info("Best parameters saved to %s", best_params_path)
-        
-        # Train the final model using the best hyperparameters
-        # Retrieve processed data again for final training
-        logger.info("Retrieving processed data for final model training...")
-        final_train_features = ray.get(train_features_ref)
-        final_train_labels = ray.get(train_labels_ref)
-        final_test_features = ray.get(test_features_ref)
-        final_test_labels = ray.get(test_labels_ref)
-
-        # Re-run preprocessing if necessary or use stored processor - NO, data is already processed
-        # Assuming preprocess_data can handle dataframes directly - NO
-        # logger.info("Re-processing data for final model training...")
-        # final_processor = FeatureProcessor()
-        # final_train_features, final_train_labels = preprocess_data(final_train_df, processor=final_processor, is_training=True)
-        # final_test_features, final_test_labels = preprocess_data(final_test_df, processor=final_processor, is_training=False)
-
-        # Handle potential missing labels (-1) for final evaluation DMatrix
-        if np.all(final_test_labels == -1):
-             logger.warning("Test data appears unlabeled (-1). Using zeros for final model evaluation DMatrix.")
-             final_test_labels_for_dmatrix = np.zeros_like(final_test_labels)
-        else:
-             final_test_labels_for_dmatrix = final_test_labels.astype(int)
-        final_train_labels = final_train_labels.astype(int)
-
-        logger.info("Training final model with best parameters...")
-        train_final_model(
-            config=best_config, # Use the filtered best_config
-            train_features=final_train_features, # Pass retrieved processed features
-            train_labels=final_train_labels,     # Pass retrieved processed labels
-            test_features=final_test_features,   # Pass retrieved processed features
-            test_labels=final_test_labels_for_dmatrix, # Pass processed labels for DMatrix
-            output_dir=output_dir
-        )
-    else:
-        logger.error("No best result found from tuning.")
-        best_config = {} # Return empty dict if no result
-
-    # Shutdown Ray
-    ray.shutdown()
-
-    # Return only the tunable hyperparameters
-    return {k: v for k, v in best_config.items() if k not in fixed_params.keys()} # Use fixed_params.keys()
+    best_config = best_result.config
+    best_metrics = best_result.metrics
+    
+    # Log the best configuration and metrics
+    logger.info("Best hyperparameters found:")
+    logger.info(json.dumps(best_config, indent=2))
+    logger.info("Best metrics:")
+    logger.info("  mlogloss: %.4f", best_metrics['mlogloss'])
+    logger.info("  merror: %.4f", best_metrics['merror'])
+    logger.info("  precision: %.4f", best_metrics['precision'])
+    logger.info("  recall: %.4f", best_metrics['recall'])
+    logger.info("  f1: %.4f", best_metrics['f1'])
+    logger.info("  accuracy: %.4f", best_metrics['accuracy'])
+    
+    # Save the best hyperparameters to a file
+    best_params_file = os.path.join(output_dir, "best_params.json")
+    # Use utf-8 encoding when writing JSON
+    with open(best_params_file, 'w', encoding='utf-8') as f:
+        json.dump(best_config, f, indent=2)
+    logger.info("Best parameters saved to %s", best_params_file)
+    
+    # Train a final model with the best parameters using the preprocessed data
+    train_final_model(best_config, final_train_features, final_train_labels, final_test_features, final_test_labels, output_dir)
+    
+    return best_config
 
 def train_final_model(config: dict, 
                       train_features: pd.DataFrame, train_labels: pd.Series, 
