@@ -35,8 +35,8 @@ def load_tuned_params(params_file):
     if not os.path.exists(params_file):
         raise FileNotFoundError(f"Parameters file not found: {params_file}")
     
-    logger.info(f"Loading optimized parameters from {params_file}")
-    with open(params_file, 'r') as f:
+    logger.info("Loading optimized parameters from %s", params_file)
+    with open(params_file, 'r', encoding='utf-8') as f:
         params = json.load(f)
     
     return params
@@ -54,10 +54,10 @@ def create_xgboost_params(tuned_params):
     # Start with the base parameters
     xgb_params = BST_PARAMS.copy()
     
-    # Update with tuned parameters
+    # Update with tuned parameters - convert float values to ints for integer parameters
     xgb_params.update({
-        'max_depth': tuned_params['max_depth'],
-        'min_child_weight': tuned_params['min_child_weight'],
+        'max_depth': int(tuned_params['max_depth']),  # HyperOpt returns float, convert to int
+        'min_child_weight': int(tuned_params['min_child_weight']),  # HyperOpt returns float, convert to int
         'eta': tuned_params['eta'],  # Learning rate
         'subsample': tuned_params['subsample'],
         'colsample_bytree': tuned_params['colsample_bytree'],
@@ -65,9 +65,17 @@ def create_xgboost_params(tuned_params):
         'reg_lambda': tuned_params['reg_lambda']
     })
     
+    # Add num_boost_round if it exists in tuned_params
+    if 'num_boost_round' in tuned_params:
+        xgb_params['num_boost_round'] = int(tuned_params['num_boost_round'])  # Convert to int
+    
     # Add GPU support if specified in tuned parameters
-    if 'tree_method' in tuned_params and tuned_params['tree_method'] == 'gpu_hist':
-        xgb_params['tree_method'] = 'gpu_hist'
+    if 'tree_method' in tuned_params:
+        if isinstance(tuned_params['tree_method'], list) and len(tuned_params['tree_method']) > 0:
+            # If it's from hp.choice, it will be a list
+            xgb_params['tree_method'] = tuned_params['tree_method'][0]
+        else:
+            xgb_params['tree_method'] = tuned_params['tree_method']
     
     return xgb_params
 
@@ -79,7 +87,7 @@ def save_updated_params(params, output_file):
         params (dict): Updated XGBoost parameters
         output_file (str): Path to save the updated parameters
     """
-    with open(output_file, 'w') as f:
+    with open(output_file, 'w', encoding='utf-8') as f:
         f.write("# This file is generated automatically by use_tuned_params.py\n")
         f.write("# It contains optimized XGBoost parameters found by Ray Tune\n\n")
         f.write("TUNED_PARAMS = {\n")
@@ -91,21 +99,20 @@ def save_updated_params(params, output_file):
             else:
                 f.write(f"    '{key}': {value},\n")
         f.write("}\n")
-    
-    logger.info(f"Updated XGBoost parameters saved to {output_file}")
+    logger.info("Updated XGBoost parameters saved to %s", output_file)
 
 def backup_original_params():
     """
-    Backup the original parameters in BST_PARAMS from utils.py
+    Backup the original parameters to a Python file for reference.
     
     Returns:
         str: Path to the backup file
     """
     backup_file = "original_bst_params.json"
-    with open(backup_file, 'w') as f:
+    with open(backup_file, 'w', encoding='utf-8') as f:
         json.dump(BST_PARAMS, f, indent=2)
     
-    logger.info(f"Original parameters backed up to {backup_file}")
+    logger.info("Original parameters backed up to %s", backup_file)
     return backup_file
 
 def main():
@@ -122,7 +129,7 @@ def main():
     tuned_params = load_tuned_params(args.params_file)
     logger.info("Loaded the following optimized parameters:")
     for key, value in tuned_params.items():
-        logger.info(f"  {key}: {value}")
+        logger.info("  %s: %s", key, value)
     
     # Create updated XGBoost parameters
     updated_params = create_xgboost_params(tuned_params)
@@ -130,13 +137,10 @@ def main():
     # Save updated parameters
     save_updated_params(updated_params, args.output_file)
     
-    # Print instructions for using the tuned parameters
-    logger.info("\nTo use these optimized parameters in your federated learning system:")
-    logger.info("1. Import the parameters in client_utils.py:")
-    logger.info("   from tuned_params import TUNED_PARAMS")
-    logger.info("2. Replace BST_PARAMS with TUNED_PARAMS in the XgbClient class:")
-    logger.info("   self.params = params if params is not None else TUNED_PARAMS.copy()")
-    logger.info(f"\nOriginal parameters are backed up to {backup_file}")
+    # Success message
+    logger.info("Optimized parameters saved to %s", args.output_file)
+    logger.info("Original parameters backed up to %s", backup_file)
+    logger.info("These parameters will be automatically used by the XGBoost client")
 
 if __name__ == "__main__":
     main() 

@@ -233,7 +233,7 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
     
     # Create a wrapper function that includes the data DataFrames
     def _train_with_data_wrapper(config):
-        return train_xgboost(config, train_features.copy(), test_features.copy()) # Pass copies to ensure isolation
+        return train_xgboost(config, train_data.copy(), test_data.copy()) # Pass copies of FULL DataFrames with labels
 
     # Set up HyperOptSearch
     algo = HyperOptSearch(
