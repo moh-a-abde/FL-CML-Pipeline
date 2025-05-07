@@ -1,5 +1,5 @@
 import warnings
-from logging import INFO, WARNING
+from logging import INFO
 import os
 
 import flwr as fl
