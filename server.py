@@ -211,19 +211,33 @@ log(INFO, "Training complete. Saving results...")
 # Create a dictionary to store the results
 results = {}
 
-# Add losses if available
+# Add distributed losses if available
 if hasattr(history, 'losses_distributed') and history.losses_distributed:
-    results["loss"] = history.losses_distributed
+    results["losses_distributed"] = history.losses_distributed
 else:
-    results["loss"] = []
+    results["losses_distributed"] = []
     log(INFO, "No distributed losses found in history")
 
-# Add metrics if available
-if hasattr(history, 'metrics_distributed') and history.metrics_distributed:
-    results["metrics"] = history.metrics_distributed
+# Add centralized losses if available
+if hasattr(history, 'losses_centralized') and history.losses_centralized:
+    results["losses_centralized"] = history.losses_centralized
 else:
-    results["metrics"] = {}
+    results["losses_centralized"] = []
+    log(INFO, "No centralized losses found in history")
+
+# Add distributed metrics if available
+if hasattr(history, 'metrics_distributed') and history.metrics_distributed:
+    results["metrics_distributed"] = history.metrics_distributed
+else:
+    results["metrics_distributed"] = {}
     log(INFO, "No distributed metrics found in history")
+
+# Add centralized metrics if available
+if hasattr(history, 'metrics_centralized') and history.metrics_centralized:
+    results["metrics_centralized"] = history.metrics_centralized
+else:
+    results["metrics_centralized"] = {}
+    log(INFO, "No centralized metrics found in history")
 
 # Save the results
 save_results_pickle(results, output_dir)

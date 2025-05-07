@@ -199,18 +199,19 @@ def plot_learning_curves(results_pkl_path, metrics_to_plot, output_dir):
             return
 
         with open(results_pkl_path, 'rb') as f:
-            history = pickle.load(f)
+            history_data = pickle.load(f) # history_data is now a dict
 
         # Plot Loss
         fig_loss, ax_loss = plt.subplots(figsize=(12, 6))
         loss_plotted = False
-        if hasattr(history, 'losses_distributed') and history.losses_distributed:
-            rounds_dist, losses_dist = zip(*history.losses_distributed)
+        # Access as dictionary keys
+        if "losses_distributed" in history_data and history_data["losses_distributed"]:
+            rounds_dist, losses_dist = zip(*history_data["losses_distributed"])
             ax_loss.plot(rounds_dist, losses_dist, label='Distributed Loss', marker='o')
             loss_plotted = True
         
-        if hasattr(history, 'losses_centralized') and history.losses_centralized:
-            rounds_cent, losses_cent = zip(*history.losses_centralized)
+        if "losses_centralized" in history_data and history_data["losses_centralized"]:
+            rounds_cent, losses_cent = zip(*history_data["losses_centralized"])
             ax_loss.plot(rounds_cent, losses_cent, label='Centralized Loss', marker='x')
             loss_plotted = True
         
@@ -244,11 +245,12 @@ def plot_learning_curves(results_pkl_path, metrics_to_plot, output_dir):
             dist_plotted = False
             cent_plotted = False
 
-            if hasattr(history, 'metrics_distributed'):
-                dist_plotted = _plot_single_metric_curve(ax, history.metrics_distributed, metric_key, 'Distributed', 'o')
+            # Access as dictionary keys
+            if "metrics_distributed" in history_data and history_data["metrics_distributed"]:
+                dist_plotted = _plot_single_metric_curve(ax, history_data["metrics_distributed"], metric_key, 'Distributed', 'o')
             
-            if hasattr(history, 'metrics_centralized'):
-                cent_plotted = _plot_single_metric_curve(ax, history.metrics_centralized, metric_key, 'Centralized', 'x')
+            if "metrics_centralized" in history_data and history_data["metrics_centralized"]:
+                cent_plotted = _plot_single_metric_curve(ax, history_data["metrics_centralized"], metric_key, 'Centralized', 'x')
             
             if dist_plotted or cent_plotted:
                 ax.set_title(f'{metric_key.replace("_", " ").capitalize()} Over Federated Learning Rounds')
