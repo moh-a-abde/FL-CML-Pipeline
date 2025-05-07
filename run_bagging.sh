@@ -3,7 +3,7 @@ set -e
 cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"/
 
 echo "Starting server"
-python3 server.py --pool-size=5 --num-rounds=5 --num-clients-per-round=5 &
+python3 server.py --pool-size=5 --num-rounds=5 --num-clients-per-round=5 --centralised-eval &
 sleep 30  # Sleep for 30s to give the server enough time to start
 
 # Start regular client (partition 0)
