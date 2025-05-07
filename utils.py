@@ -7,7 +7,7 @@ BST_PARAMS = {
     "objective": "multi:softprob",
     "num_class": 10,  # 10 classes for UNSW_NB15: Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic
     "eta": 0.05,  # Reduced learning rate to prevent overfitting
-    "max_depth": 3,  # Reduced max_depth to prevent memorization
+    "max_depth": 6,  # Increased from 3 to allow more complex trees
     "min_child_weight": 10,  # Increased to prevent fitting to small samples
     "gamma": 1.0,  # Increased minimum loss reduction for split
     "subsample": 0.7,  # Sample fewer rows per iteration
@@ -17,8 +17,8 @@ BST_PARAMS = {
     "tree_method": "hist",
     "eval_metric": ["mlogloss", "merror"],
     "max_delta_step": 5,
-    "reg_alpha": 2.0,  # Increased L1 regularization
-    "reg_lambda": 5.0,  # Increased L2 regularization
+    "reg_alpha": 0.8,  # Decreased L1 regularization from 2.0
+    "reg_lambda": 0.8,  # Decreased L2 regularization from 5.0
     "base_score": 0.5,  # Neutral starting point
     "scale_pos_weight": 1.0,  # Simplified for multi-class with >3 classes
     "grow_policy": "lossguide",  # Alternative tree growing policy
