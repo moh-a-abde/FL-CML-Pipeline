@@ -302,3 +302,85 @@ if hasattr(history, 'metrics_distributed') and history.metrics_distributed:
     save_evaluation_results(final_metrics, final_round, output_dir)
 else:
     log(INFO, "No metrics available to save")
+
+log(INFO, "Generating additional visualizations...")
+
+# Define CLASS_NAMES based on UNSW_NB15 common mapping
+CLASS_NAMES = [
+    'Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits',
+    'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic'
+]
+
+# Import visualization functions and other necessary modules
+from visualization_utils import (
+    plot_learning_curves,
+    plot_confusion_matrix as vis_plot_confusion_matrix, # Alias to avoid conflict
+    plot_roc_curves,
+    plot_precision_recall_curves,
+    plot_class_distribution,
+    plot_per_class_metrics,
+    plot_prediction_probability_distributions
+)
+from sklearn.metrics import confusion_matrix
+import numpy as np
+
+# 1. Plot Learning Curves (Loss and Metrics over rounds)
+try:
+    metrics_for_learning_curve = ['accuracy', 'precision', 'recall', 'f1', 'mlogloss'] # Common metrics
+    results_pkl_path = os.path.join(output_dir, "results.pkl")
+    if os.path.exists(results_pkl_path):
+        plot_learning_curves(results_pkl_path, metrics_for_learning_curve, output_dir)
+    else:
+        log(WARNING, "results.pkl not found at %s, skipping learning curve plots.", results_pkl_path)
+except Exception as e:
+    log(WARNING, "Failed to generate learning curve plots: %s", e)
+
+# 2. Generate other plots if centralised evaluation was performed and model is available
+if centralised_eval and hasattr(strategy, 'global_model') and strategy.global_model is not None and 'test_dmatrix' in globals():
+    log(INFO, "Performing final evaluation on centralised test set for detailed visualizations...")
+    try:
+        # Reconstruct the final model (Booster)
+        final_bst = xgb.Booster(params=BST_PARAMS)
+        if isinstance(strategy.global_model, (bytes, bytearray)):
+            final_bst.load_model(bytearray(strategy.global_model))
+        elif isinstance(strategy.global_model, xgb.Booster): # if it was already a booster (e.g. from a custom strategy)
+            final_bst = strategy.global_model
+        else:
+            raise TypeError("Unsupported global_model type in strategy for visualization.")
+
+        y_true = test_dmatrix.get_label()
+        y_pred_proba = final_bst.predict(test_dmatrix)
+        y_pred = np.argmax(y_pred_proba, axis=1)
+
+        # Plot Confusion Matrix
+        conf_matrix_data = confusion_matrix(y_true, y_pred)
+        vis_plot_confusion_matrix(conf_matrix_data, CLASS_NAMES, os.path.join(output_dir, "final_confusion_matrix.png"))
+
+        # Plot ROC Curves
+        plot_roc_curves(y_true, y_pred_proba, CLASS_NAMES, os.path.join(output_dir, "final_roc_curves.png"))
+
+        # Plot Precision-Recall Curves
+        plot_precision_recall_curves(y_true, y_pred_proba, CLASS_NAMES, os.path.join(output_dir, "final_pr_curves.png"))
+
+        # Plot Class Distribution (True vs Predicted on test set)
+        plot_class_distribution(y_true, y_pred, CLASS_NAMES, os.path.join(output_dir, "final_class_distribution.png"))
+
+        # Plot Per-Class Metrics (Precision, Recall, F1)
+        plot_per_class_metrics(y_true, y_pred, CLASS_NAMES, os.path.join(output_dir, "final_per_class_metrics.png"))
+
+        # Plot Prediction Probability Distributions
+        # This function saves to output_dir/prediction_probability_distributions.png by default
+        plot_prediction_probability_distributions(y_true, y_pred_proba, CLASS_NAMES, output_dir)
+        
+        log(INFO, "Successfully generated all detailed visualizations for the final model.")
+
+    except Exception as e:
+        log(WARNING, "Failed to generate final model visualizations: %s", e)
+elif not centralised_eval:
+    log(INFO, "Centralised evaluation was not enabled. Skipping final model detailed visualizations.")
+elif not (hasattr(strategy, 'global_model') and strategy.global_model is not None):
+    log(INFO, "No final global model available in strategy. Skipping final model detailed visualizations.")
+elif 'test_dmatrix' not in globals():
+    log(INFO, "Centralised test_dmatrix not available. Skipping final model detailed visualizations.")
+
+log(INFO, "Server process finished.")
