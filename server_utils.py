@@ -255,6 +255,28 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     # Add true labels if available
     if true_labels is not None:
         predictions_dict['true_label'] = true_labels
+        
+        # Generate and save visualizations if we have true labels to compare with
+        try:
+            class_names = list(label_mapping.values())
+            num_classes = len(class_names)
+            
+            # Convert to numpy arrays if they're not already
+            y_true = np.array(true_labels) if not isinstance(true_labels, np.ndarray) else true_labels
+            y_pred = np.array(predictions) if not isinstance(predictions, np.ndarray) else predictions
+            
+            # Create confusion matrix
+            cm = confusion_matrix(y_true, y_pred, labels=range(num_classes))
+            cm_path = os.path.join(output_dir, f"confusion_matrix_round_{round_num}.png")
+            plot_confusion_matrix(cm, class_names, cm_path)
+            
+            # Plot class distribution
+            dist_path = os.path.join(output_dir, f"class_distribution_round_{round_num}.png")
+            plot_class_distribution(y_true, y_pred, class_names, dist_path)
+            
+            log(INFO, f"Visualizations saved for round {round_num}")
+        except Exception as e:
+            log(WARNING, f"Error generating visualizations: {e}")
     
     predictions_df = pd.DataFrame(predictions_dict)
     
@@ -329,21 +351,77 @@ def predict_with_saved_model(model_path, dmatrix, output_path):
     log(INFO, "Prediction score distribution - Min: %.4f, Max: %.4f, Mean: %.4f", 
         np.min(raw_predictions), np.max(raw_predictions), np.mean(raw_predictions))
     
-    # Convert raw predictions to probabilities if necessary
-    # (Assuming a binary classification with a threshold of 0.5)
-    probabilities = 1 / (1 + np.exp(-raw_predictions))  # Example for sigmoid transformation
-    predicted_labels = (probabilities >= 0.5).astype(int)
+    # For multi-class, the raw predictions should already be class indices
+    # For binary, we might need to convert scores to binary predictions
+    if len(raw_predictions.shape) == 1:  # Binary case
+        probabilities = 1 / (1 + np.exp(-raw_predictions))  # Sigmoid transformation
+        predicted_labels = (probabilities >= 0.5).astype(int)
+        
+        # Save predictions to CSV
+        predictions_df = pd.DataFrame({
+            'predicted_label': predicted_labels,
+            'prediction_type': ['benign' if label == 0 else 'malicious' for label in predicted_labels],
+            'prediction_score': probabilities
+        })
+    else:  # Multi-class case
+        predicted_labels = np.argmax(raw_predictions, axis=1)
+        
+        # Default mapping for UNSW_NB15 multi-class predictions
+        label_mapping = {
+            0: 'Normal', 
+            1: 'Reconnaissance', 
+            2: 'Backdoor', 
+            3: 'DoS', 
+            4: 'Exploits', 
+            5: 'Analysis', 
+            6: 'Fuzzers', 
+            7: 'Worms', 
+            8: 'Shellcode', 
+            9: 'Generic'
+        }
+        
+        # Save predictions to CSV with class names
+        predictions_df = pd.DataFrame({
+            'predicted_label': predicted_labels,
+            'prediction_type': [label_mapping.get(int(p), 'unknown') for p in predicted_labels],
+        })
+        
+        # Add probability columns for each class
+        for i in range(raw_predictions.shape[1]):
+            predictions_df[f'prob_class_{i}'] = raw_predictions[:, i]
     
     # Log predicted class distribution
     unique, counts = np.unique(predicted_labels, return_counts=True)
     log(INFO, "Predicted class distribution: %s", dict(zip(unique, counts)))
     
-    # Save predictions to CSV
-    predictions_df = pd.DataFrame({
-        'predicted_label': predicted_labels,
-        'prediction_type': ['benign' if label == 0 else 'malicious' for label in predicted_labels],
-        'prediction_score': probabilities
-    })
+    # Generate visualizations if true labels are available
+    try:
+        true_labels = dmatrix.get_label()
+        if true_labels is not None:
+            output_dir = os.path.dirname(output_path)
+            class_names = list(label_mapping.values())
+            num_classes = len(class_names)
+            
+            # Create confusion matrix
+            cm = confusion_matrix(true_labels, predicted_labels, labels=range(num_classes))
+            cm_path = os.path.join(output_dir, "final_confusion_matrix.png")
+            plot_confusion_matrix(cm, class_names, cm_path)
+            
+            # Plot class distribution
+            dist_path = os.path.join(output_dir, "final_class_distribution.png")
+            plot_class_distribution(true_labels, predicted_labels, class_names, dist_path)
+            
+            # Plot ROC and Precision-Recall Curves (for multi-class)
+            if len(raw_predictions.shape) > 1 and raw_predictions.shape[1] == num_classes:
+                roc_path = os.path.join(output_dir, "final_roc_curves.png")
+                plot_roc_curves(true_labels, raw_predictions, class_names, roc_path)
+                
+                pr_path = os.path.join(output_dir, "final_precision_recall_curves.png")
+                plot_precision_recall_curves(true_labels, raw_predictions, class_names, pr_path)
+            
+            log(INFO, "Visualizations saved with final model predictions")
+    except Exception as e:
+        log(WARNING, f"Error generating visualizations: {e}")
     
     predictions_df.to_csv(output_path, index=False)
     log(INFO, "Predictions saved to: %s", output_path)
@@ -449,26 +527,25 @@ def get_evaluate_fn(test_data):
 
             # --- Generate and Save Plots ---
             output_dir = config.get("output_dir", "results") # Get output dir from config or default
-            plots_dir = os.path.join(output_dir, "plots", f"round_{server_round}")
-            os.makedirs(plots_dir, exist_ok=True)
-            log(INFO, f"Saving evaluation plots to: {plots_dir}")
+            # Instead of creating a separate plots directory, save directly in output_dir
+            log(INFO, f"Saving evaluation plots to: {output_dir}")
 
             class_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic'] # Make sure this matches your data
 
             # Plot Confusion Matrix
-            cm_path = os.path.join(plots_dir, "confusion_matrix.png")
+            cm_path = os.path.join(output_dir, f"confusion_matrix_round_{server_round}.png")
             plot_confusion_matrix(cm, class_names[:num_classes_actual], cm_path) # Use actual num_classes
 
             # Plot Class Distribution
-            dist_path = os.path.join(plots_dir, "class_distribution.png")
+            dist_path = os.path.join(output_dir, f"class_distribution_round_{server_round}.png")
             plot_class_distribution(y_test_int, predictions.astype(int), class_names[:num_classes_actual], dist_path)
 
             # Plot ROC and Precision-Recall Curves (only if probabilities are available and valid)
             if pred_proba is not None and pred_proba.shape[1] == num_classes_actual:
-                roc_path = os.path.join(plots_dir, "roc_curves.png")
+                roc_path = os.path.join(output_dir, f"roc_curves_round_{server_round}.png")
                 plot_roc_curves(y_test_int, pred_proba, class_names[:num_classes_actual], roc_path)
 
-                pr_path = os.path.join(plots_dir, "precision_recall_curves.png")
+                pr_path = os.path.join(output_dir, f"precision_recall_curves_round_{server_round}.png")
                 plot_precision_recall_curves(y_test_int, pred_proba, class_names[:num_classes_actual], pr_path)
             else:
                  log(WARNING, f"Skipping ROC and PR curve generation due to unavailable/invalid probabilities (shape: {pred_proba.shape if pred_proba is not None else 'None'}).")
