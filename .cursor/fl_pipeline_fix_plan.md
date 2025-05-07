@@ -49,7 +49,7 @@ The federated learning pipeline shows stagnant metrics across rounds while Ray T
 - Tuned parameters may not transfer properly to FL context
 
 #### Action Items:
-- [ ] **Align Ray Tune and FL Parameters**:
+- [x] **Align Ray Tune and FL Parameters**:
   ```python
   # In ray_tune_xgboost.py, ensure num_boost_round is consistently used
   config = {
@@ -62,7 +62,7 @@ The federated learning pipeline shows stagnant metrics across rounds while Ray T
   }
   ```
 
-- [ ] **Transfer num_boost_round to FL**:
+- [x] **Transfer num_boost_round to FL**:
   ```python
   # In use_tuned_params.py, modify to extract num_boost_round
   def convert_best_config():
@@ -74,7 +74,7 @@ The federated learning pipeline shows stagnant metrics across rounds while Ray T
       # Existing code...
   ```
 
-- [ ] **Increase Ray Tune Samples**:
+- [x] **Increase Ray Tune Samples**:
   ```bash
   # In run_ray_tune.sh
   # Increase NUM_SAMPLES from 5 to at least 20

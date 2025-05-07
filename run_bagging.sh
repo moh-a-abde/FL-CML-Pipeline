@@ -3,12 +3,12 @@ set -e
 cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"/
 
 echo "Starting server"
-python3 server.py --pool-size=2 --num-rounds=5 --num-clients-per-round=2 &
+python3 server.py --pool-size=5 --num-rounds=5 --num-clients-per-round=5 &
 sleep 30  # Sleep for 30s to give the server enough time to start
 
 # Start regular client (partition 0)
 echo "Starting regular client (partition 0)"
-python3 client.py --partition-id=0 --num-partitions=2 --partitioner-type=exponential &
+python3 client.py --partition-id=0 --num-partitions=5 --partitioner-type=exponential &
 
 # Start regular client (partition 1)
 echo "Starting regular client (partition 1)"
