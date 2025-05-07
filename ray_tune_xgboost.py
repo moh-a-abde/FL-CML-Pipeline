@@ -183,7 +183,7 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
         "eta": hp.loguniform("eta", np.log(1e-3), np.log(0.3)),
         "subsample": hp.uniform("subsample", 0.5, 1.0),
         "colsample_bytree": hp.uniform("colsample_bytree", 0.5, 1.0),
-        "num_boost_round": hp.quniform("num_boost_round", 50, 200, 1)
+        "num_boost_round": hp.quniform("num_boost_round", 1, 10, 1)  # Modified range for FL compatibility
     }
     if gpu_fraction is not None and gpu_fraction > 0:
         # NOTE: Ray Tune handles GPU allocation via resources_per_trial typically

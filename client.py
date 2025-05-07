@@ -28,7 +28,18 @@ from dataset import (
     FeatureProcessor,
     preprocess_data
 )
-from utils import client_args_parser, BST_PARAMS, NUM_LOCAL_ROUND
+from utils import client_args_parser, BST_PARAMS
+
+# Try to import NUM_LOCAL_ROUND from tuned_params if available, otherwise from utils
+try:
+    from tuned_params import NUM_LOCAL_ROUND
+    import logging
+    logging.getLogger(__name__).info("Using NUM_LOCAL_ROUND from tuned_params.py")
+except ImportError:
+    from utils import NUM_LOCAL_ROUND
+    import logging
+    logging.getLogger(__name__).info("Using default NUM_LOCAL_ROUND from utils.py")
+
 from client_utils import XgbClient
 
 warnings.filterwarnings("ignore", category=UserWarning)

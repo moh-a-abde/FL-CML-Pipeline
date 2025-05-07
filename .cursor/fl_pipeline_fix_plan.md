@@ -13,13 +13,13 @@ The federated learning pipeline shows stagnant metrics across rounds while Ray T
 - Potential noise features hindering learning
 
 #### Action Items:
-- [ ] **Increase Local Training Rounds**:
+- [x] **Increase Local Training Rounds**:
   ```python
   # In utils.py
   NUM_LOCAL_ROUND = 5  # Increase from 1 to 5-10 to allow proper learning
   ```
 
-- [ ] **Adjust Regularization Parameters**:
+- [x] **Adjust Regularization Parameters**:
   ```python
   # In utils.py or tuned_params.py
   BST_PARAMS = {

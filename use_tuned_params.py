@@ -87,9 +87,19 @@ def save_updated_params(params, output_file):
         params (dict): Updated XGBoost parameters
         output_file (str): Path to save the updated parameters
     """
+    # Extract num_boost_round if present to use as NUM_LOCAL_ROUND
+    num_local_round = None
+    if 'num_boost_round' in params:
+        num_local_round = int(params['num_boost_round'])
+    
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write("# This file is generated automatically by use_tuned_params.py\n")
         f.write("# It contains optimized XGBoost parameters found by Ray Tune\n\n")
+        
+        # Add NUM_LOCAL_ROUND if it was extracted from num_boost_round
+        if num_local_round is not None:
+            f.write(f"NUM_LOCAL_ROUND = {num_local_round}\n\n")
+        
         f.write("TUNED_PARAMS = {\n")
         for key, value in params.items():
             if isinstance(value, str):
@@ -100,6 +110,8 @@ def save_updated_params(params, output_file):
                 f.write(f"    '{key}': {value},\n")
         f.write("}\n")
     logger.info("Updated XGBoost parameters saved to %s", output_file)
+    if num_local_round is not None:
+        logger.info("NUM_LOCAL_ROUND set to %d based on tuned num_boost_round", num_local_round)
 
 def backup_original_params():
     """
