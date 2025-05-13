@@ -42,24 +42,45 @@ CORRELATION_TO_PARTITIONER = {
 class FeatureProcessor:
     """Handles feature preprocessing while preventing data leakage."""
     
-    def __init__(self):
+    def __init__(self, dataset_type="unsw_nb15"):
+        """
+        Initialize the feature processor.
+        
+        Args:
+            dataset_type (str): Type of dataset to process.
+                Options: "unsw_nb15" (original) or "engineered" (new dataset)
+        """
         self.categorical_encoders = {}
         self.numerical_stats = {}
         self.is_fitted = False
         self.label_encoder = LabelEncoder()
+        self.dataset_type = dataset_type
         
-        # Define feature groups for UNSW_NB15 dataset
-        self.categorical_features = [
-            'proto', 'service', 'state', 'is_ftp_login', 'is_sm_ips_ports'
-        ]
-        self.numerical_features = [
-            'dur', 'spkts', 'dpkts', 'sbytes', 'dbytes', 'rate', 'sttl', 'dttl', 
-            'sload', 'dload', 'sloss', 'dloss', 'sinpkt', 'dinpkt', 'sjit', 'djit', 
-            'swin', 'stcpb', 'dtcpb', 'dwin', 'tcprtt', 'synack', 'ackdat', 'smean', 
-            'dmean', 'trans_depth', 'response_body_len', 'ct_srv_src', 'ct_state_ttl', 
-            'ct_dst_ltm', 'ct_src_dport_ltm', 'ct_dst_sport_ltm', 'ct_dst_src_ltm', 
-            'ct_ftp_cmd', 'ct_flw_http_mthd', 'ct_src_ltm', 'ct_srv_dst'
-        ]
+        # Define feature groups based on dataset type
+        if dataset_type == "unsw_nb15":
+            # Original UNSW_NB15 dataset features
+            self.categorical_features = [
+                'proto', 'service', 'state', 'is_ftp_login', 'is_sm_ips_ports'
+            ]
+            self.numerical_features = [
+                'dur', 'spkts', 'dpkts', 'sbytes', 'dbytes', 'rate', 'sttl', 'dttl', 
+                'sload', 'dload', 'sloss', 'dloss', 'sinpkt', 'dinpkt', 'sjit', 'djit', 
+                'swin', 'stcpb', 'dtcpb', 'dwin', 'tcprtt', 'synack', 'ackdat', 'smean', 
+                'dmean', 'trans_depth', 'response_body_len', 'ct_srv_src', 'ct_state_ttl', 
+                'ct_dst_ltm', 'ct_src_dport_ltm', 'ct_dst_sport_ltm', 'ct_dst_src_ltm', 
+                'ct_ftp_cmd', 'ct_flw_http_mthd', 'ct_src_ltm', 'ct_srv_dst'
+            ]
+        elif dataset_type == "engineered":
+            # New engineered dataset features - all are numerical (pre-normalized)
+            self.categorical_features = []
+            self.numerical_features = [
+                'dur', 'sbytes', 'dbytes', 'Sload', 'swin', 'smeansz', 'Sjit', 'Stime',
+                'ct_srv_src', 'ct_srv_dst', 'ct_dst_ltm', 'ct_src_ltm', 'ct_dst_src_ltm',
+                'duration', 'jit_ratio', 'inter_pkt_ratio', 'tcp_setup_ratio',
+                'byte_pkt_interaction_dst', 'load_jit_interaction_dst', 'tcp_seq_diff'
+            ]
+        else:
+            raise ValueError(f"Unknown dataset type: {dataset_type}")
 
     def fit(self, df: pd.DataFrame) -> None:
         """Fit preprocessing parameters on training data only."""
@@ -85,19 +106,36 @@ class FeatureProcessor:
                                 log(WARNING, "Potential data leakage detected: Feature '%s' value '%s' is highly predictive of label %s (%.1f%% match)",
                                     col, val, most_common_label, label_pct * 100)
 
-        # Store numerical feature statistics
-        for col in self.numerical_features:
-            if col in df.columns:
-                self.numerical_stats[col] = {
-                    'mean': df[col].mean(),
-                    'std': df[col].std(),
-                    'median': df[col].median(),
-                    'q99': df[col].quantile(0.99)
-                }
+        # Store numerical feature statistics - for original dataset or data validation
+        # For engineered dataset, this will be minimal since data is already normalized
+        if self.dataset_type == "unsw_nb15":
+            for col in self.numerical_features:
+                if col in df.columns:
+                    self.numerical_stats[col] = {
+                        'mean': df[col].mean(),
+                        'std': df[col].std(),
+                        'median': df[col].median(),
+                        'q99': df[col].quantile(0.99)
+                    }
+        else:
+            # For engineered dataset, we only track basic stats for validation
+            # No need for extensive normalization since data is already normalized
+            for col in self.numerical_features:
+                if col in df.columns:
+                    self.numerical_stats[col] = {
+                        'min': df[col].min(),
+                        'max': df[col].max(),
+                        'median': df[col].median(),
+                    }
         
-        # Fit label encoder for attack_cat if present
+        # Fit label encoder for attack_cat if present (original dataset)
         if 'attack_cat' in df.columns:
             self.label_encoder.fit(df['attack_cat'])
+        
+        # For engineered dataset with numeric labels, just record the unique labels
+        if 'label' in df.columns and self.dataset_type == "engineered":
+            self.unique_labels = sorted(df['label'].unique())
+            log(INFO, f"Found {len(self.unique_labels)} unique labels in engineered dataset: {self.unique_labels}")
 
         self.is_fitted = True
 
@@ -114,45 +152,49 @@ class FeatureProcessor:
         if 'id' in df.columns:
             df.drop(columns=['id'], inplace=True)
         
-        # Transform categorical features
+        # Transform categorical features (only needed for original dataset)
         for col in self.categorical_features:
             if col in df.columns and col in self.categorical_encoders:
                 # Map known categories, set unknown to -1
                 df[col] = df[col].map(self.categorical_encoders[col]).fillna(-1)
 
-        # Handle numerical features with added noise for validation data
-        for col in self.numerical_features:
-            if col in df.columns and col in self.numerical_stats:
-                # Replace infinities
-                df[col] = df[col].replace([np.inf, -np.inf], np.nan)
-                
-                # Cap outliers using 99th percentile
-                q99 = self.numerical_stats[col]['q99']
-                df.loc[df[col] > q99, col] = q99  # Cap outliers
-                
-                # Fill NaN with median
-                median = self.numerical_stats[col]['median']
-                # Find NaN positions
-                nan_mask = df[col].isna()
-                
-                # Fill with median value
-                df[col] = df[col].fillna(median)
+        # Handle numerical features with different approaches based on dataset type
+        if self.dataset_type == "unsw_nb15":
+            # Original dataset needs normalization and outlier handling
+            for col in self.numerical_features:
+                if col in df.columns and col in self.numerical_stats:
+                    # Replace infinities
+                    df[col] = df[col].replace([np.inf, -np.inf], np.nan)
+                    
+                    # Cap outliers using 99th percentile
+                    q99 = self.numerical_stats[col]['q99']
+                    df.loc[df[col] > q99, col] = q99  # Cap outliers
+                    
+                    # Fill NaN with median
+                    median = self.numerical_stats[col]['median']
+                    df[col] = df[col].fillna(median)
+        else:
+            # Engineered dataset is already normalized, just handle missing values
+            for col in self.numerical_features:
+                if col in df.columns:
+                    # Replace infinities and NaN with 0 (since data is normalized, 0 is a reasonable default)
+                    df[col] = df[col].replace([np.inf, -np.inf, np.nan], 0)
 
-        # Explicitly drop the raw attack_cat column if it exists
-        # Label encoding is handled separately in preprocess_data
+        # Explicitly drop the raw attack_cat column if it exists (original dataset)
         if 'attack_cat' in df.columns:
             df.drop(columns=['attack_cat'], inplace=True)
             
-        # Also drop the binary 'label' column if it exists
-        if 'label' in df.columns:
-             df.drop(columns=['label'], inplace=True)
+        # For engineered dataset, we keep the 'label' column
+        # This will be handled in preprocess_data instead
+        if 'label' in df.columns and self.dataset_type == "unsw_nb15":
+            df.drop(columns=['label'], inplace=True)
 
         return df
 
 def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_training: bool = False):
     """
     Preprocess the data by encoding categorical features and separating features and labels.
-    Handles multi-class classification for the UNSW_NB15 dataset with 10 classes.
+    Handles multi-class classification for both original and engineered datasets.
     
     Args:
         data (pd.DataFrame): Input DataFrame
@@ -163,11 +205,20 @@ def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_t
         tuple: (features DataFrame, labels Series or None if unlabeled)
     """
     if processor is None:
-        processor = FeatureProcessor()
+        # Auto-detect dataset type based on columns
+        if 'attack_cat' in data.columns:
+            processor = FeatureProcessor(dataset_type="unsw_nb15")
+        elif 'tcp_seq_diff' in data.columns:
+            processor = FeatureProcessor(dataset_type="engineered")
+        else:
+            log(WARNING, "Could not automatically detect dataset type. Defaulting to 'unsw_nb15'.")
+            processor = FeatureProcessor(dataset_type="unsw_nb15")
     
-    # --- Handle labels FIRST --- 
+    # --- Handle labels based on dataset type ---
     labels = None
-    if 'attack_cat' in data.columns:
+    
+    # For original UNSW_NB15 dataset with attack_cat
+    if processor.dataset_type == "unsw_nb15" and 'attack_cat' in data.columns:
         # Extract 'attack_cat' before transforming features
         attack_labels = data['attack_cat'].copy()
         
@@ -190,32 +241,32 @@ def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_t
         # Transform labels if encoder is ready
         if hasattr(processor.label_encoder, 'classes_') and processor.label_encoder.classes_.size > 0:
             try:
-                # Handle unseen labels during transform by mapping them to a default class (e.g., -1 or max_class_index + 1)
-                # For now, let's assume fit handled all expected labels, or handle error
                 labels = processor.label_encoder.transform(attack_labels)
             except ValueError as e:
                 log(ERROR, f"Error transforming labels: {e}. Unseen labels might exist.")
-                # Fallback: assign a default value like -1 or try to refit/update encoder
-                # Ensure fallback has same length as data
-                log(ERROR, f"Assigning fallback labels due to transform error.")
                 labels = np.full(len(data), -1, dtype=int) # Simple fallback for now
         elif labels is None: # If fitting failed or wasn't possible earlier
-             # Ensure fallback has same length as data
              log(WARNING, "Assigning fallback labels because fitting failed or was not possible.")
              labels = np.full(len(data), -1, dtype=int)
-
+             
+    # For engineered dataset with direct numeric labels
+    elif processor.dataset_type == "engineered" and 'label' in data.columns:
+        log(INFO, "Using direct numeric labels from engineered dataset.")
+        labels = data['label'].values
+        # Log label distribution
+        label_counts = data['label'].value_counts().to_dict()
+        log(INFO, f"Label distribution in engineered dataset: {label_counts}")
     elif 'label' in data.columns:
-        # If only binary label, we might still want to return it, but tune script expects multi-class
-        log(WARNING, "Only binary 'label' column found, but multi-class 'attack_cat' expected for tuning/training.")
-        # Return None for labels as it's not the expected format
+        # Fallback case for binary label in original dataset
+        log(WARNING, "Only binary 'label' column found, but multi-class labels expected for training.")
         labels = None 
     else:
         # No label column found
-        log(INFO, "No 'attack_cat' or 'label' column found in data.")
+        log(INFO, "No label column found in data.")
         labels = None
 
     # --- Process features AFTER handling labels --- 
-    # The processor's transform method will drop 'attack_cat' and 'label' if they exist
+    # The processor's transform method will handle dropping labels differently based on dataset_type
     features = processor.transform(data, is_training)
     
     return features, labels
@@ -240,6 +291,12 @@ def load_csv_data(file_path: str) -> DatasetDict:
     print("Dataset Statistics:")
     print(f"Total samples: {len(df)}")
     print(f"Features: {df.columns.tolist()}")
+    
+    # Auto-detect dataset type
+    if 'attack_cat' in df.columns:
+        print("Detected original UNSW_NB15 dataset with attack_cat column")
+    elif 'tcp_seq_diff' in df.columns:
+        print("Detected engineered dataset with normalized features")
     
     # Check if this is an unlabeled test set (from filename)
     is_unlabeled = "nolabel" in file_path.lower()
@@ -312,11 +369,19 @@ def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_tr
     if not is_training:
         # Count occurrences of each label
         label_counts = np.bincount(y.astype(int))
-        # Use the correct class names for UNSW_NB15 dataset
-        label_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic'] 
+        # Use the correct class names for UNSW_NB15 dataset if possible
+        if hasattr(processor, 'dataset_type') and processor.dataset_type == "unsw_nb15":
+            label_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic'] 
+        else:
+            # For engineered dataset, use numeric labels as names
+            label_names = [str(i) for i in range(len(label_counts))]
+            
         log(INFO, "Label distribution in validation data:")
         for i, count in enumerate(label_counts):
-            class_name = label_names[i] if i < len(label_names) else f'unknown_{i}'
+            if i < len(label_names):
+                class_name = label_names[i]
+            else:
+                class_name = f'unknown_{i}'
             log(INFO, f"  {class_name}: {count}")
     
     return xgb.DMatrix(x, label=y, missing=np.nan)
@@ -350,17 +415,31 @@ def train_test_split(
     # Set random seed for consistency
     np.random.seed(random_state)
     
+    # Auto-detect dataset type
+    if 'attack_cat' in data.columns:
+        dataset_type = "unsw_nb15"
+    elif 'tcp_seq_diff' in data.columns:
+        dataset_type = "engineered"
+    else:
+        dataset_type = "unsw_nb15"  # Default
+        log(WARNING, "Could not auto-detect dataset type. Defaulting to 'unsw_nb15'.")
+    
+    # Initialize appropriate feature processor
+    processor = FeatureProcessor(dataset_type=dataset_type)
+        
     # Check if 'label' column exists in data
-    if 'label' not in data.columns:
-        log(INFO, "Warning: No 'label' column found in data. Available columns: %s", data.columns.tolist())
+    label_col = 'label' if dataset_type == "engineered" else 'label' 
+    if label_col not in data.columns:
+        log(INFO, "Warning: No '%s' column found in data. Available columns: %s", 
+            label_col, data.columns.tolist())
     else:
         # Report class distribution
-        label_counts = data['label'].value_counts().to_dict()
+        label_counts = data[label_col].value_counts().to_dict()
         log(INFO, "Class distribution in original data: %s", label_counts)
     
     # Check for data leakage indicators
     if 'uid' in data.columns:
-        uid_label_counts = data.groupby('uid')['label'].value_counts()
+        uid_label_counts = data.groupby('uid')[label_col].value_counts()
         uid_with_multiple_labels = uid_label_counts.index.get_level_values(0).duplicated(keep=False)
         if not any(uid_with_multiple_labels):
             log(WARNING, "CRITICAL: Each UID has only one label, indicating potential perfect data leakage through UIDs")
@@ -393,16 +472,16 @@ def train_test_split(
             test_size=test_fraction,
             random_state=validation_random_state,
             shuffle=True,  # Ensure data is shuffled for a proper split
-            stratify=data['label'] if 'label' in data.columns else None  # Use stratified split if possible
+            stratify=data[label_col] if label_col in data.columns else None  # Use stratified split if possible
         )
     
     # Log the shapes to verify they're different sets
     log(INFO, "Train data shape: %s, Test data shape: %s", train_data.shape, test_data.shape)
     
     # Verify label distributions to ensure proper stratification
-    if 'label' in data.columns:
-        train_label_counts = train_data['label'].value_counts().to_dict()
-        test_label_counts = test_data['label'].value_counts().to_dict()
+    if label_col in data.columns:
+        train_label_counts = train_data[label_col].value_counts().to_dict()
+        test_label_counts = test_data[label_col].value_counts().to_dict()
         log(INFO, "Class distribution in train data: %s", train_label_counts)
         log(INFO, "Class distribution in test data: %s", test_label_counts)
     
@@ -416,9 +495,6 @@ def train_test_split(
                 len(common_uids))
         else:
             log(INFO, "Good: Train and test sets have completely separate UIDs (no overlap).")
-    
-    # Initialize feature processor
-    processor = FeatureProcessor()
     
     # Fit processor on training data and transform both sets
     # Note: transform calls fit implicitly if is_training=True and not fitted

@@ -66,20 +66,20 @@ if __name__ == "__main__":
     args = client_args_parser()
 
     data_directory = "data/received"
-    #latest_csv_path = get_latest_csv(data_directory)
-    #labeled_dataset = load_csv_data(latest_csv_path)
-    #unlabeled_dataset = load_csv_data(latest_csv_path)
     
     # Ensure data/received/ directory exists
     os.makedirs("data/received", exist_ok=True)
     
-    # Load labeled data for training
-    labeled_csv_path = "data/received/UNSW_NB15_training-set.csv"
+    # Load labeled data for training - using the new engineered dataset
+    labeled_csv_path = "data/received/shuffled_final_dataset.csv"
+    log(INFO, "Using engineered dataset: %s", labeled_csv_path)
     labeled_dataset = load_csv_data(labeled_csv_path)
     
-    # Load unlabeled data for prediction
-    unlabeled_csv_path = "data/received/UNSW_NB15_testing-set.csv"
-    unlabeled_dataset = load_csv_data(unlabeled_csv_path)
+    # Load unlabeled data for prediction if available
+    # For now, we'll use a portion of the labeled data as unlabeled
+    # This should be updated once an unlabeled version of the engineered dataset is available
+    unlabeled_csv_path = labeled_csv_path  # Using the same file for now
+    unlabeled_dataset = labeled_dataset    # Using the same dataset for now
     
     # Initialize data partitioner based on specified strategy
     partitioner = instantiate_partitioner(
@@ -126,8 +126,25 @@ if __name__ == "__main__":
         train_data = train_partition
         valid_data = labeled_dataset["test"]
         valid_data.set_format("numpy")
-        num_train = train_data.shape[0]
-        num_val = valid_data.shape[0]
+        
+        # For the engineered dataset, we need to convert to pandas and create train/test DMatrices
+        # We can't just use the train_data and valid_data directly since they're not DMatrices
+        # Convert to pandas first
+        train_df = train_data.to_pandas() if not isinstance(train_data, pd.DataFrame) else train_data
+        valid_df = valid_data.to_pandas() if not isinstance(valid_data, pd.DataFrame) else valid_data
+        
+        # Create a feature processor specifically for the engineered dataset
+        processor = FeatureProcessor(dataset_type="engineered")
+        
+        # Create DMatrices with this processor
+        train_dmatrix = transform_dataset_to_dmatrix(train_df, processor=processor, is_training=True)
+        valid_dmatrix = transform_dataset_to_dmatrix(valid_df, processor=processor, is_training=False)
+        
+        # Get row counts
+        num_train = train_dmatrix.num_row()
+        num_val = valid_dmatrix.num_row()
+        log(INFO, "Centralized evaluation: %d train samples, %d validation samples", num_train, num_val)
+        
     else:
         # Perform local train/test split using the updated function
         # This now returns the fitted processor as well
@@ -138,7 +155,7 @@ if __name__ == "__main__":
         client_specific_seed = args.seed + (args.partition_id * 1000)
         log(INFO, "Using client-specific random seed for train/test split: %d", client_specific_seed)
         
-        train_dmatrix, valid_dmatrix, processor = train_test_split( # Capture processor
+        train_dmatrix, valid_dmatrix, processor = train_test_split(
             train_partition,
             test_fraction=args.test_fraction,
             random_state=client_specific_seed  # Use client-specific seed

@@ -18,7 +18,7 @@ from server_utils import (
     save_results_pickle,
 )
 
-from dataset import transform_dataset_to_dmatrix, load_csv_data
+from dataset import transform_dataset_to_dmatrix, load_csv_data, FeatureProcessor
 
 
 
@@ -40,9 +40,21 @@ centralised_eval = args.centralised_eval
 # Load centralised test set
 if centralised_eval:
     log(INFO, "Loading centralised test set...")
-    test_set = load_csv_data("data/static_data.csv")["test"]
+    # Use the engineered dataset for testing
+    test_csv_path = "data/received/shuffled_final_dataset.csv"
+    log(INFO, "Using engineered dataset for centralized evaluation: %s", test_csv_path)
+    test_set = load_csv_data(test_csv_path)["test"]
     test_set.set_format("pandas")
-    test_dmatrix = transform_dataset_to_dmatrix(test_set)
+    
+    # Create a processor specifically for the engineered dataset
+    processor = FeatureProcessor(dataset_type="engineered")
+    
+    # Transform to DMatrix with the engineered dataset processor
+    test_dmatrix = transform_dataset_to_dmatrix(
+        test_set, 
+        processor=processor,
+        is_training=False
+    )
 
 # Define a custom config function that includes the output directory
 def custom_eval_config(rnd: int):
@@ -319,11 +331,14 @@ else:
 
 log(INFO, "Generating additional visualizations...")
 
-# Define CLASS_NAMES based on UNSW_NB15 common mapping
-CLASS_NAMES = [
-    'Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits',
-    'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic'
-]
+# Define CLASS_NAMES based on the engineered dataset labels found during preprocessing
+# This is a placeholder - we'll use generic labels since engineered dataset has numeric classes
+CLASS_NAMES = [str(i) for i in range(11)]  # Using generic labels 0-10 as a fallback
+
+# Check if we can get real class names from the processor
+if centralised_eval and hasattr(processor, 'unique_labels'):
+    CLASS_NAMES = [str(label) for label in processor.unique_labels]
+    log(INFO, "Using class names from engineered dataset: %s", CLASS_NAMES)
 
 # Import visualization functions and other necessary modules
 from visualization_utils import (

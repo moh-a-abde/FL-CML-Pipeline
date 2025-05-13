@@ -5,7 +5,7 @@ import argparse
 NUM_LOCAL_ROUND = 10
 BST_PARAMS = {
     "objective": "multi:softprob",
-    "num_class": 10,  # 10 classes for UNSW_NB15: Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic
+    "num_class": 11,  # Updated for engineered dataset which has 11 classes (0-10)
     "eta": 0.05,  # Reduced learning rate to prevent overfitting
     "max_depth": 6,  # Increased from 3 to allow more complex trees
     "min_child_weight": 10,  # Increased to prevent fitting to small samples
