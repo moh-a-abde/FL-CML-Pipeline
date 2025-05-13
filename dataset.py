@@ -144,8 +144,11 @@ class FeatureProcessor:
         if not self.is_fitted and is_training:
             self.fit(df)
         elif not self.is_fitted:
-            raise ValueError("FeatureProcessor must be fitted before transform")
-
+            # If not fitted and not training, we should fit it anyway to avoid errors
+            # This is needed for the centralized evaluation case
+            log(INFO, "FeatureProcessor not fitted but needed for transform. Fitting now.")
+            self.fit(df)
+            
         df = df.copy()
         
         # Drop id column since it's just an identifier

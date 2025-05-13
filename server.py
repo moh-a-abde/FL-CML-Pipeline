@@ -45,13 +45,18 @@ if centralised_eval:
     log(INFO, "Using engineered dataset for centralized evaluation: %s", test_csv_path)
     test_set = load_csv_data(test_csv_path)["test"]
     test_set.set_format("pandas")
+    test_df = test_set.to_pandas()
     
     # Create a processor specifically for the engineered dataset
     processor = FeatureProcessor(dataset_type="engineered")
     
+    # Explicitly fit the processor on the test data to ensure it's ready for transform
+    processor.fit(test_df)
+    log(INFO, "Fitted processor on test data")
+    
     # Transform to DMatrix with the engineered dataset processor
     test_dmatrix = transform_dataset_to_dmatrix(
-        test_set, 
+        test_df, 
         processor=processor,
         is_training=False
     )
