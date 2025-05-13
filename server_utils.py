@@ -213,7 +213,7 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     
     Args:
         data: Original data
-        predictions: Prediction labels (class indices)
+        predictions: Prediction labels (class indices or array of probabilities)
         round_num (int): Round number
         output_dir (str, optional): Directory to save results to. If None, uses the default results directory.
         true_labels (array, optional): True labels if available
@@ -228,9 +228,18 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     
     os.makedirs(output_dir, exist_ok=True)
     
+    # Check if predictions is a 2D array (multi-class probabilities)
+    if isinstance(predictions, np.ndarray) and len(predictions.shape) > 1:
+        log(INFO, "Detected multi-class probability predictions with shape: %s", predictions.shape)
+        # Convert probabilities to class labels
+        predicted_labels = np.argmax(predictions, axis=1)
+    else:
+        # Already a list of class indices
+        predicted_labels = predictions
+    
     # Create predictions DataFrame
     predictions_dict = {
-        'predicted_label': predictions,
+        'predicted_label': predicted_labels,
     }
     
     # Add prediction types if provided
@@ -248,9 +257,11 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
             6: 'Fuzzers', 
             7: 'Worms', 
             8: 'Shellcode', 
-            9: 'Generic'
+            9: 'Generic',
+            10: 'Class_10'  # Added for the engineered dataset which has 11 classes
         }
-        predictions_dict['prediction_type'] = [label_mapping.get(int(p), 'unknown') for p in predictions]
+        # Safely convert predictions to integers
+        predictions_dict['prediction_type'] = [label_mapping.get(int(label), f'unknown_{label}') for label in predicted_labels]
     
     # Add true labels if available
     if true_labels is not None:
@@ -263,7 +274,7 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
             
             # Convert to numpy arrays if they're not already
             y_true = np.array(true_labels) if not isinstance(true_labels, np.ndarray) else true_labels
-            y_pred = np.array(predictions) if not isinstance(predictions, np.ndarray) else predictions
+            y_pred = np.array(predicted_labels) if not isinstance(predicted_labels, np.ndarray) else predicted_labels
             
             # Create confusion matrix
             cm = confusion_matrix(y_true, y_pred, labels=range(num_classes))
@@ -345,28 +356,19 @@ def predict_with_saved_model(model_path, dmatrix, output_path):
     raw_predictions = model.predict(dmatrix)
     
     # Log raw predictions
-    log(INFO, "Raw predictions: %s", raw_predictions)
+    log(INFO, "Raw predictions shape: %s", raw_predictions.shape if hasattr(raw_predictions, 'shape') else 'scalar')
     
     # Log distribution of scores
-    log(INFO, "Prediction score distribution - Min: %.4f, Max: %.4f, Mean: %.4f", 
-        np.min(raw_predictions), np.max(raw_predictions), np.mean(raw_predictions))
+    if hasattr(raw_predictions, 'shape'):
+        log(INFO, "Prediction score distribution - Min: %.4f, Max: %.4f, Mean: %.4f", 
+            np.min(raw_predictions), np.max(raw_predictions), np.mean(raw_predictions))
     
-    # For multi-class, the raw predictions should already be class indices
-    # For binary, we might need to convert scores to binary predictions
-    if len(raw_predictions.shape) == 1:  # Binary case
-        probabilities = 1 / (1 + np.exp(-raw_predictions))  # Sigmoid transformation
-        predicted_labels = (probabilities >= 0.5).astype(int)
-        
-        # Save predictions to CSV
-        predictions_df = pd.DataFrame({
-            'predicted_label': predicted_labels,
-            'prediction_type': ['benign' if label == 0 else 'malicious' for label in predicted_labels],
-            'prediction_score': probabilities
-        })
-    else:  # Multi-class case
+    # For multi-class with multi:softprob, the raw predictions will be probabilities for each class
+    if hasattr(raw_predictions, 'shape') and len(raw_predictions.shape) > 1:
+        log(INFO, "Processing multi-class probability predictions with shape: %s", raw_predictions.shape)
         predicted_labels = np.argmax(raw_predictions, axis=1)
         
-        # Default mapping for UNSW_NB15 multi-class predictions
+        # Default mapping for the engineered dataset
         label_mapping = {
             0: 'Normal', 
             1: 'Reconnaissance', 
@@ -377,30 +379,77 @@ def predict_with_saved_model(model_path, dmatrix, output_path):
             6: 'Fuzzers', 
             7: 'Worms', 
             8: 'Shellcode', 
-            9: 'Generic'
+            9: 'Generic',
+            10: 'Class_10'  # Added for the engineered dataset which has 11 classes
         }
         
         # Save predictions to CSV with class names
         predictions_df = pd.DataFrame({
             'predicted_label': predicted_labels,
-            'prediction_type': [label_mapping.get(int(p), 'unknown') for p in predicted_labels],
+            'prediction_type': [label_mapping.get(int(p), f'unknown_{p}') for p in predicted_labels],
         })
         
         # Add probability columns for each class
         for i in range(raw_predictions.shape[1]):
             predictions_df[f'prob_class_{i}'] = raw_predictions[:, i]
+    elif len(raw_predictions.shape) == 1:  # Binary case or multi:softmax
+        # Check if this is binary classification or multi-class with direct labels
+        if np.max(raw_predictions) <= 1.0 and np.min(raw_predictions) >= 0.0:
+            # Binary case
+            probabilities = raw_predictions  # Already probabilities
+            predicted_labels = (probabilities >= 0.5).astype(int)
+            
+            # Save predictions to CSV
+            predictions_df = pd.DataFrame({
+                'predicted_label': predicted_labels,
+                'prediction_type': ['benign' if label == 0 else 'malicious' for label in predicted_labels],
+                'prediction_score': probabilities
+            })
+        else:
+            # Likely multi:softmax with direct class labels
+            predicted_labels = np.round(raw_predictions).astype(int)
+            
+            # Default mapping for the engineered dataset
+            label_mapping = {
+                0: 'Normal', 
+                1: 'Reconnaissance', 
+                2: 'Backdoor', 
+                3: 'DoS', 
+                4: 'Exploits', 
+                5: 'Analysis', 
+                6: 'Fuzzers', 
+                7: 'Worms', 
+                8: 'Shellcode', 
+                9: 'Generic',
+                10: 'Class_10'  # Added for the engineered dataset which has 11 classes
+            }
+            
+            # Save predictions to CSV with class names
+            predictions_df = pd.DataFrame({
+                'predicted_label': predicted_labels,
+                'prediction_type': [label_mapping.get(int(p), f'unknown_{p}') for p in predicted_labels],
+            })
+    else:
+        # Fallback for unexpected prediction format
+        log(WARNING, "Unexpected prediction format. Creating basic predictions DataFrame.")
+        predictions_df = pd.DataFrame({
+            'raw_prediction': raw_predictions
+        })
     
     # Log predicted class distribution
-    unique, counts = np.unique(predicted_labels, return_counts=True)
-    log(INFO, "Predicted class distribution: %s", dict(zip(unique, counts)))
+    if 'predicted_label' in predictions_df.columns:
+        unique, counts = np.unique(predictions_df['predicted_label'], return_counts=True)
+        log(INFO, "Predicted class distribution: %s", dict(zip(unique, counts)))
     
     # Generate visualizations if true labels are available
     try:
         true_labels = dmatrix.get_label()
-        if true_labels is not None:
+        if true_labels is not None and 'predicted_label' in predictions_df.columns:
             output_dir = os.path.dirname(output_path)
-            class_names = list(label_mapping.values())
-            num_classes = len(class_names)
+            num_classes = max(11, np.max(true_labels) + 1)  # Ensure at least 11 classes for the engineered dataset
+            class_names = [label_mapping.get(i, f'Class_{i}') for i in range(num_classes)]
+            
+            predicted_labels = predictions_df['predicted_label'].values
             
             # Create confusion matrix
             cm = confusion_matrix(true_labels, predicted_labels, labels=range(num_classes))
@@ -412,7 +461,7 @@ def predict_with_saved_model(model_path, dmatrix, output_path):
             plot_class_distribution(true_labels, predicted_labels, class_names, dist_path)
             
             # Plot ROC and Precision-Recall Curves (for multi-class)
-            if len(raw_predictions.shape) > 1 and raw_predictions.shape[1] == num_classes:
+            if len(raw_predictions.shape) > 1 and raw_predictions.shape[1] >= num_classes:
                 roc_path = os.path.join(output_dir, "final_roc_curves.png")
                 plot_roc_curves(true_labels, raw_predictions, class_names, roc_path)
                 
@@ -443,19 +492,26 @@ def get_evaluate_fn(test_data):
 
             bst.load_model(para_b)
             
-            # Predict on test data
-            y_pred = bst.predict(test_data)
-            y_pred_labels = y_pred.astype(int)
+            # Get predictions
+            y_pred_proba = bst.predict(test_data)
+            
+            # For multi:softprob, we get probabilities for each class
+            # Convert to labels by taking argmax if predictions are probabilities
+            if isinstance(y_pred_proba, np.ndarray) and len(y_pred_proba.shape) > 1:
+                y_pred_labels = np.argmax(y_pred_proba, axis=1)
+                log(INFO, "Converting probability predictions to labels (argmax), shape: %s", y_pred_proba.shape)
+            else:
+                y_pred_labels = y_pred_proba  # Already labels
             
             # Get true labels
             y_true = test_data.get_label()
             
             # Save dataset with predictions to results directory
-            output_path = save_predictions_to_csv(test_data, y_pred_labels, server_round, "results", y_true)
+            output_path = save_predictions_to_csv(test_data, y_pred_proba, server_round, "results", y_true)
             
-            # Evaluate
-            predictions = bst.predict(test_data)
-            pred_proba = bst.predict(test_data, output_margin=False) # Need probabilities for ROC/PR
+            # Compute metrics using the predictions
+            predictions = y_pred_labels  # Use the converted labels for metrics
+            pred_proba = y_pred_proba    # The original probabilities for plots that need them
 
             # Ensure pred_proba has the correct shape for multi-class
             if len(pred_proba.shape) == 1 or pred_proba.shape[1] == 1:
@@ -497,7 +553,7 @@ def get_evaluate_fn(test_data):
             y_test_int = y_true.astype(int)
             num_classes_actual = BST_PARAMS.get('num_class', 10)
 
-            if pred_proba is not None and pred_proba.shape[1] == num_classes_actual:
+            if pred_proba is not None and len(pred_proba.shape) > 1 and pred_proba.shape[1] == num_classes_actual:
                  try:
                      loss = log_loss(y_test_int, pred_proba, eps=1e-15, labels=range(num_classes_actual))
                  except ValueError as e:
@@ -509,12 +565,13 @@ def get_evaluate_fn(test_data):
             else:
                  log(WARNING, "Calculating log_loss using one-hot encoding due to missing/invalid probabilities.")
                  try:
-                     loss = log_loss(y_test_int, np.eye(num_classes_actual)[predictions.astype(int)], eps=1e-15, labels=range(num_classes_actual))
+                     predictions_int = np.array(predictions).astype(int)
+                     loss = log_loss(y_test_int, np.eye(num_classes_actual)[predictions_int], eps=1e-15, labels=range(num_classes_actual))
                  except ValueError as e:
                      log(WARNING, f"ValueError during one-hot log_loss calculation: {e}. Setting loss to high value.")
                      loss = 100.0 # Assign a high loss value
                      log(WARNING, f"y_test unique: {np.unique(y_test_int)}, shape: {y_test_int.shape}")
-                     log(WARNING, f"predictions unique: {np.unique(predictions.astype(int))}, shape: {predictions.shape}")
+                     log(WARNING, f"predictions unique: {np.unique(predictions)}, shape: {predictions.shape}")
 
 
             accuracy = accuracy_score(y_true, predictions)
@@ -530,7 +587,8 @@ def get_evaluate_fn(test_data):
             # Instead of creating a separate plots directory, save directly in output_dir
             log(INFO, f"Saving evaluation plots to: {output_dir}")
 
-            class_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic'] # Make sure this matches your data
+            # Update class names to include the 11th class
+            class_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic', 'Class_10'] 
 
             # Plot Confusion Matrix
             cm_path = os.path.join(output_dir, f"confusion_matrix_round_{server_round}.png")
@@ -541,7 +599,7 @@ def get_evaluate_fn(test_data):
             plot_class_distribution(y_test_int, predictions.astype(int), class_names[:num_classes_actual], dist_path)
 
             # Plot ROC and Precision-Recall Curves (only if probabilities are available and valid)
-            if pred_proba is not None and pred_proba.shape[1] == num_classes_actual:
+            if pred_proba is not None and len(pred_proba.shape) > 1 and pred_proba.shape[1] == num_classes_actual:
                 roc_path = os.path.join(output_dir, f"roc_curves_round_{server_round}.png")
                 plot_roc_curves(y_test_int, pred_proba, class_names[:num_classes_actual], roc_path)
 
