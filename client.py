@@ -125,11 +125,12 @@ if __name__ == "__main__":
         # Use centralized test set for evaluation
         train_data = train_partition
         valid_data = labeled_dataset["test"]
-        valid_data.set_format("numpy")
         
-        # For the engineered dataset, we need to convert to pandas and create train/test DMatrices
-        # We can't just use the train_data and valid_data directly since they're not DMatrices
-        # Convert to pandas first
+        # Ensure data is in the correct format
+        train_data.set_format("pandas")
+        valid_data.set_format("pandas")
+        
+        # Get the pandas DataFrames
         train_df = train_data.to_pandas() if not isinstance(train_data, pd.DataFrame) else train_data
         valid_df = valid_data.to_pandas() if not isinstance(valid_data, pd.DataFrame) else valid_data
         

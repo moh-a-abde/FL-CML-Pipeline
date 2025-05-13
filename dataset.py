@@ -191,19 +191,23 @@ class FeatureProcessor:
 
         return df
 
-def preprocess_data(data: pd.DataFrame, processor: FeatureProcessor = None, is_training: bool = False):
+def preprocess_data(data: Union[pd.DataFrame, Dataset], processor: FeatureProcessor = None, is_training: bool = False):
     """
     Preprocess the data by encoding categorical features and separating features and labels.
     Handles multi-class classification for both original and engineered datasets.
     
     Args:
-        data (pd.DataFrame): Input DataFrame
+        data (Union[pd.DataFrame, Dataset]): Input DataFrame or Hugging Face Dataset
         processor (FeatureProcessor): Feature processor instance for consistent preprocessing
         is_training (bool): Whether this is training data
         
     Returns:
         tuple: (features DataFrame, labels Series or None if unlabeled)
     """
+    # Convert Hugging Face Dataset to pandas DataFrame if needed
+    if not isinstance(data, pd.DataFrame):
+        data = data.to_pandas()
+    
     if processor is None:
         # Auto-detect dataset type based on columns
         if 'attack_cat' in data.columns:
@@ -339,14 +343,18 @@ def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_tr
     Transform dataset to DMatrix format.
     
     Args:
-        data: Input dataset (should be pandas DataFrame)
+        data: Input dataset (can be pandas DataFrame or Hugging Face Dataset)
         processor (FeatureProcessor): Feature processor instance for consistent preprocessing
         is_training (bool): Whether this is training data
         
     Returns:
         xgb.DMatrix: Transformed dataset
     """
-    # The input 'data' should already be a pandas DataFrame in this context
+    # Convert Hugging Face Dataset to pandas DataFrame if needed
+    if not isinstance(data, pd.DataFrame):
+        data = data.to_pandas()
+    
+    # Now process the data using the pandas DataFrame
     x, y = preprocess_data(data, processor=processor, is_training=is_training)
     
     # --- Logging before DMatrix creation ---
