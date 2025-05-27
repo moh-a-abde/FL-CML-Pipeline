@@ -1,0 +1,23 @@
+.venv/
+# Virtual environments (should NEVER be in Git)
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Data files (too large for Git)
+data/old/
+data/received/
+received/
+outputs/
+*.csv
+*.log
+
+# Keep only essential CSV files
+!data/received/final_dataset.csv
