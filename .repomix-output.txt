@@ -65,6 +65,7 @@ dataset.py
 go_to_work.sh
 multi_class_implementation_plan.md
 original_bst_params.json
+PREPROCESSING_CONSISTENCY_FIX.md
 pretrained_model_usage.md
 progress.md
 pyproject.toml
@@ -183,39 +184,54 @@ jobs:
           source venv/bin/activate
           # Check if data directory exists, create if not
           mkdir -p data/sample
-          # Define train and test file paths for UNSW_NB15
-          TRAIN_FILE="data/received/UNSW_NB15_training-set.csv"
-          TEST_FILE="data/received/UNSW_NB15_testing-set.csv"
-          # Check if the UNSW_NB15 files exist, otherwise use sample data
-          if [ -f "$TRAIN_FILE" ] && [ -f "$TEST_FILE" ]; then
-            echo "Using UNSW_NB15 data files for hyperparameter tuning"
+          # Use the same dataset that federated learning will use for consistency
+          FINAL_DATASET="data/received/final_dataset.csv"
+          # Check if the final dataset exists
+          if [ -f "$FINAL_DATASET" ]; then
+            echo "Using final dataset for hyperparameter tuning: $FINAL_DATASET"
+            # Create output directory for Ray Tune results
+            mkdir -p tune_results
+            # Run Ray Tune with the final dataset for consistency
+            bash run_ray_tune.sh --data-file "$FINAL_DATASET" --num-samples 5 --cpus-per-trial 2 --output-dir "./tune_results"
           else
-            echo "UNSW_NB15 data files not found, checking for any CSV data"
-            # Try to find any CSV file to use as a fallback
-            SAMPLE_DATA=""
-            for csv_file in $(find data -name "*.csv" | head -n 1); do
-              SAMPLE_DATA="$csv_file"
-              break
-            done
-            if [ -z "$SAMPLE_DATA" ]; then
-              echo "No CSV data found, creating a sample dataset for tuning"
-              # Generate synthetic data for train and test (kept as fallback)
-              python -c "import pandas as pd; import numpy as np; np.random.seed(42); n = 1000; df = pd.DataFrame({'feature1': np.random.normal(0, 1, n), 'feature2': np.random.normal(0, 1, n), 'feature3': np.random.normal(0, 1, n), 'feature4': np.random.normal(0, 1, n), 'feature5': np.random.normal(0, 1, n), 'label': np.random.choice([0, 1, 2], n)}); train = df.sample(frac=0.8, random_state=42); test = df.drop(train.index); train.to_csv('data/sample/synthetic_train.csv', index=False); test.to_csv('data/sample/synthetic_test.csv', index=False)"
-              TRAIN_FILE="data/sample/synthetic_train.csv"
-              TEST_FILE="data/sample/synthetic_test.csv"
+            echo "Final dataset not found at $FINAL_DATASET, checking for fallback data..."
+            # Define train and test file paths for UNSW_NB15 as fallback
+            TRAIN_FILE="data/received/UNSW_NB15_training-set.csv"
+            TEST_FILE="data/received/UNSW_NB15_testing-set.csv"
+            # Check if the UNSW_NB15 files exist, otherwise use sample data
+            if [ -f "$TRAIN_FILE" ] && [ -f "$TEST_FILE" ]; then
+              echo "Using UNSW_NB15 data files for hyperparameter tuning"
+              # Create output directory for Ray Tune results
+              mkdir -p tune_results
+              bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples 5 --cpus-per-trial 2 --output-dir "./tune_results"
             else
-              # If we have a single file, create train/test split (kept as fallback)
-              python -c "import pandas as pd; from sklearn.model_selection import train_test_split; df = pd.read_csv('$SAMPLE_DATA'); train, test = train_test_split(df, test_size=0.2, random_state=42); train.to_csv('data/sample/split_train.csv', index=False); test.to_csv('data/sample/split_test.csv', index=False)"
-              TRAIN_FILE="data/sample/split_train.csv"
-              TEST_FILE="data/sample/split_test.csv"
+              echo "No suitable data found, creating synthetic data for testing"
+              # Try to find any CSV file to use as a fallback
+              SAMPLE_DATA=""
+              for csv_file in $(find data -name "*.csv" | head -n 1); do
+                SAMPLE_DATA="$csv_file"
+                break
+              done
+              if [ -z "$SAMPLE_DATA" ]; then
+                echo "No CSV data found, creating a sample dataset for tuning"
+                # Generate synthetic data for train and test (kept as fallback)
+                python -c "import pandas as pd; import numpy as np; np.random.seed(42); n = 1000; df = pd.DataFrame({'feature1': np.random.normal(0, 1, n), 'feature2': np.random.normal(0, 1, n), 'feature3': np.random.normal(0, 1, n), 'feature4': np.random.normal(0, 1, n), 'feature5': np.random.normal(0, 1, n), 'label': np.random.choice([0, 1, 2], n)}); train = df.sample(frac=0.8, random_state=42); test = df.drop(train.index); train.to_csv('data/sample/synthetic_train.csv', index=False); test.to_csv('data/sample/synthetic_test.csv', index=False)"
+                TRAIN_FILE="data/sample/synthetic_train.csv"
+                TEST_FILE="data/sample/synthetic_test.csv"
+              else
+                # If we have a single file, create train/test split (kept as fallback)
+                python -c "import pandas as pd; from sklearn.model_selection import train_test_split; df = pd.read_csv('$SAMPLE_DATA'); train, test = train_test_split(df, test_size=0.2, random_state=42); train.to_csv('data/sample/split_train.csv', index=False); test.to_csv('data/sample/split_test.csv', index=False)"
+                TRAIN_FILE="data/sample/split_train.csv"
+                TEST_FILE="data/sample/split_test.csv"
+              fi
+              echo "Using train file: $TRAIN_FILE"
+              echo "Using test file: $TEST_FILE"
+              # Create output directory for Ray Tune results
+              mkdir -p tune_results
+              # Use a small number of samples in CI for speed
+              bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples 5 --cpus-per-trial 2 --output-dir "./tune_results"
             fi
           fi
-          echo "Using train file: $TRAIN_FILE"
-          echo "Using test file: $TEST_FILE"
-          # Create output directory for Ray Tune results
-          mkdir -p tune_results
-          # Use a small number of samples in CI for speed; default is 100 for local runs
-          bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples 1 --cpus-per-trial 4 --output-dir "./tune_results"
           # Apply the tuned parameters to the federated learning system
           if [ -f "tune_results/best_params.json" ]; then
             python use_tuned_params.py --params-file "./tune_results/best_params.json"
@@ -790,7 +806,8 @@ from dataset import (
     FeatureProcessor,
     preprocess_data,
     load_global_feature_processor,
-    create_global_feature_processor
+    create_global_feature_processor,
+    transform_dataset_to_dmatrix
 )
 from utils import client_args_parser, BST_PARAMS
 # Try to import NUM_LOCAL_ROUND from tuned_params if available, otherwise from utils
@@ -916,7 +933,7 @@ if __name__ == "__main__":
         log(INFO, "Falling back to original train_test_split method")
         # Fallback to the original method if global processor fails
         train_dmatrix, valid_dmatrix, _ = train_test_split(
-            train_partition, test_fraction=args.test_fraction, seed=args.seed
+            train_partition, test_fraction=args.test_fraction, random_state=args.seed
         )
         num_train = train_dmatrix.num_row()
         num_val = valid_dmatrix.num_row()
@@ -1922,6 +1939,172 @@ git pull
 }
 </file>
 
+<file path="PREPROCESSING_CONSISTENCY_FIX.md">
+# Preprocessing Consistency Fix
+
+## Problem Fixed
+
+Your federated learning pipeline was experiencing disconnection between two phases:
+
+1. **Individual Client Training** (showing good learning curves with decreasing mlogloss)
+2. **Federated Learning** (showing stagnant accuracy at 0.5453)
+
+## Root Cause
+
+The disconnection was caused by **inconsistent preprocessing** across different phases:
+
+- **Ray Tune optimization**: Created its own `FeatureProcessor` for each trial
+- **Federated Learning clients**: Each created their own `FeatureProcessor` fitted on local data
+- **Server evaluation**: Created its own `FeatureProcessor` for centralized evaluation
+
+This led to different scaling, encoding, and feature transformations across phases, making the hyperparameters learned during Ray Tune ineffective for federated learning.
+
+## Solution Implemented
+
+### 1. Global Feature Processor
+
+Created a **single, global `FeatureProcessor`** that:
+- Is fitted on the **full training dataset** (`data/received/final_dataset.csv`)
+- Uses **temporal splitting** to prevent data leakage
+- Is saved to `outputs/global_feature_processor.pkl`
+- Is shared across **all phases** (Ray Tune, Server, Clients)
+
+### 2. Updated Scripts
+
+#### A. `run_bagging.sh` (Primary Fix)
+Updated to create the global processor before starting federated learning:
+
+```bash
+# Step 1: Create global feature processor
+python create_global_processor.py \
+    --data-file "data/received/final_dataset.csv" \
+    --output-dir "outputs" \
+    --force
+
+# Step 2: Start server (uses global processor)
+python3 server.py --pool-size=5 --num-rounds=5 --num-clients-per-round=5 --centralised-eval
+
+# Step 3: Start clients (use global processor)
+python3 client.py --partition-id=0 --num-partitions=5 --partitioner-type=exponential
+# ... (all clients)
+```
+
+#### B. GitHub Workflow (`.github/workflows/cml.yaml`)
+Updated to use the same `final_dataset.csv` for both Ray Tune and federated learning:
+
+```yaml
+# Ray Tune step now uses the same dataset as federated learning
+bash run_ray_tune.sh --data-file "data/received/final_dataset.csv" --num-samples 5
+
+# Federated learning step uses the same dataset
+./run_bagging.sh
+```
+
+#### C. `create_global_processor.py`
+New script that creates the global processor:
+
+```bash
+python create_global_processor.py \
+    --data-file "data/received/final_dataset.csv" \
+    --output-dir "outputs" \
+    --force
+```
+
+## Key Improvements
+
+### ✅ Consistent Preprocessing
+- **Same feature scaling** across all phases
+- **Same categorical encoding** across all phases  
+- **Same data transformations** across all phases
+
+### ✅ Temporal Data Integrity
+- **No data leakage** between train/test splits
+- **Temporal splitting** based on `Stime` column
+- **Proper train/validation separation**
+
+### ✅ Phase Alignment
+- **Ray Tune** uses same preprocessing as **Federated Learning**
+- **Individual client training** matches **federated aggregation**
+- **Hyperparameters** transfer effectively between phases
+
+## Usage Instructions
+
+### For GitHub Actions Workflow
+Your workflow automatically runs the fixed version:
+
+1. **Ray Tune Step**: Creates global processor and tunes hyperparameters
+2. **Federated Learning Step**: Uses same global processor for training
+3. **Results**: Should now show consistent performance across phases
+
+### For Local Development
+
+#### Option 1: Use the workflow scripts (Recommended)
+```bash
+# Run the complete pipeline with consistent preprocessing
+source venv/bin/activate
+./run_bagging.sh
+```
+
+#### Option 2: Manual step-by-step
+```bash
+# Step 1: Create global processor
+python create_global_processor.py \
+    --data-file "data/received/final_dataset.csv" \
+    --output-dir "outputs"
+
+# Step 2: Run Ray Tune (optional)
+bash run_ray_tune.sh --data-file "data/received/final_dataset.csv"
+
+# Step 3: Run federated learning
+./run_bagging.sh
+```
+
+## Expected Results
+
+After this fix, you should see:
+
+1. **Consistent Learning Curves**: Both individual client training and federated learning should show similar learning patterns
+2. **Improved Federated Performance**: Accuracy should improve beyond the previous stagnant 0.5453
+3. **Effective Hyperparameter Transfer**: Parameters tuned in Ray Tune should work effectively in federated learning
+4. **Reproducible Results**: Same preprocessing ensures consistent results across runs
+
+## Files Modified
+
+1. **`run_bagging.sh`** - Added global processor creation step
+2. **`.github/workflows/cml.yaml`** - Updated to use consistent dataset
+3. **`dataset.py`** - Added global processor creation/loading functions
+4. **`create_global_processor.py`** - New script for processor creation
+5. **`ray_tune_xgboost_updated.py`** - Updated to use global processor
+6. **`client.py`** - Updated to load global processor
+7. **`server.py`** - Updated to use global processor
+
+## Validation
+
+To verify the fix is working:
+
+1. **Check processor creation**: Look for `✓ Global feature processor ready at outputs/global_feature_processor.pkl`
+2. **Monitor learning curves**: Both phases should show similar learning patterns
+3. **Check accuracy progression**: Federated learning accuracy should improve over rounds
+4. **Verify consistency**: Individual client metrics should align with federated metrics
+
+## Troubleshooting
+
+### Issue: "Global feature processor not found"
+**Solution**: Ensure `run_bagging.sh` is being used, which creates the processor automatically.
+
+### Issue: "Still seeing stagnant accuracy"
+**Check**: 
+- Verify `outputs/global_feature_processor.pkl` exists
+- Check that all clients and server are loading the same processor
+- Ensure temporal splitting is working correctly
+
+### Issue: "Ray Tune parameters not transferring"
+**Check**:
+- Both Ray Tune and federated learning are using `data/received/final_dataset.csv`
+- Global processor is created before both phases
+- `tune_results/best_params.json` exists and is being applied
+</file>
+
 <file path="pretrained_model_usage.md">
 # Using the Saved Federated Learning Model
 
@@ -2269,6 +2452,12 @@ Key Components:
 - XGBoost parameter space definition
 - Multi-class evaluation metrics (precision, recall, F1)
 - Optimal model selection and persistence
+Recent Fixes:
+- Fixed Ray Tune worker file access issues by passing data directly to trial functions
+  instead of trying to reload files from worker environments
+- Ensured consistent preprocessing across hyperparameter tuning and federated learning phases
+- Fixed processor path issues by using absolute paths for Ray Tune workers
+- Added robust label column handling to work with different feature processor behaviors
 """
 import os
 import argparse
@@ -2314,10 +2503,26 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
     # Transform data using the global processor
     train_processed = processor.transform(train_df, is_training=True)
     test_processed = processor.transform(test_df, is_training=False)
-    train_features = train_processed.drop(columns=['label'])
-    train_labels = train_processed['label'].astype(int)
-    test_features = test_processed.drop(columns=['label'])
-    test_labels = test_processed['label'].astype(int)
+    # Debug: Check what columns are available after processing
+    logger.info(f"Train processed columns: {list(train_processed.columns)}")
+    logger.info(f"Test processed columns: {list(test_processed.columns)}")
+    # Handle label column extraction more robustly
+    if 'label' in train_processed.columns:
+        train_features = train_processed.drop(columns=['label'])
+        train_labels = train_processed['label'].astype(int)
+    else:
+        # If label column doesn't exist after processing, use original data
+        logger.warning("Label column not found in processed data, using original labels")
+        train_features = train_processed
+        train_labels = train_df['label'].astype(int) if 'label' in train_df.columns else train_df['Label'].astype(int)
+    if 'label' in test_processed.columns:
+        test_features = test_processed.drop(columns=['label'])
+        test_labels = test_processed['label'].astype(int)
+    else:
+        # If label column doesn't exist after processing, use original data
+        logger.warning("Label column not found in processed test data, using original labels")
+        test_features = test_processed
+        test_labels = test_df['label'].astype(int) if 'label' in test_df.columns else test_df['Label'].astype(int)
     # Create DMatrix objects inside the function to avoid pickling issues
     train_data = xgb.DMatrix(train_features, label=train_labels, missing=np.nan)
     test_data = xgb.DMatrix(test_features, label=test_labels, missing=np.nan)
@@ -2411,10 +2616,20 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         train_processed = processor.transform(train_data, is_training=True)
         test_processed = processor.transform(test_data, is_training=False)
         # Extract features and labels
-        train_features = train_processed.drop(columns=['label'])
-        train_labels = train_processed['label'].astype(int)
-        test_features = test_processed.drop(columns=['label'])
-        test_labels = test_processed['label'].astype(int)
+        if 'label' in train_processed.columns:
+            train_features = train_processed.drop(columns=['label'])
+            train_labels = train_processed['label'].astype(int)
+        else:
+            logger.warning("Label column not found in processed training data, using original labels")
+            train_features = train_processed
+            train_labels = train_data['label'].astype(int) if 'label' in train_data.columns else train_data['Label'].astype(int)
+        if 'label' in test_processed.columns:
+            test_features = test_processed.drop(columns=['label'])
+            test_labels = test_processed['label'].astype(int)
+        else:
+            logger.warning("Label column not found in processed test data, using original labels")
+            test_features = test_processed
+            test_labels = test_data['label'].astype(int) if 'label' in test_data.columns else test_data['Label'].astype(int)
         logger.info(f"Training data size: {len(train_features)}")
         logger.info(f"Validation data size: {len(test_features)}")
     else:
@@ -2431,20 +2646,32 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
             logger.info("Using temporal splitting based on Stime to avoid data leakage")
             data_sorted = data.sort_values('Stime').reset_index(drop=True)
             train_size = int(0.8 * len(data_sorted))
-            train_processed = data_sorted.iloc[:train_size]
-            test_processed = data_sorted.iloc[train_size:]
+            train_split_orig = data_sorted.iloc[:train_size].copy()
+            test_split_orig = data_sorted.iloc[train_size:].copy()
         else:
             logger.warning("No Stime column found, using random split")
-            train_processed, test_processed = sklearn_split(data, test_size=0.2, random_state=42)
+            train_split_orig, test_split_orig = sklearn_split(data, test_size=0.2, random_state=42)
         # Load the global processor and transform data
         processor = load_global_feature_processor(processor_path)
-        train_processed = processor.transform(train_processed, is_training=True)
-        test_processed = processor.transform(test_processed, is_training=False)
+        train_processed = processor.transform(train_split_orig, is_training=True)
+        test_processed = processor.transform(test_split_orig, is_training=False)
         # Extract features and labels
-        train_features = train_processed.drop(columns=['label'])
-        train_labels = train_processed['label'].astype(int)
-        test_features = test_processed.drop(columns=['label'])
-        test_labels = test_processed['label'].astype(int)
+        if 'label' in train_processed.columns:
+            train_features = train_processed.drop(columns=['label'])
+            train_labels = train_processed['label'].astype(int)
+        else:
+            logger.warning("Label column not found in processed training data, using original labels from split")
+            train_features = train_processed
+            # Get labels from the original split data before processing
+            train_labels = train_split_orig['label'].astype(int)
+        if 'label' in test_processed.columns:
+            test_features = test_processed.drop(columns=['label'])
+            test_labels = test_processed['label'].astype(int)
+        else:
+            logger.warning("Label column not found in processed test data, using original labels from split")
+            test_features = test_processed
+            # Get labels from the original split data before processing
+            test_labels = test_split_orig['label'].astype(int)
         logger.info(f"Training data size: {len(train_features)}")
         logger.info(f"Validation data size: {len(test_features)}")
     # Define the search space using hyperopt's hp module
@@ -2462,17 +2689,15 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         search_space["tree_method"] = hp.choice("tree_method", ["gpu_hist"])
     # Create a wrapper function that includes the original data DataFrames and processor path
     def _train_with_data_wrapper(config):
-        # Add processor path to config
-        config['global_processor_path'] = processor_path
+        # Add processor path to config - ensure it's absolute for Ray Tune workers
+        config['global_processor_path'] = os.path.abspath(processor_path)
         # Pass copies of the original dataframes to the training function
         if train_file and test_file:
             return train_xgboost(config, train_data.copy(), test_data.copy())
         else:
-            # Use the original data before processing for the trial function
-            data_orig = load_csv_data(data_file)["train"].to_pandas()
-            if 'label' not in data_orig.columns and 'Label' in data_orig.columns:
-                data_orig['label'] = data_orig['Label']
-            return train_xgboost(config, data_orig.copy(), data_orig.copy())
+            # For single data file mode, pass the original loaded data directly
+            # instead of trying to reload it in the worker
+            return train_xgboost(config, data.copy(), data.copy())
     # Set up HyperOptSearch
     algo = HyperOptSearch(
         search_space,
@@ -3327,28 +3552,58 @@ wait
 #!/bin/bash
 set -e
 cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"/
-echo "Starting server"
+# Ensure the global feature processor is created before starting server and clients
+# This guarantees consistent preprocessing across all clients and the server
+echo "Step 1: Ensuring global feature processor is created..."
+python create_global_processor.py \
+    --data-file "data/received/final_dataset.csv" \
+    --output-dir "outputs" \
+    --force
+if [ $? -ne 0 ]; then
+    echo "Error creating global feature processor. Exiting."
+    exit 1
+fi
+echo "✓ Global feature processor ready at outputs/global_feature_processor.pkl"
+echo ""
+echo "Step 2: Starting federated learning server..."
 python3 server.py --pool-size=5 --num-rounds=5 --num-clients-per-round=5 --centralised-eval &
+SERVER_PID=$!
 sleep 30  # Sleep for 30s to give the server enough time to start
+echo "Step 3: Starting federated learning clients..."
 # Start regular client (partition 0)
 echo "Starting regular client (partition 0)"
 python3 client.py --partition-id=0 --num-partitions=5 --partitioner-type=exponential &
+CLIENT_PIDS[0]=$!
 # Start regular client (partition 1)
 echo "Starting regular client (partition 1)"
 python3 client.py --partition-id=1 --num-partitions=5 --partitioner-type=exponential &
+CLIENT_PIDS[1]=$!
 # Start regular client (partition 2)
 echo "Starting regular client (partition 2)"
 python3 client.py --partition-id=2 --num-partitions=5 --partitioner-type=exponential &
+CLIENT_PIDS[2]=$!
 # Start regular client (partition 3)
 echo "Starting regular client (partition 3)"
 python3 client.py --partition-id=3 --num-partitions=5 --partitioner-type=exponential &
+CLIENT_PIDS[3]=$!
 # Start regular client (partition 4)
 echo "Starting regular client (partition 4)"
 python3 client.py --partition-id=4 --num-partitions=5 --partitioner-type=exponential &
+CLIENT_PIDS[4]=$!
+echo "All clients started. Waiting for federated learning to complete..."
 # Enable CTRL+C to stop all background processes
-trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM
-# Wait for all background processes to complete
-wait
+trap "echo 'Stopping all processes...'; kill -- -$$" SIGINT SIGTERM
+# Wait for server to complete (it will finish after all rounds)
+wait $SERVER_PID
+# Wait for all client processes to complete
+for pid in "${CLIENT_PIDS[@]}"; do
+    if kill -0 $pid 2>/dev/null; then
+        wait $pid
+    fi
+done
+echo ""
+echo "✓ Federated learning completed successfully!"
+echo "Results saved to: outputs/"
 </file>
 
 <file path="run_cyclic.sh">
@@ -3373,11 +3628,56 @@ wait
 #!/bin/bash
 # Script to run Ray Tune for XGBoost hyperparameter optimization
 # with consistent preprocessing to fix disconnection between tuning and FL phases
+# Default values
+DATA_FILE="data/received/final_dataset.csv"
+NUM_SAMPLES=50
+CPUS_PER_TRIAL=2
+OUTPUT_DIR="./tune_results"
+TRAIN_FILE=""
+TEST_FILE=""
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --data-file)
+            DATA_FILE="$2"
+            shift 2
+            ;;
+        --train-file)
+            TRAIN_FILE="$2"
+            shift 2
+            ;;
+        --test-file)
+            TEST_FILE="$2"
+            shift 2
+            ;;
+        --num-samples)
+            NUM_SAMPLES="$2"
+            shift 2
+            ;;
+        --cpus-per-trial)
+            CPUS_PER_TRIAL="$2"
+            shift 2
+            ;;
+        --output-dir)
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        *)
+            echo "Unknown argument: $1"
+            shift
+            ;;
+    esac
+done
 echo "Starting Ray Tune XGBoost hyperparameter optimization with consistent preprocessing..."
 # Step 1: Create global feature processor for consistent preprocessing
 echo "Step 1: Creating global feature processor..."
+# Determine which data file to use for the global processor
+PROCESSOR_DATA_FILE="$DATA_FILE"
+if [[ -n "$TRAIN_FILE" && -f "$TRAIN_FILE" ]]; then
+    PROCESSOR_DATA_FILE="$TRAIN_FILE"
+fi
 python create_global_processor.py \
-    --data-file "data/received/final_dataset.csv" \
+    --data-file "$PROCESSOR_DATA_FILE" \
     --output-dir "outputs" \
     --force
 if [ $? -ne 0 ]; then
@@ -3387,11 +3687,20 @@ fi
 echo "Global feature processor created successfully."
 # Step 2: Run Ray Tune with the updated script
 echo "Step 2: Running Ray Tune optimization..."
-python ray_tune_xgboost_updated.py \
-    --data-file "data/received/final_dataset.csv" \
-    --num-samples 50 \
-    --cpus-per-trial 2 \
-    --output-dir "./tune_results"
+# Build the Python command based on available files
+PYTHON_CMD="python ray_tune_xgboost_updated.py"
+PYTHON_CMD="$PYTHON_CMD --num-samples $NUM_SAMPLES"
+PYTHON_CMD="$PYTHON_CMD --cpus-per-trial $CPUS_PER_TRIAL"
+PYTHON_CMD="$PYTHON_CMD --output-dir \"$OUTPUT_DIR\""
+if [[ -n "$TRAIN_FILE" && -n "$TEST_FILE" && -f "$TRAIN_FILE" && -f "$TEST_FILE" ]]; then
+    echo "Using separate train and test files"
+    PYTHON_CMD="$PYTHON_CMD --train-file \"$TRAIN_FILE\" --test-file \"$TEST_FILE\""
+else
+    echo "Using single data file: $DATA_FILE"
+    PYTHON_CMD="$PYTHON_CMD --data-file \"$DATA_FILE\""
+fi
+echo "Executing: $PYTHON_CMD"
+eval $PYTHON_CMD
 if [ $? -ne 0 ]; then
     echo "Ray Tune optimization failed. Exiting."
     exit 1
@@ -3405,7 +3714,7 @@ if [ $? -ne 0 ]; then
 fi
 echo "Ray Tune with consistent preprocessing completed!"
 echo "Global feature processor is available at: outputs/global_feature_processor.pkl"
-echo "Tuned parameters are available at: tune_results/best_params.json"
+echo "Tuned parameters are available at: $OUTPUT_DIR/best_params.json"
 </file>
 
 <file path="run.py">

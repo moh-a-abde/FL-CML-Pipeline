@@ -33,6 +33,10 @@ def load_tuned_params(params_file):
         dict: Optimized hyperparameters
     """
     if not os.path.exists(params_file):
+        if params_file == "./tune_results/best_params.json":
+            logger.error(f"Default parameters file not found: {params_file}")
+            logger.error("This usually means Ray Tune hasn't been run yet or completed successfully.")
+            logger.error("Please run the Ray Tune optimization first or specify a different --params-file")
         raise FileNotFoundError(f"Parameters file not found: {params_file}")
     
     logger.info("Loading optimized parameters from %s", params_file)
@@ -130,9 +134,20 @@ def backup_original_params():
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Use tuned hyperparameters with the existing XGBoost client")
-    parser.add_argument("--params-file", type=str, required=True, help="Path to the tuned parameters JSON file")
+    parser.add_argument(
+        "--params-file", 
+        type=str, 
+        default="./tune_results/best_params.json",
+        help="Path to the tuned parameters JSON file (default: ./tune_results/best_params.json)"
+    )
     parser.add_argument("--output-file", type=str, default="tuned_params.py", help="Output Python file for updated parameters")
     args = parser.parse_args()
+    
+    # Log which parameters file is being used
+    if args.params_file == "./tune_results/best_params.json":
+        logger.info("Using default parameters file: %s", args.params_file)
+    else:
+        logger.info("Using specified parameters file: %s", args.params_file)
     
     # Backup original parameters
     backup_file = backup_original_params()

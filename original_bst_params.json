@@ -1,8 +1,8 @@
 {
-  "objective": "multi:softmax",
-  "num_class": 3,
+  "objective": "multi:softprob",
+  "num_class": 11,
   "eta": 0.05,
-  "max_depth": 3,
+  "max_depth": 6,
   "min_child_weight": 10,
   "gamma": 1.0,
   "subsample": 0.7,
@@ -15,14 +15,10 @@
     "merror"
   ],
   "max_delta_step": 5,
-  "reg_alpha": 2.0,
-  "reg_lambda": 5.0,
+  "reg_alpha": 0.8,
+  "reg_lambda": 0.8,
   "base_score": 0.5,
-  "scale_pos_weight": [
-    1.0,
-    2.0,
-    1.0
-  ],
+  "scale_pos_weight": 1.0,
   "grow_policy": "lossguide",
   "normalize_type": "tree",
   "random_state": 42
