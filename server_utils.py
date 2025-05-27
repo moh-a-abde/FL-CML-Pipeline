@@ -522,7 +522,7 @@ def get_evaluate_fn(test_data):
                      log(WARNING, "Predict output seems 1D, attempting to handle for multi-class probability plots...")
                      if BST_PARAMS.get('objective') == 'multi:softmax':
                          # Create dummy probabilities centered around the predicted class
-                         num_classes = BST_PARAMS.get('num_class', 10) # Default to 10 if not set
+                         num_classes = BST_PARAMS.get('num_class', 11) # Default to 11 if not set
                          pred_proba = np.zeros((len(predictions), num_classes))
                          for i, label in enumerate(predictions):
                              if 0 <= int(label) < num_classes: # Check bounds
@@ -544,14 +544,14 @@ def get_evaluate_fn(test_data):
                  except Exception as e:
                      log(WARNING, f"Error processing probabilities: {e}. ROC/PR plots skipped.")
                      pred_proba = None
-            elif pred_proba.shape[1] != BST_PARAMS.get('num_class', 10):
-                 log(WARNING, f"Probability shape mismatch ({pred_proba.shape[1]} columns vs {BST_PARAMS.get('num_class', 10)} classes). Plots may fail.")
+            elif pred_proba.shape[1] != BST_PARAMS.get('num_class', 11):
+                 log(WARNING, f"Probability shape mismatch ({pred_proba.shape[1]} columns vs {BST_PARAMS.get('num_class', 11)} classes). Plots may fail.")
                  # Attempt to proceed, but plots requiring probabilities might error out
 
             # Calculate metrics
             # Ensure y_test is integer type for log_loss if using one-hot encoding
             y_test_int = y_true.astype(int)
-            num_classes_actual = BST_PARAMS.get('num_class', 10)
+            num_classes_actual = BST_PARAMS.get('num_class', 11)
 
             if pred_proba is not None and len(pred_proba.shape) > 1 and pred_proba.shape[1] == num_classes_actual:
                  try:

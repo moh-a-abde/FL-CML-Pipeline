@@ -14,14 +14,14 @@ def update_file(input_file, output_file):
     # Update num_class in train_xgboost function
     content = re.sub(
         r"'num_class': 3,  # benign \(0\), dns_tunneling \(1\), icmp_tunneling \(2\)",
-        "'num_class': 10,  # UNSW_NB15 has 10 classes",
+        "'num_class': 11,  # UNSW_NB15 has 11 classes (0-10)",
         content
     )
     
     # Update num_class in train_final_model function
     content = re.sub(
         r"'num_class': 3,",
-        "'num_class': 10,  # UNSW_NB15 has 10 classes",
+        "'num_class': 11,  # UNSW_NB15 has 11 classes (0-10)",
         content
     )
     
