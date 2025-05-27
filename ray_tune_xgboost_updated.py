@@ -10,6 +10,11 @@ Key Components:
 - XGBoost parameter space definition
 - Multi-class evaluation metrics (precision, recall, F1)
 - Optimal model selection and persistence
+
+Recent Fixes:
+- Fixed Ray Tune worker file access issues by passing data directly to trial functions
+  instead of trying to reload files from worker environments
+- Ensured consistent preprocessing across hyperparameter tuning and federated learning phases
 """
 
 import os
@@ -249,13 +254,9 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         if train_file and test_file:
             return train_xgboost(config, train_data.copy(), test_data.copy())
         else:
-            # Use the original data before processing for the trial function
-            # Convert relative path to absolute path for Ray Tune workers
-            data_file_abs = os.path.abspath(data_file)
-            data_orig = load_csv_data(data_file_abs)["train"].to_pandas()
-            if 'label' not in data_orig.columns and 'Label' in data_orig.columns:
-                data_orig['label'] = data_orig['Label']
-            return train_xgboost(config, data_orig.copy(), data_orig.copy())
+            # For single data file mode, pass the original loaded data directly
+            # instead of trying to reload it in the worker
+            return train_xgboost(config, data.copy(), data.copy())
 
     # Set up HyperOptSearch
     algo = HyperOptSearch(
