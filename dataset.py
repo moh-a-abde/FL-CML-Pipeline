@@ -281,6 +281,7 @@ def preprocess_data(data: Union[pd.DataFrame, Dataset], processor: FeatureProces
 def load_csv_data(file_path: str) -> DatasetDict:
     """
     Load and prepare CSV data into a Hugging Face DatasetDict format.
+    Uses temporal splitting based on Stime column to avoid data leakage.
 
     Args:
         file_path (str): Path to the CSV file containing network traffic data
@@ -316,13 +317,43 @@ def load_csv_data(file_path: str) -> DatasetDict:
         # This won't create issues since unlabeled data is only used for prediction
         return DatasetDict({"train": dataset, "test": dataset})
     else:
-        # For labeled data, create a proper 80/20 split to avoid data leakage
-        # Use a specific random seed for reproducibility
-        train_test_dict = dataset.train_test_split(test_size=0.2, seed=42)
-        return DatasetDict({
-            "train": train_test_dict["train"],
-            "test": train_test_dict["test"]
-        })
+        # For labeled data, use temporal splitting to avoid data leakage
+        # Sort by Stime column if available for temporal integrity
+        if 'Stime' in df.columns:
+            print("Using temporal splitting based on Stime column to avoid data leakage")
+            df_sorted = df.sort_values('Stime').reset_index(drop=True)
+            
+            # Split temporally: first 80% for training, last 20% for testing
+            train_size = int(0.8 * len(df_sorted))
+            train_df = df_sorted.iloc[:train_size]
+            test_df = df_sorted.iloc[train_size:]
+            
+            # Optional: shuffle within each set to add randomness while maintaining temporal integrity
+            train_df = train_df.sample(frac=1, random_state=42).reset_index(drop=True)
+            test_df = test_df.sample(frac=1, random_state=42).reset_index(drop=True)
+            
+            print(f"Temporal split: {len(train_df)} train samples, {len(test_df)} test samples")
+            print(f"Train Stime range: {train_df['Stime'].min():.4f} to {train_df['Stime'].max():.4f}")
+            print(f"Test Stime range: {test_df['Stime'].min():.4f} to {test_df['Stime'].max():.4f}")
+            
+            # Verify no temporal overlap
+            if train_df['Stime'].max() <= test_df['Stime'].min():
+                print("✓ No temporal overlap between train and test sets")
+            else:
+                print("⚠ Warning: Temporal overlap detected between train and test sets")
+            
+            return DatasetDict({
+                "train": Dataset.from_pandas(train_df),
+                "test": Dataset.from_pandas(test_df)
+            })
+        else:
+            # Fallback to stratified random split if no temporal column available
+            print("No Stime column found, using stratified random split")
+            train_test_dict = dataset.train_test_split(test_size=0.2, seed=42, stratify_by_column='label' if 'label' in df.columns else None)
+            return DatasetDict({
+                "train": train_test_dict["train"],
+                "test": train_test_dict["test"]
+            })
 
 def instantiate_partitioner(partitioner_type: str, num_partitions: int):
     """

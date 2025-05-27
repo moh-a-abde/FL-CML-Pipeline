@@ -10,7 +10,12 @@ data/
 # Ignore outputs and results
 outputs/
 results/
+local_utils/
+received/
+notebooks/
+tune_results/
 
 # Cache directories
 __pycache__/
 .cache/ 
+.cursor/

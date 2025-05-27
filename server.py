@@ -40,9 +40,9 @@ centralised_eval = args.centralised_eval
 # Load centralised test set
 if centralised_eval:
     log(INFO, "Loading centralised test set...")
-    # Use the engineered dataset for testing
-    test_csv_path = "data/received/shuffled_final_dataset.csv"
-    log(INFO, "Using engineered dataset for centralized evaluation: %s", test_csv_path)
+    # Use the original final dataset with proper temporal splitting for testing
+    test_csv_path = "data/received/final_dataset.csv"
+    log(INFO, "Using original final dataset with temporal splitting for centralized evaluation: %s", test_csv_path)
     test_set = load_csv_data(test_csv_path)["test"]
     test_set.set_format("pandas")
     test_df = test_set.to_pandas()

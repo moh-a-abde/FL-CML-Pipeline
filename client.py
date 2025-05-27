@@ -70,9 +70,9 @@ if __name__ == "__main__":
     # Ensure data/received/ directory exists
     os.makedirs("data/received", exist_ok=True)
     
-    # Load labeled data for training - using the new engineered dataset
-    labeled_csv_path = "data/received/shuffled_final_dataset.csv"
-    log(INFO, "Using engineered dataset: %s", labeled_csv_path)
+    # Load labeled data for training - using the original final dataset with proper temporal splitting
+    labeled_csv_path = "data/received/final_dataset.csv"
+    log(INFO, "Using original final dataset with temporal splitting: %s", labeled_csv_path)
     labeled_dataset = load_csv_data(labeled_csv_path)
     
     # Load unlabeled data for prediction if available
