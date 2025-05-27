@@ -88,11 +88,21 @@ class FeatureProcessor:
         """Fit preprocessing parameters on training data only."""
         if self.is_fitted:
             return
+        
+        # === LABEL COLUMN STANDARDIZATION DURING FIT ===
+        # Ensure consistent label column naming during fitting
+        df_copy = df.copy()
+        if 'attack_cat' in df_copy.columns and 'label' not in df_copy.columns:
+            log(INFO, "Standardizing 'attack_cat' column to 'label' during fit")
+            df_copy = df_copy.rename(columns={'attack_cat': 'label'})
+        elif 'Label' in df_copy.columns and 'label' not in df_copy.columns:
+            log(INFO, "Standardizing 'Label' column to 'label' during fit")
+            df_copy = df_copy.rename(columns={'Label': 'label'})
             
         # Initialize encoders for categorical features
         for col in self.categorical_features:
-            if col in df.columns:
-                unique_values = df[col].unique()
+            if col in df_copy.columns:
+                unique_values = df_copy[col].unique()
                 # Create a mapping for each unique value to an integer
                 self.categorical_encoders[col] = {
                     val: idx for idx, val in enumerate(unique_values)
@@ -100,10 +110,10 @@ class FeatureProcessor:
                 # Log warning if a categorical feature is highly predictive
                 if len(unique_values) > 1 and len(unique_values) < 10:
                     for val in unique_values:
-                        subset = df[df[col] == val]
-                        if 'attack_cat' in df.columns and len(subset) > 0:
-                            most_common_label = subset['attack_cat'].value_counts().idxmax()
-                            label_pct = subset['attack_cat'].value_counts()[most_common_label] / len(subset)
+                        subset = df_copy[df_copy[col] == val]
+                        if 'label' in df_copy.columns and len(subset) > 0:
+                            most_common_label = subset['label'].value_counts().idxmax()
+                            label_pct = subset['label'].value_counts()[most_common_label] / len(subset)
                             if label_pct > 0.9:  # If >90% of rows with this value have the same label
                                 log(WARNING, "Potential data leakage detected: Feature '%s' value '%s' is highly predictive of label %s (%.1f%% match)",
                                     col, val, most_common_label, label_pct * 100)
@@ -112,31 +122,36 @@ class FeatureProcessor:
         # For engineered dataset, this will be minimal since data is already normalized
         if self.dataset_type == "unsw_nb15":
             for col in self.numerical_features:
-                if col in df.columns:
+                if col in df_copy.columns:
                     self.numerical_stats[col] = {
-                        'mean': df[col].mean(),
-                        'std': df[col].std(),
-                        'median': df[col].median(),
-                        'q99': df[col].quantile(0.99)
+                        'mean': df_copy[col].mean(),
+                        'std': df_copy[col].std(),
+                        'median': df_copy[col].median(),
+                        'q99': df_copy[col].quantile(0.99)
                     }
         else:
             # For engineered dataset, we only track basic stats for validation
             # No need for extensive normalization since data is already normalized
             for col in self.numerical_features:
-                if col in df.columns:
+                if col in df_copy.columns:
                     self.numerical_stats[col] = {
-                        'min': df[col].min(),
-                        'max': df[col].max(),
-                        'median': df[col].median(),
+                        'min': df_copy[col].min(),
+                        'max': df_copy[col].max(),
+                        'median': df_copy[col].median(),
                     }
         
-        # Fit label encoder for attack_cat if present (original dataset)
-        if 'attack_cat' in df.columns:
-            self.label_encoder.fit(df['attack_cat'])
+        # Fit label encoder for standardized 'label' column
+        if 'label' in df_copy.columns:
+            label_values = df_copy['label']
+            if label_values.dtype == 'object' or isinstance(label_values.iloc[0], str):
+                log(INFO, "Fitting label encoder for categorical labels")
+                self.label_encoder.fit(label_values)
+            else:
+                log(INFO, "Labels are already numeric, no encoding needed")
         
         # For engineered dataset with numeric labels, just record the unique labels
-        if 'label' in df.columns and self.dataset_type == "engineered":
-            self.unique_labels = sorted(df['label'].unique())
+        if 'label' in df_copy.columns and self.dataset_type == "engineered":
+            self.unique_labels = sorted(df_copy['label'].unique())
             log(INFO, f"Found {len(self.unique_labels)} unique labels in engineered dataset: {self.unique_labels}")
 
         self.is_fitted = True
@@ -152,6 +167,17 @@ class FeatureProcessor:
             self.fit(df)
             
         df = df.copy()
+        
+        # === LABEL COLUMN STANDARDIZATION ===
+        # Ensure consistent label column naming throughout the pipeline
+        if 'attack_cat' in df.columns and 'label' not in df.columns:
+            # Convert attack_cat to standardized 'label' column for original dataset
+            log(INFO, "Standardizing 'attack_cat' column to 'label' for consistent naming")
+            df = df.rename(columns={'attack_cat': 'label'})
+        elif 'Label' in df.columns and 'label' not in df.columns:
+            # Convert uppercase 'Label' to lowercase 'label' for consistency
+            log(INFO, "Standardizing 'Label' column to 'label' for consistent naming")
+            df = df.rename(columns={'Label': 'label'})
         
         # Drop id column since it's just an identifier
         if 'id' in df.columns:
@@ -171,12 +197,18 @@ class FeatureProcessor:
                     # Replace infinities
                     df[col] = df[col].replace([np.inf, -np.inf], np.nan)
                     
-                    # Cap outliers using 99th percentile
+                    # Cap outliers using 99th percentile - fix dtype compatibility
                     q99 = self.numerical_stats[col]['q99']
+                    # Ensure q99 has the same dtype as the column to avoid FutureWarning
+                    if df[col].dtype.kind in 'biufc':  # numeric dtypes
+                        q99 = df[col].dtype.type(q99)
                     df.loc[df[col] > q99, col] = q99  # Cap outliers
                     
                     # Fill NaN with median
                     median = self.numerical_stats[col]['median']
+                    # Ensure median has the same dtype as the column
+                    if df[col].dtype.kind in 'biufc':  # numeric dtypes
+                        median = df[col].dtype.type(median)
                     df[col] = df[col].fillna(median)
         else:
             # Engineered dataset is already normalized, just handle missing values
@@ -185,14 +217,14 @@ class FeatureProcessor:
                     # Replace infinities and NaN with 0 (since data is normalized, 0 is a reasonable default)
                     df[col] = df[col].replace([np.inf, -np.inf, np.nan], 0)
 
-        # Explicitly drop the raw attack_cat column if it exists (original dataset)
+        # === IMPORTANT: DO NOT DROP THE STANDARDIZED 'label' COLUMN ===
+        # The label column should be preserved so that downstream components can find it
+        # The preprocess_data function will handle label extraction separately
+        
+        # Only drop the original attack_cat column if it still exists after renaming
         if 'attack_cat' in df.columns:
+            log(INFO, "Dropping original 'attack_cat' column after standardization")
             df.drop(columns=['attack_cat'], inplace=True)
-            
-        # For engineered dataset, we keep the 'label' column
-        # This will be handled in preprocess_data instead
-        if 'label' in df.columns and self.dataset_type == "unsw_nb15":
-            df.drop(columns=['label'], inplace=True)
 
         return df
 
@@ -223,61 +255,67 @@ def preprocess_data(data: Union[pd.DataFrame, Dataset], processor: FeatureProces
             log(WARNING, "Could not automatically detect dataset type. Defaulting to 'unsw_nb15'.")
             processor = FeatureProcessor(dataset_type="unsw_nb15")
     
-    # --- Handle labels based on dataset type ---
-    labels = None
-    
-    # For original UNSW_NB15 dataset with attack_cat
-    if processor.dataset_type == "unsw_nb15" and 'attack_cat' in data.columns:
-        # Extract 'attack_cat' before transforming features
-        attack_labels = data['attack_cat'].copy()
-        
-        # Ensure label encoder is fitted if needed (during training)
-        if is_training and not hasattr(processor.label_encoder, 'classes_'):
-             log(INFO, "Fitting label encoder during training preprocessing.")
-             processor.label_encoder.fit(attack_labels)
-        elif not hasattr(processor.label_encoder, 'classes_') or processor.label_encoder.classes_.size == 0:
-            # If not training but encoder isn't fitted, can't proceed reliably
-            log(WARNING, "Label encoder not fitted, cannot transform attack_cat labels.")
-            # Try fitting on the current chunk, might be incomplete
-            try:
-                 processor.label_encoder.fit(attack_labels)
-                 log(WARNING, "Fitted label encoder on non-training data chunk.")
-            except Exception as fit_err:
-                 log(ERROR, f"Could not fit label encoder on non-training data: {fit_err}")
-                 # Use a specific value like -1 or np.nan if XGBoost handles it, else zeros
-                 labels = np.full(len(data), -1, dtype=int) # Fallback to -1
-
-        # Transform labels if encoder is ready
-        if hasattr(processor.label_encoder, 'classes_') and processor.label_encoder.classes_.size > 0:
-            try:
-                labels = processor.label_encoder.transform(attack_labels)
-            except ValueError as e:
-                log(ERROR, f"Error transforming labels: {e}. Unseen labels might exist.")
-                labels = np.full(len(data), -1, dtype=int) # Simple fallback for now
-        elif labels is None: # If fitting failed or wasn't possible earlier
-             log(WARNING, "Assigning fallback labels because fitting failed or was not possible.")
-             labels = np.full(len(data), -1, dtype=int)
-             
-    # For engineered dataset with direct numeric labels
-    elif processor.dataset_type == "engineered" and 'label' in data.columns:
-        log(INFO, "Using direct numeric labels from engineered dataset.")
-        labels = data['label'].values
-        # Log label distribution
-        label_counts = data['label'].value_counts().to_dict()
-        log(INFO, f"Label distribution in engineered dataset: {label_counts}")
-    elif 'label' in data.columns:
-        # Fallback case for binary label in original dataset
-        log(WARNING, "Only binary 'label' column found, but multi-class labels expected for training.")
-        labels = None 
-    else:
-        # No label column found
-        log(INFO, "No label column found in data.")
-        labels = None
-
-    # --- Process features AFTER handling labels --- 
-    # The processor's transform method will handle dropping labels differently based on dataset_type
+    # === STANDARDIZED LABEL HANDLING ===
+    # Process features first (this will standardize label column names)
     features = processor.transform(data, is_training)
     
+    # Now extract labels from the standardized 'label' column
+    labels = None
+    
+    if 'label' in features.columns:
+        log(INFO, "Found standardized 'label' column in processed data")
+        labels = features['label'].copy()
+        
+        # Handle label encoding based on dataset type
+        if processor.dataset_type == "unsw_nb15":
+            # For original dataset, labels need to be encoded if they're categorical
+            if labels.dtype == 'object' or isinstance(labels.iloc[0], str):
+                log(INFO, "Encoding categorical labels for UNSW_NB15 dataset")
+                # Ensure label encoder is fitted if needed (during training)
+                if is_training and not hasattr(processor.label_encoder, 'classes_'):
+                    log(INFO, "Fitting label encoder during training preprocessing.")
+                    processor.label_encoder.fit(labels)
+                elif not hasattr(processor.label_encoder, 'classes_') or processor.label_encoder.classes_.size == 0:
+                    log(WARNING, "Label encoder not fitted, cannot transform categorical labels.")
+                    try:
+                        processor.label_encoder.fit(labels)
+                        log(WARNING, "Fitted label encoder on non-training data chunk.")
+                    except Exception as fit_err:
+                        log(ERROR, f"Could not fit label encoder on non-training data: {fit_err}")
+                        labels = np.full(len(data), -1, dtype=int)
+                
+                # Transform labels if encoder is ready
+                if hasattr(processor.label_encoder, 'classes_') and processor.label_encoder.classes_.size > 0:
+                    try:
+                        labels = processor.label_encoder.transform(labels)
+                    except ValueError as e:
+                        log(ERROR, f"Error transforming labels: {e}. Unseen labels might exist.")
+                        labels = np.full(len(data), -1, dtype=int)
+            else:
+                # Labels are already numeric
+                labels = labels.astype(int)
+        else:
+            # For engineered dataset, labels should already be numeric
+            log(INFO, "Using direct numeric labels from engineered dataset.")
+            labels = labels.astype(int)
+            
+        # Log label distribution
+        if labels is not None:
+            try:
+                unique_labels, counts = np.unique(labels, return_counts=True)
+                label_counts = dict(zip(unique_labels, counts))
+                log(INFO, f"Label distribution: {label_counts}")
+            except Exception as e:
+                log(WARNING, f"Could not compute label distribution: {e}")
+        
+        # Remove label column from features to avoid data leakage
+        features = features.drop(columns=['label'])
+        log(INFO, "Removed 'label' column from features to prevent data leakage")
+    else:
+        # No label column found
+        log(INFO, "No 'label' column found in processed data - assuming unlabeled data")
+        labels = None
+
     return features, labels
 
 def load_csv_data(file_path: str) -> DatasetDict:

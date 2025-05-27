@@ -555,7 +555,10 @@ def get_evaluate_fn(test_data):
 
             if pred_proba is not None and len(pred_proba.shape) > 1 and pred_proba.shape[1] == num_classes_actual:
                  try:
-                     loss = log_loss(y_test_int, pred_proba, eps=1e-15, labels=range(num_classes_actual))
+                     # Manual clipping to replace deprecated eps parameter
+                     epsilon = 1e-15
+                     pred_proba_clipped = np.clip(pred_proba, epsilon, 1 - epsilon)
+                     loss = log_loss(y_test_int, pred_proba_clipped, labels=range(num_classes_actual))
                  except ValueError as e:
                      log(WARNING, f"ValueError during log_loss calculation: {e}. Setting loss to high value.")
                      loss = 100.0 # Assign a high loss value
@@ -566,7 +569,11 @@ def get_evaluate_fn(test_data):
                  log(WARNING, "Calculating log_loss using one-hot encoding due to missing/invalid probabilities.")
                  try:
                      predictions_int = np.array(predictions).astype(int)
-                     loss = log_loss(y_test_int, np.eye(num_classes_actual)[predictions_int], eps=1e-15, labels=range(num_classes_actual))
+                     # Manual clipping to replace deprecated eps parameter
+                     epsilon = 1e-15
+                     one_hot_predictions = np.eye(num_classes_actual)[predictions_int]
+                     one_hot_clipped = np.clip(one_hot_predictions, epsilon, 1 - epsilon)
+                     loss = log_loss(y_test_int, one_hot_clipped, labels=range(num_classes_actual))
                  except ValueError as e:
                      log(WARNING, f"ValueError during one-hot log_loss calculation: {e}. Setting loss to high value.")
                      loss = 100.0 # Assign a high loss value
