@@ -30,6 +30,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from flwr.common.logger import log
 from logging import INFO, WARNING, ERROR
+import pickle
+import os
 
 # Mapping between partitioning strategy names and their implementations
 CORRELATION_TO_PARTITIONER = {
@@ -587,6 +589,71 @@ def resplit(dataset: DatasetDict) -> DatasetDict:
             ),
         }
     )
+
+def create_global_feature_processor(data_file: str, output_dir: str = "outputs") -> str:
+    """
+    Create a global feature processor fitted on the full training dataset.
+    This ensures consistent preprocessing across Ray Tune and Federated Learning.
+    
+    Args:
+        data_file (str): Path to the dataset file
+        output_dir (str): Directory to save the processor
+        
+    Returns:
+        str: Path to the saved processor file
+    """
+    log(INFO, f"Creating global feature processor from: {data_file}")
+    
+    # Load full dataset
+    dataset = load_csv_data(data_file)
+    train_data = dataset["train"]
+    train_df = train_data.to_pandas()
+    
+    # Auto-detect dataset type
+    if 'attack_cat' in train_df.columns:
+        dataset_type = "unsw_nb15"
+    elif 'tcp_seq_diff' in train_df.columns:
+        dataset_type = "engineered"
+    else:
+        dataset_type = "unsw_nb15"  # Default
+        log(WARNING, "Could not auto-detect dataset type. Defaulting to 'unsw_nb15'.")
+    
+    # Create and fit processor on full training data
+    processor = FeatureProcessor(dataset_type=dataset_type)
+    processor.fit(train_df)
+    
+    # Save processor to file
+    os.makedirs(output_dir, exist_ok=True)
+    processor_path = os.path.join(output_dir, "global_feature_processor.pkl")
+    
+    with open(processor_path, 'wb') as f:
+        pickle.dump(processor, f)
+    
+    log(INFO, f"Global feature processor saved to: {processor_path}")
+    log(INFO, f"Processor type: {dataset_type}")
+    log(INFO, f"Categorical features: {len(processor.categorical_features)}")
+    log(INFO, f"Numerical features: {len(processor.numerical_features)}")
+    
+    return processor_path
+
+def load_global_feature_processor(processor_path: str) -> FeatureProcessor:
+    """
+    Load a pre-fitted global feature processor.
+    
+    Args:
+        processor_path (str): Path to the saved processor file
+        
+    Returns:
+        FeatureProcessor: The loaded processor
+    """
+    if not os.path.exists(processor_path):
+        raise FileNotFoundError(f"Global feature processor not found at: {processor_path}")
+    
+    with open(processor_path, 'rb') as f:
+        processor = pickle.load(f)
+    
+    log(INFO, f"Loaded global feature processor from: {processor_path}")
+    return processor
 
 # Comment out or remove ModelPredictor if not used or complete
 # class ModelPredictor:

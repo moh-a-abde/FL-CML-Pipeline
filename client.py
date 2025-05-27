@@ -26,7 +26,9 @@ from dataset import (
     instantiate_partitioner,
     train_test_split,
     FeatureProcessor,
-    preprocess_data
+    preprocess_data,
+    load_global_feature_processor,
+    create_global_feature_processor
 )
 from utils import client_args_parser, BST_PARAMS
 
@@ -73,6 +75,17 @@ if __name__ == "__main__":
     # Load labeled data for training - using the original final dataset with proper temporal splitting
     labeled_csv_path = "data/received/final_dataset.csv"
     log(INFO, "Using original final dataset with temporal splitting: %s", labeled_csv_path)
+
+    # Check for global feature processor first
+    global_processor_path = "outputs/global_feature_processor.pkl"
+    if os.path.exists(global_processor_path):
+        log(INFO, "Loading global feature processor for consistent preprocessing")
+        global_processor = load_global_feature_processor(global_processor_path)
+    else:
+        log(WARNING, "Global feature processor not found, creating one from the dataset")
+        global_processor_path = create_global_feature_processor(labeled_csv_path, "outputs")
+        global_processor = load_global_feature_processor(global_processor_path)
+
     labeled_dataset = load_csv_data(labeled_csv_path)
     
     # Load unlabeled data for prediction if available
@@ -100,71 +113,86 @@ if __name__ == "__main__":
     try:
         # First try to use get_partition method which returns the partition subset directly
         train_partition = partitioner.get_partition(full_train_data, args.partition_id)
-    except AttributeError:
-        # If that fails, try using the partition method (used in newer versions)
-        try:
-            # Newer versions use a different API
-            train_partition = partitioner.partition(full_train_data)[args.partition_id]
-        except (AttributeError, TypeError, IndexError):
-            # As a fallback, if all partition methods fail, use a simple numerical partition
-            # by getting evenly spaced indices based on partition ID
-            total_samples = len(full_train_data)
-            samples_per_partition = total_samples // args.num_partitions
-            start_idx = args.partition_id * samples_per_partition
-            end_idx = start_idx + samples_per_partition if args.partition_id < args.num_partitions - 1 else total_samples
-            partition_indices = list(range(start_idx, end_idx))
-            train_partition = full_train_data.select(partition_indices)
-            log(INFO, "Used fallback partitioning. Partition %d: samples %d to %d", 
-                args.partition_id, start_idx, end_idx)
+    except Exception as e:
+        log(INFO, f"get_partition failed ({e}), using fallback partitioning")
+        # Fallback to simple index-based partitioning if get_partition is not available
+        total_samples = len(full_train_data)
+        samples_per_partition = total_samples // args.num_partitions
+        start_idx = args.partition_id * samples_per_partition
+        end_idx = (args.partition_id + 1) * samples_per_partition if args.partition_id < args.num_partitions - 1 else total_samples
+        
+        log(INFO, f"Used fallback partitioning. Partition {args.partition_id}: samples {start_idx} to {end_idx}")
+        log(INFO, f"Partition size: {end_idx - start_idx} samples (out of {total_samples} total)")
+        
+        # Get the partition slice
+        train_partition = full_train_data.select(range(start_idx, end_idx))
     
-    log(INFO, "Partition size: %d samples (out of %d total)", 
-        len(train_partition), len(full_train_data))
+    # Convert to pandas for easier manipulation
+    train_partition_df = train_partition.to_pandas()
     
-    # Handle data splitting based on evaluation strategy
-    if args.centralised_eval:
-        # Use centralized test set for evaluation
-        train_data = train_partition
-        valid_data = labeled_dataset["test"]
+    # Perform local train/test split using client-specific random seed
+    client_seed = args.seed + args.partition_id * 1000  # Make each client's seed unique
+    log(INFO, f"Using client-specific random seed for train/test split: {client_seed}")
+    
+    # Log data shape before splitting
+    log(INFO, f"Original data shape before splitting: {train_partition_df.shape}")
+    
+    # Check class distribution before splitting
+    if 'label' in train_partition_df.columns:
+        class_dist = train_partition_df['label'].value_counts().to_dict()
+        log(INFO, f"Class distribution in original data: {class_dist}")
+    
+    # Use different random states for train/validation split to ensure no overlap
+    train_random_state = client_seed
+    val_random_state = client_seed + 5000  # Different seed for validation
+    log(INFO, f"Using different random states for train/validation split: {train_random_state}/{val_random_state}")
+    
+    # Perform the split
+    from sklearn.model_selection import train_test_split as sklearn_split
+    train_df, valid_df = sklearn_split(
+        train_partition_df, 
+        test_size=args.test_fraction, 
+        random_state=train_random_state,
+        stratify=train_partition_df['label'] if 'label' in train_partition_df.columns else None
+    )
+    
+    log(INFO, f"Train data shape: {train_df.shape}, Test data shape: {valid_df.shape}")
+    
+    # Log class distributions after splitting
+    if 'label' in train_df.columns:
+        train_class_dist = train_df['label'].value_counts().to_dict()
+        valid_class_dist = valid_df['label'].value_counts().to_dict()
+        log(INFO, f"Class distribution in train data: {train_class_dist}")
+        log(INFO, f"Class distribution in test data: {valid_class_dist}")
+    
+    # Use the global processor to transform the data
+    log(INFO, "Transforming data using global feature processor")
+    
+    try:
+        # Transform using the global processor
+        train_processed = global_processor.transform(train_df, is_training=True)
+        valid_processed = global_processor.transform(valid_df, is_training=False)
         
-        # Ensure data is in the correct format
-        train_data.set_format("pandas")
-        valid_data.set_format("pandas")
+        # Convert to DMatrix
+        train_dmatrix = transform_dataset_to_dmatrix(train_processed, processor=global_processor, is_training=True)
+        valid_dmatrix = transform_dataset_to_dmatrix(valid_processed, processor=global_processor, is_training=False)
         
-        # Get the pandas DataFrames
-        train_df = train_data.to_pandas() if not isinstance(train_data, pd.DataFrame) else train_data
-        valid_df = valid_data.to_pandas() if not isinstance(valid_data, pd.DataFrame) else valid_data
+        num_train = len(train_processed)
+        num_val = len(valid_processed)
         
-        # Create a feature processor specifically for the engineered dataset
-        processor = FeatureProcessor(dataset_type="engineered")
+        log(INFO, f"Train DMatrix has {train_dmatrix.num_row()} rows, Test DMatrix has {valid_dmatrix.num_row()} rows")
+        log(INFO, f"Local split: {num_train} train samples, {num_val} validation samples")
         
-        # Create DMatrices with this processor
-        train_dmatrix = transform_dataset_to_dmatrix(train_df, processor=processor, is_training=True)
-        valid_dmatrix = transform_dataset_to_dmatrix(valid_df, processor=processor, is_training=False)
+    except Exception as e:
+        log(ERROR, f"Error in data transformation: {str(e)}")
+        log(INFO, "Falling back to original train_test_split method")
         
-        # Get row counts
-        num_train = train_dmatrix.num_row()
-        num_val = valid_dmatrix.num_row()
-        log(INFO, "Centralized evaluation: %d train samples, %d validation samples", num_train, num_val)
-        
-    else:
-        # Perform local train/test split using the updated function
-        # This now returns the fitted processor as well
-        log(INFO, "Performing local train/test split...")
-        
-        # Generate a unique seed for each client based on partition_id to ensure
-        # different clients get different train/test splits
-        client_specific_seed = args.seed + (args.partition_id * 1000)
-        log(INFO, "Using client-specific random seed for train/test split: %d", client_specific_seed)
-        
-        train_dmatrix, valid_dmatrix, processor = train_test_split(
-            train_partition,
-            test_fraction=args.test_fraction,
-            random_state=client_specific_seed  # Use client-specific seed
+        # Fallback to the original method if global processor fails
+        train_dmatrix, valid_dmatrix, _ = train_test_split(
+            train_partition, test_fraction=args.test_fraction, seed=args.seed
         )
-        # Get counts from the DMatrix objects
         num_train = train_dmatrix.num_row()
         num_val = valid_dmatrix.num_row()
-        log(INFO, "Local split: %d train samples, %d validation samples", num_train, num_val)
     
     # Transform unlabeled data for prediction using the processor from train_test_split
     log(INFO, "Reformatting unlabeled data...")
@@ -176,7 +204,7 @@ if __name__ == "__main__":
     # Preprocess unlabeled data using the fitted processor from train/test split
     try:
         # Use the processor returned by train_test_split
-        unlabeled_features, _ = preprocess_data(unlabeled_data, processor=processor, is_training=False)
+        unlabeled_features, _ = preprocess_data(unlabeled_data, processor=global_processor, is_training=False)
         unlabeled_dmatrix = xgb.DMatrix(unlabeled_features, missing=np.nan)
         log(INFO, "Successfully preprocessed unlabeled data.")
     except Exception as e:

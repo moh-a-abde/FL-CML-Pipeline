@@ -27,7 +27,7 @@ import logging
 from ray.air.config import RunConfig
 
 # Import existing data processing code
-from dataset import load_csv_data, transform_dataset_to_dmatrix
+from dataset import load_csv_data, transform_dataset_to_dmatrix, create_global_feature_processor, load_global_feature_processor
 from utils import BST_PARAMS
 
 # Configure logging
@@ -46,10 +46,19 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
         test_df (pd.DataFrame): Test data as DataFrame
     """
     logger.info(f"Starting trial with config: {config}")
-    # Instantiate FeatureProcessor inside the trial
-    from dataset import FeatureProcessor
-    processor = FeatureProcessor()
-    processor.fit(train_df)
+    
+    # Load the global feature processor instead of creating a new one
+    processor_path = config.get('global_processor_path', 'outputs/global_feature_processor.pkl')
+    try:
+        processor = load_global_feature_processor(processor_path)
+        logger.info("Using global feature processor for consistent preprocessing")
+    except FileNotFoundError:
+        logger.warning(f"Global processor not found at {processor_path}, creating new one")
+        from dataset import FeatureProcessor
+        processor = FeatureProcessor()
+        processor.fit(train_df)
+    
+    # Transform data using the global processor
     train_processed = processor.transform(train_df, is_training=True)
     test_processed = processor.transform(test_df, is_training=False)
     train_features = train_processed.drop(columns=['label'])
@@ -126,22 +135,19 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
 
 def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=100, cpus_per_trial=1, gpu_fraction=None, output_dir="./tune_results"):
     """
-    Run hyperparameter tuning for XGBoost using Ray Tune.
-    
-    Args:
-        train_file (str): Path to the training CSV data file (required for HPO)
-        test_file (str): Path to the testing CSV data file (ignored for HPO validation split)
-        data_file (str): Path to a single CSV data file (fallback if train_file not provided, will be split)
-        num_samples (int): Number of hyperparameter combinations to try (default: 100)
-        cpus_per_trial (int): CPUs to allocate per trial
-        gpu_fraction (float): Fraction of GPU to use per trial (if None, no GPU is used)
-        output_dir (str): Directory to save results
-        
-    Returns:
-        dict: Best hyperparameters found
+    Run hyperparameter tuning for XGBoost using Ray Tune with consistent preprocessing.
     """
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
+    
+    # Step 1: Create global feature processor for consistent preprocessing
+    logger.info("Creating global feature processor for consistent preprocessing...")
+    if data_file:
+        processor_path = create_global_feature_processor(data_file, output_dir)
+    elif train_file:
+        processor_path = create_global_feature_processor(train_file, output_dir)
+    else:
+        raise ValueError("Either data_file or train_file must be provided to create global processor")
     
     # Load and prepare data
     if train_file and test_file:
@@ -165,14 +171,10 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
             logger.warning("Test data doesn't have a label column. Creating a dummy label column with zeros.")
             test_data['label'] = 0
                 
-        # Create feature processor and fit it on training data
-        from dataset import FeatureProcessor
+        # Load the global feature processor and process data
+        processor = load_global_feature_processor(processor_path)
         
-        # Create and fit the feature processor
-        processor = FeatureProcessor()
-        processor.fit(train_data)
-        
-        # Process the data, but don't create DMatrix yet (to avoid pickling issues)
+        # Process the data using the global processor
         train_processed = processor.transform(train_data, is_training=True)
         test_processed = processor.transform(test_data, is_training=False)
         
@@ -194,16 +196,22 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         if 'label' not in data.columns and 'Label' in data.columns:
             data['label'] = data['Label']
             
-        # Import this function only if needed
-        from dataset import train_test_split
-        
-        # Split the data, but use pandas directly
+        # Use temporal splitting to avoid data leakage
         from sklearn.model_selection import train_test_split as sklearn_split
-        train_processed, test_processed = sklearn_split(data, test_size=0.2, random_state=42)
         
-        # Process with feature processor
-        processor = FeatureProcessor()
-        processor.fit(train_processed)
+        # Check if Stime column exists for temporal splitting
+        if 'Stime' in data.columns:
+            logger.info("Using temporal splitting based on Stime to avoid data leakage")
+            data_sorted = data.sort_values('Stime').reset_index(drop=True)
+            train_size = int(0.8 * len(data_sorted))
+            train_processed = data_sorted.iloc[:train_size]
+            test_processed = data_sorted.iloc[train_size:]
+        else:
+            logger.warning("No Stime column found, using random split")
+            train_processed, test_processed = sklearn_split(data, test_size=0.2, random_state=42)
+        
+        # Load the global processor and transform data
+        processor = load_global_feature_processor(processor_path)
         
         train_processed = processor.transform(train_processed, is_training=True)
         test_processed = processor.transform(test_processed, is_training=False)
@@ -217,7 +225,7 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         
         logger.info(f"Training data size: {len(train_features)}")
         logger.info(f"Validation data size: {len(test_features)}")
-    
+
     # Define the search space using hyperopt's hp module
     search_space = {
         "max_depth": hp.quniform("max_depth", 3, 10, 1),
@@ -227,14 +235,25 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         "eta": hp.loguniform("eta", np.log(1e-3), np.log(0.3)),
         "subsample": hp.uniform("subsample", 0.5, 1.0),
         "colsample_bytree": hp.uniform("colsample_bytree", 0.5, 1.0),
-        "num_boost_round": hp.quniform("num_boost_round", 50, 200, 1)
+        "num_boost_round": hp.quniform("num_boost_round", 1, 10, 1)  # Modified range for FL compatibility
     }
+
     if gpu_fraction is not None and gpu_fraction > 0:
         search_space["tree_method"] = hp.choice("tree_method", ["gpu_hist"])
-    
-    # Create a wrapper function that includes the data DataFrames
+
+    # Create a wrapper function that includes the original data DataFrames and processor path
     def _train_with_data_wrapper(config):
-        return train_xgboost(config, train_data.copy(), test_data.copy()) # Pass copies of FULL DataFrames with labels
+        # Add processor path to config
+        config['global_processor_path'] = processor_path
+        # Pass copies of the original dataframes to the training function
+        if train_file and test_file:
+            return train_xgboost(config, train_data.copy(), test_data.copy())
+        else:
+            # Use the original data before processing for the trial function
+            data_orig = load_csv_data(data_file)["train"].to_pandas()
+            if 'label' not in data_orig.columns and 'Label' in data_orig.columns:
+                data_orig['label'] = data_orig['Label']
+            return train_xgboost(config, data_orig.copy(), data_orig.copy())
 
     # Set up HyperOptSearch
     algo = HyperOptSearch(

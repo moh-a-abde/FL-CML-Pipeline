@@ -18,7 +18,7 @@ from server_utils import (
     save_results_pickle,
 )
 
-from dataset import transform_dataset_to_dmatrix, load_csv_data, FeatureProcessor
+from dataset import transform_dataset_to_dmatrix, load_csv_data, FeatureProcessor, create_global_feature_processor, load_global_feature_processor
 
 
 
@@ -36,28 +36,28 @@ num_clients_per_round = args.num_clients_per_round
 num_evaluate_clients = args.num_evaluate_clients
 centralised_eval = args.centralised_eval
 
+# Create global feature processor before starting federated learning
+log(INFO, "Creating global feature processor for consistent preprocessing across all clients...")
+test_csv_path = "data/received/final_dataset.csv"
+global_processor_path = create_global_feature_processor(test_csv_path, output_dir)
+global_processor = load_global_feature_processor(global_processor_path)
 
 # Load centralised test set
 if centralised_eval:
     log(INFO, "Loading centralised test set...")
-    # Use the original final dataset with proper temporal splitting for testing
-    test_csv_path = "data/received/final_dataset.csv"
+    # Use the engineered dataset for testing
     log(INFO, "Using original final dataset with temporal splitting for centralized evaluation: %s", test_csv_path)
     test_set = load_csv_data(test_csv_path)["test"]
     test_set.set_format("pandas")
     test_df = test_set.to_pandas()
     
-    # Create a processor specifically for the engineered dataset
-    processor = FeatureProcessor(dataset_type="engineered")
+    # Use the global processor for consistent evaluation
+    log(INFO, "Using global feature processor for centralized evaluation")
     
-    # Explicitly fit the processor on the test data to ensure it's ready for transform
-    processor.fit(test_df)
-    log(INFO, "Fitted processor on test data")
-    
-    # Transform to DMatrix with the engineered dataset processor
+    # Transform to DMatrix with the global processor
     test_dmatrix = transform_dataset_to_dmatrix(
         test_df, 
-        processor=processor,
+        processor=global_processor,
         is_training=False
     )
 
@@ -341,8 +341,8 @@ log(INFO, "Generating additional visualizations...")
 CLASS_NAMES = [str(i) for i in range(11)]  # Using generic labels 0-10 as a fallback
 
 # Check if we can get real class names from the processor
-if centralised_eval and hasattr(processor, 'unique_labels'):
-    CLASS_NAMES = [str(label) for label in processor.unique_labels]
+if centralised_eval and hasattr(global_processor, 'unique_labels'):
+    CLASS_NAMES = [str(label) for label in global_processor.unique_labels]
     log(INFO, "Using class names from engineered dataset: %s", CLASS_NAMES)
 
 # Import visualization functions and other necessary modules
