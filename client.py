@@ -28,7 +28,8 @@ from dataset import (
     FeatureProcessor,
     preprocess_data,
     load_global_feature_processor,
-    create_global_feature_processor
+    create_global_feature_processor,
+    transform_dataset_to_dmatrix
 )
 from utils import client_args_parser, BST_PARAMS
 
@@ -189,7 +190,7 @@ if __name__ == "__main__":
         
         # Fallback to the original method if global processor fails
         train_dmatrix, valid_dmatrix, _ = train_test_split(
-            train_partition, test_fraction=args.test_fraction, seed=args.seed
+            train_partition, test_fraction=args.test_fraction, random_state=args.seed
         )
         num_train = train_dmatrix.num_row()
         num_val = valid_dmatrix.num_row()
