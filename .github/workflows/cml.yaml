@@ -176,8 +176,22 @@ jobs:
       - name: Run federated learning pipeline
         run: |
           source venv/bin/activate
+          
+          # Create output directories to ensure they exist
+          mkdir -p outputs results tune_results
+          
           # Run the federated learning with tuned parameters
           ./run_bagging.sh
+          
+          # List what was created for debugging
+          echo "Contents of outputs directory:"
+          ls -la outputs/ || echo "outputs directory is empty or doesn't exist"
+          
+          echo "Contents of results directory:"
+          ls -la results/ || echo "results directory is empty or doesn't exist"
+          
+          echo "Contents of tune_results directory:"
+          ls -la tune_results/ || echo "tune_results directory is empty or doesn't exist"
       
       - name: Evaluate model performance
         run: |
@@ -212,29 +226,71 @@ jobs:
             echo '```' >> model_performance.md
           fi
 
+      - name: Debug git status before commit
+        run: |
+          echo "=== Current git status ==="
+          git status
+          
+          echo "=== Files in outputs directory ==="
+          find outputs -type f 2>/dev/null || echo "No files in outputs directory"
+          
+          echo "=== Files in results directory ==="
+          find results -type f 2>/dev/null || echo "No files in results directory"
+          
+          echo "=== Files in tune_results directory ==="
+          find tune_results -type f 2>/dev/null || echo "No files in tune_results directory"
+          
+          echo "=== Git check-ignore on key directories ==="
+          git check-ignore outputs/ || echo "outputs/ is NOT ignored"
+          git check-ignore results/ || echo "results/ is NOT ignored" 
+          git check-ignore tune_results/ || echo "tune_results/ is NOT ignored"
+          
       - name: Commit results file
         run: |
           git config --local user.email "abde8473@stthomas.edu"
           git config --local user.name "moh-a-abde"
 
           git checkout multi-class-predictions
-          # Add Ray Tune results
-          git add tune_results/
           
-          # Add aggegrated results files
-          git add results/
+          # Force add all files in result directories using find to be more robust
+          echo "Force adding all result files..."
+          
+          # Add tune_results directory and all its contents
+          if [ -d "tune_results" ]; then
+            git add -f tune_results/
+            find tune_results -type f -exec git add -f {} \; 2>/dev/null || true
+          fi
+          
+          # Add results directory and all its contents  
+          if [ -d "results" ]; then
+            git add -f results/
+            find results -type f -exec git add -f {} \; 2>/dev/null || true
+          fi
+          
+          # Add outputs directory and all its contents
+          if [ -d "outputs" ]; then
+            git add -f outputs/
+            find outputs -type f -exec git add -f {} \; 2>/dev/null || true
+          fi
           
           # Add model performance report
-          git add model_performance.md
+          git add model_performance.md 2>/dev/null || true
           
-          # Add new files in outputs directory
-          git add outputs/
+          # Add any other important files that might have been created
+          git add -f *.json 2>/dev/null || true
+          git add -f tuned_params.py 2>/dev/null || true
           
-          # Explicitly add any plot files 
-          git add "outputs/**/*.png"
+          # Check what files are staged for commit
+          echo "Files staged for commit:"
+          git status --porcelain
           
-          # Commit all changes
-          git commit -m "workflow with Ray Tune optimization in action🚀"
+          # Commit all changes (only if there are changes)
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "workflow with Ray Tune optimization in action🚀"
+            echo "Changes committed successfully"
+          else
+            echo "No changes to commit"
+          fi
 
       - name: Push changes
         uses: ad-m/github-push-action@master

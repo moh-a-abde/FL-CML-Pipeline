@@ -11,13 +11,33 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Data files (too large for Git)
+# Large data files (too large for Git)
 data/old/
 data/received/
 received/
-outputs/
-*.csv
+
+# Ignore large CSV files in data directories, but allow small result CSVs
+data/**/*.csv
+received/**/*.csv
+
+# Keep essential CSV files
+!data/received/final_dataset.csv
+
+# Keep important result files (override the general ignore patterns)
+!outputs/**/*.json
+!outputs/**/*.pkl
+!outputs/**/*.txt
+!outputs/**/*.png
+!results/**/*.json
+!results/**/*.txt
+!results/**/*.png
+!tune_results/**/*.json
+!tune_results/**/*.pkl
+
+# Still ignore log files as they can be large
 *.log
 
-# Keep only essential CSV files
-!data/received/final_dataset.csv
+# Allow outputs, results, and tune_results directories for FL results
+!outputs/
+!results/
+!tune_results/
