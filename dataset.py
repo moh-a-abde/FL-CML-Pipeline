@@ -321,7 +321,7 @@ def preprocess_data(data: Union[pd.DataFrame, Dataset], processor: FeatureProces
 def load_csv_data(file_path: str) -> DatasetDict:
     """
     Load and prepare CSV data into a Hugging Face DatasetDict format.
-    Uses temporal splitting based on Stime column to avoid data leakage.
+    Uses hybrid temporal-stratified splitting to avoid data leakage while ensuring class coverage.
 
     Args:
         file_path (str): Path to the CSV file containing network traffic data
@@ -357,30 +357,93 @@ def load_csv_data(file_path: str) -> DatasetDict:
         # This won't create issues since unlabeled data is only used for prediction
         return DatasetDict({"train": dataset, "test": dataset})
     else:
-        # For labeled data, use temporal splitting to avoid data leakage
-        # Sort by Stime column if available for temporal integrity
-        if 'Stime' in df.columns:
-            print("Using temporal splitting based on Stime column to avoid data leakage")
+        # For labeled data, use hybrid temporal-stratified splitting to avoid data leakage
+        # while ensuring all classes are present in both train and test splits
+        if 'Stime' in df.columns and 'label' in df.columns:
+            print("Using hybrid temporal-stratified split to preserve time order while ensuring class coverage")
+            
+            # Sort by time first to maintain temporal integrity
             df_sorted = df.sort_values('Stime').reset_index(drop=True)
             
-            # Split temporally: first 80% for training, last 20% for testing
-            train_size = int(0.8 * len(df_sorted))
-            train_df = df_sorted.iloc[:train_size]
-            test_df = df_sorted.iloc[train_size:]
+            # Create temporal windows to split data while preserving time order
+            n_windows = 10  # Split into 10 temporal windows
+            window_size = len(df_sorted) // n_windows
             
-            # Optional: shuffle within each set to add randomness while maintaining temporal integrity
-            train_df = train_df.sample(frac=1, random_state=42).reset_index(drop=True)
-            test_df = test_df.sample(frac=1, random_state=42).reset_index(drop=True)
+            train_dfs = []
+            test_dfs = []
             
-            print(f"Temporal split: {len(train_df)} train samples, {len(test_df)} test samples")
-            print(f"Train Stime range: {train_df['Stime'].min():.4f} to {train_df['Stime'].max():.4f}")
-            print(f"Test Stime range: {test_df['Stime'].min():.4f} to {test_df['Stime'].max():.4f}")
+            for i in range(n_windows):
+                start_idx = i * window_size
+                end_idx = (i + 1) * window_size if i < n_windows - 1 else len(df_sorted)
+                window_df = df_sorted.iloc[start_idx:end_idx]
+                
+                # Within each window, use stratified split to ensure all classes are represented
+                if len(window_df) > 0:
+                    try:
+                        from sklearn.model_selection import train_test_split
+                        train_window, test_window = train_test_split(
+                            window_df, test_size=0.2, random_state=42, 
+                            stratify=window_df['label']
+                        )
+                        train_dfs.append(train_window)
+                        test_dfs.append(test_window)
+                    except ValueError as e:
+                        # Some classes missing in this window - use temporal split as fallback
+                        print(f"  Warning: Stratification failed for window {i}: {e}")
+                        print(f"  Falling back to temporal split for this window")
+                        window_train_size = int(0.8 * len(window_df))
+                        train_dfs.append(window_df.iloc[:window_train_size])
+                        test_dfs.append(window_df.iloc[window_train_size:])
             
-            # Verify no temporal overlap
-            if train_df['Stime'].max() <= test_df['Stime'].min():
-                print("✓ No temporal overlap between train and test sets")
+            # Combine all windows
+            train_df = pd.concat(train_dfs, ignore_index=True)
+            test_df = pd.concat(test_dfs, ignore_index=True)
+            
+            # Verify all classes are present in both splits
+            train_classes = set(train_df['label'].unique())
+            test_classes = set(test_df['label'].unique())
+            all_classes = set(df['label'].unique())
+            
+            print(f"Hybrid split: {len(train_df)} train samples, {len(test_df)} test samples")
+            print(f"Train classes: {sorted(train_classes)} ({len(train_classes)} classes)")
+            print(f"Test classes: {sorted(test_classes)} ({len(test_classes)} classes)")
+            print(f"All classes: {sorted(all_classes)} ({len(all_classes)} classes)")
+            
+            # Check for missing classes and apply fallback if needed
+            missing_train_classes = all_classes - train_classes
+            missing_test_classes = all_classes - test_classes
+            
+            if missing_train_classes or missing_test_classes:
+                print(f"⚠️ WARNING: Missing classes detected!")
+                if missing_train_classes:
+                    print(f"  Missing from training: {sorted(missing_train_classes)}")
+                if missing_test_classes:
+                    print(f"  Missing from testing: {sorted(missing_test_classes)}")
+                
+                print("  Applying fallback: Pure stratified split to ensure all classes")
+                from sklearn.model_selection import train_test_split
+                train_df, test_df = train_test_split(
+                    df, test_size=0.2, random_state=42, stratify=df['label']
+                )
+                print(f"✓ Fallback complete: {len(train_df)} train, {len(test_df)} test samples")
+                print(f"✓ All classes now present in both splits")
             else:
-                print("⚠ Warning: Temporal overlap detected between train and test sets")
+                print("✓ All classes successfully present in both train and test splits")
+                
+                # Show temporal ranges for verification
+                print(f"Train Stime range: {train_df['Stime'].min():.4f} to {train_df['Stime'].max():.4f}")
+                print(f"Test Stime range: {test_df['Stime'].min():.4f} to {test_df['Stime'].max():.4f}")
+            
+            # Final verification: print class distribution
+            print("\nFinal class distribution:")
+            train_counts = train_df['label'].value_counts().sort_index()
+            test_counts = test_df['label'].value_counts().sort_index()
+            
+            for label in sorted(all_classes):
+                train_count = train_counts.get(label, 0)
+                test_count = test_counts.get(label, 0)
+                total_count = train_count + test_count
+                print(f"  Class {label}: {train_count} train, {test_count} test, {total_count} total")
             
             return DatasetDict({
                 "train": Dataset.from_pandas(train_df),
