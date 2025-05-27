@@ -2,7 +2,7 @@ import argparse
 
 
 # Hyper-parameters for xgboost training
-NUM_LOCAL_ROUND = 2
+NUM_LOCAL_ROUND = 20  # Increased from 2 for better convergence
 BST_PARAMS = {
     "objective": "multi:softprob",
     "num_class": 11,  # Updated for engineered dataset which has 11 classes (0-10)

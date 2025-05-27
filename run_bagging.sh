@@ -19,7 +19,7 @@ echo "✓ Global feature processor ready at outputs/global_feature_processor.pkl
 echo ""
 
 echo "Step 2: Starting federated learning server..."
-python3 server.py --pool-size=5 --num-rounds=5 --num-clients-per-round=5 --centralised-eval &
+python3 server.py --pool-size=5 --num-rounds=20 --num-clients-per-round=5 --centralised-eval &
 SERVER_PID=$!
 sleep 30  # Sleep for 30s to give the server enough time to start
 

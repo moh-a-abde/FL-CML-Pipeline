@@ -115,18 +115,51 @@ if __name__ == "__main__":
         # First try to use get_partition method which returns the partition subset directly
         train_partition = partitioner.get_partition(full_train_data, args.partition_id)
     except Exception as e:
-        log(INFO, f"get_partition failed ({e}), using fallback partitioning")
-        # Fallback to simple index-based partitioning if get_partition is not available
-        total_samples = len(full_train_data)
-        samples_per_partition = total_samples // args.num_partitions
-        start_idx = args.partition_id * samples_per_partition
-        end_idx = (args.partition_id + 1) * samples_per_partition if args.partition_id < args.num_partitions - 1 else total_samples
+        log(INFO, f"get_partition failed ({e}), using stratified fallback partitioning")
         
-        log(INFO, f"Used fallback partitioning. Partition {args.partition_id}: samples {start_idx} to {end_idx}")
-        log(INFO, f"Partition size: {end_idx - start_idx} samples (out of {total_samples} total)")
+        # IMPROVED FALLBACK: Use stratified partitioning to ensure all classes in each partition
+        full_train_df = full_train_data.to_pandas()
         
-        # Get the partition slice
-        train_partition = full_train_data.select(range(start_idx, end_idx))
+        # Check if we have labels for stratification
+        if 'label' in full_train_df.columns:
+            log(INFO, "Using stratified partitioning to ensure class balance across clients")
+            
+            # Create stratified partitions
+            from sklearn.model_selection import StratifiedKFold
+            skf = StratifiedKFold(n_splits=args.num_partitions, shuffle=True, random_state=42)
+            
+            # Get all partition indices
+            partition_indices = list(skf.split(full_train_df, full_train_df['label']))
+            
+            # Get the specific partition for this client
+            if args.partition_id < len(partition_indices):
+                _, partition_idx = partition_indices[args.partition_id]
+                train_partition_df = full_train_df.iloc[partition_idx].reset_index(drop=True)
+                
+                log(INFO, f"Stratified partition {args.partition_id}: {len(train_partition_df)} samples")
+                
+                # Check class distribution in this partition
+                class_dist = train_partition_df['label'].value_counts().sort_index()
+                log(INFO, f"Class distribution in partition {args.partition_id}: {class_dist.to_dict()}")
+                
+                # Convert back to Dataset format
+                train_partition = Dataset.from_pandas(train_partition_df)
+            else:
+                log(ERROR, f"Partition ID {args.partition_id} exceeds available partitions")
+                raise ValueError(f"Invalid partition ID: {args.partition_id}")
+        else:
+            log(WARNING, "No label column found, falling back to simple index-based partitioning")
+            # Original fallback method as last resort
+            total_samples = len(full_train_data)
+            samples_per_partition = total_samples // args.num_partitions
+            start_idx = args.partition_id * samples_per_partition
+            end_idx = (args.partition_id + 1) * samples_per_partition if args.partition_id < args.num_partitions - 1 else total_samples
+            
+            log(INFO, f"Used simple fallback partitioning. Partition {args.partition_id}: samples {start_idx} to {end_idx}")
+            log(INFO, f"Partition size: {end_idx - start_idx} samples (out of {total_samples} total)")
+            
+            # Get the partition slice
+            train_partition = full_train_data.select(range(start_idx, end_idx))
     
     # Convert to pandas for easier manipulation
     train_partition_df = train_partition.to_pandas()
