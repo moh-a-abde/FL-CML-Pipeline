@@ -20,24 +20,5 @@ received/
 data/**/*.csv
 received/**/*.csv
 
-# Keep essential CSV files
-!data/received/final_dataset.csv
-
-# Keep important result files (override the general ignore patterns)
-!outputs/**/*.json
-!outputs/**/*.pkl
-!outputs/**/*.txt
-!outputs/**/*.png
-!results/**/*.json
-!results/**/*.txt
-!results/**/*.png
-!tune_results/**/*.json
-!tune_results/**/*.pkl
-
 # Still ignore log files as they can be large
 *.log
-
-# Allow outputs, results, and tune_results directories for FL results
-!outputs/
-!results/
-!tune_results/
