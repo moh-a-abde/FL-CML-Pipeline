@@ -243,14 +243,16 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
 
     # Create a wrapper function that includes the original data DataFrames and processor path
     def _train_with_data_wrapper(config):
-        # Add processor path to config
-        config['global_processor_path'] = processor_path
+        # Add processor path to config - ensure it's absolute for Ray Tune workers
+        config['global_processor_path'] = os.path.abspath(processor_path)
         # Pass copies of the original dataframes to the training function
         if train_file and test_file:
             return train_xgboost(config, train_data.copy(), test_data.copy())
         else:
             # Use the original data before processing for the trial function
-            data_orig = load_csv_data(data_file)["train"].to_pandas()
+            # Convert relative path to absolute path for Ray Tune workers
+            data_file_abs = os.path.abspath(data_file)
+            data_orig = load_csv_data(data_file_abs)["train"].to_pandas()
             if 'label' not in data_orig.columns and 'Label' in data_orig.columns:
                 data_orig['label'] = data_orig['Label']
             return train_xgboost(config, data_orig.copy(), data_orig.copy())
