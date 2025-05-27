@@ -31,6 +31,7 @@ from dataset import (
     create_global_feature_processor,
     transform_dataset_to_dmatrix
 )
+from datasets import Dataset
 from utils import client_args_parser, BST_PARAMS
 
 # Try to import NUM_LOCAL_ROUND from tuned_params if available, otherwise from utils
