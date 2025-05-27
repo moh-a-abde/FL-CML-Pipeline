@@ -15,6 +15,8 @@ Recent Fixes:
 - Fixed Ray Tune worker file access issues by passing data directly to trial functions
   instead of trying to reload files from worker environments
 - Ensured consistent preprocessing across hyperparameter tuning and federated learning phases
+- Fixed processor path issues by using absolute paths for Ray Tune workers
+- Added robust label column handling to work with different feature processor behaviors
 """
 
 import os
@@ -66,10 +68,29 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
     # Transform data using the global processor
     train_processed = processor.transform(train_df, is_training=True)
     test_processed = processor.transform(test_df, is_training=False)
-    train_features = train_processed.drop(columns=['label'])
-    train_labels = train_processed['label'].astype(int)
-    test_features = test_processed.drop(columns=['label'])
-    test_labels = test_processed['label'].astype(int)
+    
+    # Debug: Check what columns are available after processing
+    logger.info(f"Train processed columns: {list(train_processed.columns)}")
+    logger.info(f"Test processed columns: {list(test_processed.columns)}")
+    
+    # Handle label column extraction more robustly
+    if 'label' in train_processed.columns:
+        train_features = train_processed.drop(columns=['label'])
+        train_labels = train_processed['label'].astype(int)
+    else:
+        # If label column doesn't exist after processing, use original data
+        logger.warning("Label column not found in processed data, using original labels")
+        train_features = train_processed
+        train_labels = train_df['label'].astype(int) if 'label' in train_df.columns else train_df['Label'].astype(int)
+    
+    if 'label' in test_processed.columns:
+        test_features = test_processed.drop(columns=['label'])
+        test_labels = test_processed['label'].astype(int)
+    else:
+        # If label column doesn't exist after processing, use original data
+        logger.warning("Label column not found in processed test data, using original labels")
+        test_features = test_processed
+        test_labels = test_df['label'].astype(int) if 'label' in test_df.columns else test_df['Label'].astype(int)
     
     # Create DMatrix objects inside the function to avoid pickling issues
     train_data = xgb.DMatrix(train_features, label=train_labels, missing=np.nan)
@@ -184,11 +205,21 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         test_processed = processor.transform(test_data, is_training=False)
         
         # Extract features and labels
-        train_features = train_processed.drop(columns=['label'])
-        train_labels = train_processed['label'].astype(int)
+        if 'label' in train_processed.columns:
+            train_features = train_processed.drop(columns=['label'])
+            train_labels = train_processed['label'].astype(int)
+        else:
+            logger.warning("Label column not found in processed training data, using original labels")
+            train_features = train_processed
+            train_labels = train_data['label'].astype(int) if 'label' in train_data.columns else train_data['Label'].astype(int)
         
-        test_features = test_processed.drop(columns=['label'])
-        test_labels = test_processed['label'].astype(int)
+        if 'label' in test_processed.columns:
+            test_features = test_processed.drop(columns=['label'])
+            test_labels = test_processed['label'].astype(int)
+        else:
+            logger.warning("Label column not found in processed test data, using original labels")
+            test_features = test_processed
+            test_labels = test_data['label'].astype(int) if 'label' in test_data.columns else test_data['Label'].astype(int)
         
         logger.info(f"Training data size: {len(train_features)}")
         logger.info(f"Validation data size: {len(test_features)}")
@@ -209,24 +240,36 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
             logger.info("Using temporal splitting based on Stime to avoid data leakage")
             data_sorted = data.sort_values('Stime').reset_index(drop=True)
             train_size = int(0.8 * len(data_sorted))
-            train_processed = data_sorted.iloc[:train_size]
-            test_processed = data_sorted.iloc[train_size:]
+            train_split_orig = data_sorted.iloc[:train_size].copy()
+            test_split_orig = data_sorted.iloc[train_size:].copy()
         else:
             logger.warning("No Stime column found, using random split")
-            train_processed, test_processed = sklearn_split(data, test_size=0.2, random_state=42)
+            train_split_orig, test_split_orig = sklearn_split(data, test_size=0.2, random_state=42)
         
         # Load the global processor and transform data
         processor = load_global_feature_processor(processor_path)
         
-        train_processed = processor.transform(train_processed, is_training=True)
-        test_processed = processor.transform(test_processed, is_training=False)
+        train_processed = processor.transform(train_split_orig, is_training=True)
+        test_processed = processor.transform(test_split_orig, is_training=False)
         
         # Extract features and labels
-        train_features = train_processed.drop(columns=['label'])
-        train_labels = train_processed['label'].astype(int)
+        if 'label' in train_processed.columns:
+            train_features = train_processed.drop(columns=['label'])
+            train_labels = train_processed['label'].astype(int)
+        else:
+            logger.warning("Label column not found in processed training data, using original labels from split")
+            train_features = train_processed
+            # Get labels from the original split data before processing
+            train_labels = train_split_orig['label'].astype(int)
         
-        test_features = test_processed.drop(columns=['label'])
-        test_labels = test_processed['label'].astype(int)
+        if 'label' in test_processed.columns:
+            test_features = test_processed.drop(columns=['label'])
+            test_labels = test_processed['label'].astype(int)
+        else:
+            logger.warning("Label column not found in processed test data, using original labels from split")
+            test_features = test_processed
+            # Get labels from the original split data before processing
+            test_labels = test_split_orig['label'].astype(int)
         
         logger.info(f"Training data size: {len(train_features)}")
         logger.info(f"Validation data size: {len(test_features)}")
