@@ -38,8 +38,8 @@ from sklearn.utils.class_weight import compute_sample_weight
 
 # Default XGBoost parameters for UNSW_NB15 multi-class classification
 BST_PARAMS = {
-    'objective': 'multi:softmax',  # Multi-class classification
-    'num_class': 10,  # Classes: Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic
+    'objective': 'multi:softprob',  # Multi-class classification with probabilities
+    'num_class': 11,  # Classes: 0-10 (Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic, plus class 10)
     'eval_metric': ['mlogloss', 'merror'],  # Multi-class metrics
     'learning_rate': 0.05,
     'max_depth': 6,

@@ -70,7 +70,7 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
     params = {
         # Fixed parameters
         'objective': 'multi:softprob',
-        'num_class': 10,  # UNSW_NB15 has 10 classes
+        'num_class': 11,  # UNSW_NB15 has 11 classes (0-10)
         'eval_metric': ['mlogloss', 'merror'],
         
         # Tunable parameters from config - convert float values to integers where needed
@@ -289,7 +289,7 @@ def train_final_model(config: dict,
     params = {
         # Fixed parameters
         'objective': 'multi:softprob',
-        'num_class': 10,  # UNSW_NB15 has 10 classes
+        'num_class': 11,  # UNSW_NB15 has 11 classes (0-10)
         'eval_metric': ['mlogloss', 'merror'],
         
         # Best parameters from tuning - convert float values to integers where needed
