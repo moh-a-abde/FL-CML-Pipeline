@@ -1,60 +1,22 @@
-# XGBoost Model Performance Report
+## XGBoost Model Performance
 
-## Ray Tune Hyperparameter Optimization Results
+### Federated Learning Results
 
-### Best Hyperparameters Found:
+| Metric | Value |
+| ------ | ----- |
+
+### Hyperparameter Optimization Results
+
+Best hyperparameters:
 ```json
 {
-  "colsample_bytree": 0.7516518865459294,
-  "eta": 0.023418154481471127,
-  "max_depth": 6.0,
-  "min_child_weight": 8.0,
-  "num_boost_round": 8.0,
-  "reg_alpha": 0.18887659874307602,
-  "reg_lambda": 0.006673107568162361,
-  "subsample": 0.7081559047661303
-}
-```
-
-### Ray Tune Validation Performance:
-- **Accuracy**: 74.09%
-- **Precision**: 76.57%
-- **Recall**: 74.09%
-- **F1 Score**: 73.08%
-- **Multi-class Log Loss**: 1.9652
-
-## Federated Learning Results
-
-### Training Configuration:
-- **Number of Rounds**: 5
-- **Clients per Round**: 5
-- **Dataset**: UNSW-NB15 (165,000 samples)
-- **Classes**: 11 (multi-class cybersecurity attack classification)
-- **Train/Test Split**: Temporal split (132k train, 33k test)
-
-### Centralized Evaluation Performance:
-| Round | Accuracy | Precision | Recall | F1 Score | Loss |
-|-------|----------|-----------|--------|----------|------|
-| 1     | 35.62%   | 34.15%    | 35.62% | 33.08%   | 2.209|
-| 2     | 35.59%   | 34.06%    | 35.59% | 33.00%   | 2.206|
-| 3     | 35.69%   | 34.10%    | 35.69% | 33.06%   | 2.204|
-| 4     | 35.68%   | 34.10%    | 35.68% | 33.05%   | 2.202|
-| 5     | 35.68%   | 34.10%    | 35.68% | 33.05%   | 2.201|
-
-### Key Improvements:
-- **Hyperparameter Optimization**: Ray Tune found optimal parameters improving validation accuracy to 74%
-- **Consistent Performance**: Federated learning maintained stable performance across all rounds
-- **Class Balance**: Successfully handled multi-class imbalanced dataset with sample weighting
-- **Temporal Splitting**: Prevented data leakage using time-based train/test split
-
-### Technical Features:
-- ✅ Global feature processor for consistent preprocessing
-- ✅ Sample weighting for class imbalance
-- ✅ Comprehensive visualization (confusion matrices, ROC curves, PR curves)
-- ✅ Per-round evaluation metrics and predictions
-- ✅ Temporal data splitting to prevent leakage
-
-## Notes:
-- Performance gap between Ray Tune validation (74%) and federated learning (36%) suggests opportunity for federated-specific optimization
-- Consistent performance across federated rounds indicates stable convergence
-- Multi-class cybersecurity classification is inherently challenging with 11 classes 
+  "colsample_bytree": 0.82011802398955,
+  "eta": 0.08320809934829289,
+  "max_depth": 9.0,
+  "min_child_weight": 19.0,
+  "num_boost_round": 2.0,
+  "reg_alpha": 0.0024157333696349283,
+  "reg_lambda": 5.069298395764341,
+  "subsample": 0.7336272180598685,
+  "global_processor_path": "/tmp/ray/session_2025-05-28_00-15-37_802354_3022/artifacts/2025-05-28_00-15-41/xgboost_tune/working_dirs/_train_with_data_wrapper_be74a43d_1_colsample_bytree=0.8201,eta=0.0832,max_depth=9.0000,min_child_weight=19.0000,num_boost_round=2_2025-05-28_00-15-42/tune_results/global_feature_processor.pkl"
+}```

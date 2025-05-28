@@ -1,10 +1,11 @@
 {
-  "max_depth": 5,
-  "min_child_weight": 19,
-  "reg_alpha": 4.000877452784171,
-  "reg_lambda": 6.121688592715271,
-  "eta": 0.0017574056471531343,
-  "subsample": 0.7626600174065583,
-  "colsample_bytree": 0.5836140774820693,
-  "num_boost_round": 82
+  "colsample_bytree": 0.82011802398955,
+  "eta": 0.08320809934829289,
+  "max_depth": 9.0,
+  "min_child_weight": 19.0,
+  "num_boost_round": 2.0,
+  "reg_alpha": 0.0024157333696349283,
+  "reg_lambda": 5.069298395764341,
+  "subsample": 0.7336272180598685,
+  "global_processor_path": "/tmp/ray/session_2025-05-28_00-15-37_802354_3022/artifacts/2025-05-28_00-15-41/xgboost_tune/working_dirs/_train_with_data_wrapper_be74a43d_1_colsample_bytree=0.8201,eta=0.0832,max_depth=9.0000,min_child_weight=19.0000,num_boost_round=2_2025-05-28_00-15-42/tune_results/global_feature_processor.pkl"
 }
