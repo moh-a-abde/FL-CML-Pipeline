@@ -182,7 +182,7 @@ def test_bst_params_consistency():
         from utils import BST_PARAMS
         
         checks = [
-            ('num_class', BST_PARAMS.get('num_class') == 10, f"Expected 10, got {BST_PARAMS.get('num_class')}"),
+            ('num_class', BST_PARAMS.get('num_class') == 11, f"Expected 11, got {BST_PARAMS.get('num_class')}"),
             ('eta reasonable', 0.01 <= BST_PARAMS.get('eta', 0) <= 0.3, f"eta = {BST_PARAMS.get('eta')}"),
             ('max_depth increased', BST_PARAMS.get('max_depth', 0) >= 8, f"max_depth = {BST_PARAMS.get('max_depth')}"),
             ('subsample increased', BST_PARAMS.get('subsample', 0) >= 0.8, f"subsample = {BST_PARAMS.get('subsample')}"),

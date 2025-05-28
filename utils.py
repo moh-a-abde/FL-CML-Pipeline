@@ -5,7 +5,7 @@ import argparse
 NUM_LOCAL_ROUND = 20  # Increased from 2 for better convergence
 BST_PARAMS = {
     "objective": "multi:softprob",
-    "num_class": 10,  # Fixed from 11 - dataset has classes 0-9 (10 classes total)
+    "num_class": 11,  # Fixed to match dataset - has classes 0-10 (11 classes total)
     "eta": 0.05,  # Reasonable learning rate
     "max_depth": 8,  # Increased from 6 for more complex patterns
     "min_child_weight": 5,  # Decreased from 10 for better learning

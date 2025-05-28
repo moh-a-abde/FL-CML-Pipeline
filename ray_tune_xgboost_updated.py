@@ -100,7 +100,7 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
     params = {
         # Fixed parameters
         'objective': 'multi:softprob',
-        'num_class': 10,  # Fixed from 11 - dataset has classes 0-9 (10 classes total)
+        'num_class': 11,  # Fixed to match dataset - has classes 0-10 (11 classes total)
         'eval_metric': ['mlogloss', 'merror'],
         
         # Tunable parameters from config - convert float values to integers where needed
@@ -329,7 +329,7 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         ),
         param_space={},  # search space is handled by HyperOptSearch
         run_config=RunConfig(
-            local_dir=output_dir,
+            storage_path=os.path.abspath(output_dir),
             name="xgboost_tune"
         )
     )
@@ -384,7 +384,7 @@ def train_final_model(config, train_features, train_labels, test_features, test_
     params = {
         # Fixed parameters
         'objective': 'multi:softprob',
-        'num_class': 10,  # Fixed from 11 - dataset has classes 0-9 (10 classes total)
+        'num_class': 11,  # Fixed to match dataset - has classes 0-10 (11 classes total)
         'eval_metric': ['mlogloss', 'merror'],
         
         # Best parameters from tuning - convert float values to integers where needed
