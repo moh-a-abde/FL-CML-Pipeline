@@ -24,6 +24,7 @@ The issue was a **data splitting inconsistency** between two parts of the Ray Tu
 
 ## The Fix Applied
 
+### Fix 1: Data Splitting Consistency
 **File**: `ray_tune_xgboost_updated.py` lines 241-260
 
 **Before (BROKEN)**:
@@ -50,6 +51,32 @@ train_split_orig = dataset['train'].to_pandas()
 test_split_orig = dataset['test'].to_pandas()
 ```
 
+### Fix 2: Variable Scope Issue
+**File**: `ray_tune_xgboost_updated.py` line 292
+
+**Problem**: After fixing the data splitting, a new error emerged:
+```
+NameError: name 'data' is not defined
+```
+
+**Before (BROKEN)**:
+```python
+def _train_with_data_wrapper(config):
+    # ...
+    else:
+        # For single data file mode, pass the original loaded data directly
+        return train_xgboost(config, data.copy(), data.copy())  # 'data' not defined!
+```
+
+**After (FIXED)**:
+```python
+def _train_with_data_wrapper(config):
+    # ...
+    else:
+        # For single data file mode, pass the original split data
+        return train_xgboost(config, train_split_orig.copy(), test_split_orig.copy())
+```
+
 ## Verification Results
 
 ### Old Logic (BROKEN):
@@ -66,6 +93,7 @@ test_split_orig = dataset['test'].to_pandas()
 - **Trial data**: Train: 132,000, Test: 33,000 ✅
 - **Final data**: Train: 132,000, Test: 33,000 ✅
 - **Class distributions**: Identical between trials and final model ✅
+- **Ray Tune execution**: No more NameError, trials run successfully ✅
 
 ## Expected Performance Impact
 
@@ -73,11 +101,13 @@ test_split_orig = dataset['test'].to_pandas()
 - **Ray Tune Best Trial**: 88.75% accuracy, 0.8890 F1-score ✅
 - **Final Model**: 11.36% accuracy, 0.0981 F1-score ❌
 - **Performance Gap**: 77.39 percentage points ❌
+- **Ray Tune Status**: Failing with NameError ❌
 
 ### After Fix:
 - **Ray Tune Best Trial**: 88.75% accuracy, 0.8890 F1-score ✅
 - **Final Model**: ~88.75% accuracy, ~0.8890 F1-score ✅ (Expected)
 - **Performance Gap**: ~0 percentage points ✅
+- **Ray Tune Status**: Running successfully ✅
 
 ## Technical Details
 
@@ -86,6 +116,7 @@ test_split_orig = dataset['test'].to_pandas()
 2. The `train_xgboost()` function (used by Ray Tune trials) correctly used `load_csv_data()` 
 3. The `tune_xgboost()` function (used for final model) still had the old temporal split logic
 4. This created two different data distributions for the same optimization run
+5. After fixing the data split, a variable scope issue emerged in the wrapper function
 
 ### Why Early Stopping Made It Worse:
 - The final model training used early stopping with 30 rounds patience
@@ -99,15 +130,21 @@ test_split_orig = dataset['test'].to_pandas()
    - Replaced old temporal split with `load_csv_data()` call
    - Ensured consistency between trials and final model training
 
+2. **`ray_tune_xgboost_updated.py`** (line 292):
+   - Fixed variable scope issue in `_train_with_data_wrapper`
+   - Changed from undefined `data` to properly scoped `train_split_orig` and `test_split_orig`
+
 ## Validation
 
-The fix was validated with a comprehensive test that confirmed:
+The fix was validated with comprehensive testing that confirmed:
 1. ✅ Both Ray Tune trials and final model use identical data splits
 2. ✅ All 11 classes are present in both train and test sets
 3. ✅ Data sizes are consistent (132K train, 33K test)
 4. ✅ Class distributions are identical
 5. ✅ The old logic was indeed broken (missing Class 2)
 6. ✅ The new logic correctly includes all classes
+7. ✅ Ray Tune executes without NameError
+8. ✅ Trials start successfully and run to completion
 
 ## Next Steps
 
@@ -117,4 +154,4 @@ The fix was validated with a comprehensive test that confirmed:
 
 ## Impact
 
-This fix resolves the most critical issue preventing the federated learning pipeline from achieving publication-worthy results. The final model will now properly utilize the optimized hyperparameters and achieve the expected 85-90% accuracy instead of the previous 11% failure rate. 
+This fix resolves the most critical issue preventing the federated learning pipeline from achieving publication-worthy results. The final model will now properly utilize the optimized hyperparameters and achieve the expected 85-90% accuracy instead of the previous 11% failure rate. Additionally, Ray Tune now executes successfully without runtime errors. 

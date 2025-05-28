@@ -287,9 +287,8 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         if train_file and test_file:
             return train_xgboost(config, train_data.copy(), test_data.copy())
         else:
-            # For single data file mode, pass the original loaded data directly
-            # instead of trying to reload it in the worker
-            return train_xgboost(config, data.copy(), data.copy())
+            # For single data file mode, pass the original split data
+            return train_xgboost(config, train_split_orig.copy(), test_split_orig.copy())
 
     # Set up HyperOptSearch
     algo = HyperOptSearch(
