@@ -115,8 +115,8 @@ if __name__ == "__main__":
     try:
         # First try to use get_partition method which returns the partition subset directly
         train_partition = partitioner.get_partition(full_train_data, args.partition_id)
-    except Exception as e:
-        log(INFO, f"get_partition failed ({e}), using stratified fallback partitioning")
+    except (AttributeError, ValueError) as e:
+        log(INFO, "get_partition failed (%s), using stratified fallback partitioning", str(e))
         
         # IMPROVED FALLBACK: Use stratified partitioning to ensure all classes in each partition
         full_train_df = full_train_data.to_pandas()
@@ -137,17 +137,17 @@ if __name__ == "__main__":
                 _, partition_idx = partition_indices[args.partition_id]
                 train_partition_df = full_train_df.iloc[partition_idx].reset_index(drop=True)
                 
-                log(INFO, f"Stratified partition {args.partition_id}: {len(train_partition_df)} samples")
+                log(INFO, "Stratified partition %d: %d samples", args.partition_id, len(train_partition_df))
                 
                 # Check class distribution in this partition
                 class_dist = train_partition_df['label'].value_counts().sort_index()
-                log(INFO, f"Class distribution in partition {args.partition_id}: {class_dist.to_dict()}")
+                log(INFO, "Class distribution in partition %d: %s", args.partition_id, class_dist.to_dict())
                 
                 # Convert back to Dataset format
                 train_partition = Dataset.from_pandas(train_partition_df)
             else:
-                log(ERROR, f"Partition ID {args.partition_id} exceeds available partitions")
-                raise ValueError(f"Invalid partition ID: {args.partition_id}")
+                log(ERROR, "Partition ID %d exceeds available partitions", args.partition_id)
+                raise ValueError(f"Invalid partition ID: {args.partition_id}") from e
         else:
             log(WARNING, "No label column found, falling back to simple index-based partitioning")
             # Original fallback method as last resort
@@ -156,8 +156,8 @@ if __name__ == "__main__":
             start_idx = args.partition_id * samples_per_partition
             end_idx = (args.partition_id + 1) * samples_per_partition if args.partition_id < args.num_partitions - 1 else total_samples
             
-            log(INFO, f"Used simple fallback partitioning. Partition {args.partition_id}: samples {start_idx} to {end_idx}")
-            log(INFO, f"Partition size: {end_idx - start_idx} samples (out of {total_samples} total)")
+            log(INFO, "Used simple fallback partitioning. Partition %d: samples %d to %d", args.partition_id, start_idx, end_idx)
+            log(INFO, "Partition size: %d samples (out of %d total)", end_idx - start_idx, total_samples)
             
             # Get the partition slice
             train_partition = full_train_data.select(range(start_idx, end_idx))
@@ -167,20 +167,20 @@ if __name__ == "__main__":
     
     # Perform local train/test split using client-specific random seed
     client_seed = args.seed + args.partition_id * 1000  # Make each client's seed unique
-    log(INFO, f"Using client-specific random seed for train/test split: {client_seed}")
+    log(INFO, "Using client-specific random seed for train/test split: %d", client_seed)
     
     # Log data shape before splitting
-    log(INFO, f"Original data shape before splitting: {train_partition_df.shape}")
+    log(INFO, "Original data shape before splitting: %s", str(train_partition_df.shape))
     
     # Check class distribution before splitting
     if 'label' in train_partition_df.columns:
         class_dist = train_partition_df['label'].value_counts().to_dict()
-        log(INFO, f"Class distribution in original data: {class_dist}")
+        log(INFO, "Class distribution in original data: %s", str(class_dist))
     
     # Use different random states for train/validation split to ensure no overlap
     train_random_state = client_seed
     val_random_state = client_seed + 5000  # Different seed for validation
-    log(INFO, f"Using different random states for train/validation split: {train_random_state}/{val_random_state}")
+    log(INFO, "Using different random states for train/validation split: %d/%d", train_random_state, val_random_state)
     
     # Perform the split
     from sklearn.model_selection import train_test_split as sklearn_split
@@ -191,14 +191,14 @@ if __name__ == "__main__":
         stratify=train_partition_df['label'] if 'label' in train_partition_df.columns else None
     )
     
-    log(INFO, f"Train data shape: {train_df.shape}, Test data shape: {valid_df.shape}")
+    log(INFO, "Train data shape: %s, Test data shape: %s", str(train_df.shape), str(valid_df.shape))
     
     # Log class distributions after splitting
     if 'label' in train_df.columns:
         train_class_dist = train_df['label'].value_counts().to_dict()
         valid_class_dist = valid_df['label'].value_counts().to_dict()
-        log(INFO, f"Class distribution in train data: {train_class_dist}")
-        log(INFO, f"Class distribution in test data: {valid_class_dist}")
+        log(INFO, "Class distribution in train data: %s", str(train_class_dist))
+        log(INFO, "Class distribution in test data: %s", str(valid_class_dist))
     
     # Use the global processor to transform the data
     log(INFO, "Transforming data using global feature processor")
@@ -215,11 +215,11 @@ if __name__ == "__main__":
         num_train = len(train_processed)
         num_val = len(valid_processed)
         
-        log(INFO, f"Train DMatrix has {train_dmatrix.num_row()} rows, Test DMatrix has {valid_dmatrix.num_row()} rows")
-        log(INFO, f"Local split: {num_train} train samples, {num_val} validation samples")
+        log(INFO, "Train DMatrix has %d rows, Test DMatrix has %d rows", train_dmatrix.num_row(), valid_dmatrix.num_row())
+        log(INFO, "Local split: %d train samples, %d validation samples", num_train, num_val)
         
-    except Exception as e:
-        log(ERROR, f"Error in data transformation: {str(e)}")
+    except (ValueError, TypeError, AttributeError) as e:
+        log(ERROR, "Error in data transformation: %s", str(e))
         log(INFO, "Falling back to original train_test_split method")
         
         # Fallback to the original method if global processor fails
@@ -242,8 +242,8 @@ if __name__ == "__main__":
         unlabeled_features, _ = preprocess_data(unlabeled_data, processor=global_processor, is_training=False)
         unlabeled_dmatrix = xgb.DMatrix(unlabeled_features, missing=np.nan)
         log(INFO, "Successfully preprocessed unlabeled data.")
-    except Exception as e:
-        log(ERROR, "Failed to preprocess unlabeled data or create DMatrix: %s", e)
+    except (ValueError, TypeError, AttributeError) as e:
+        log(ERROR, "Failed to preprocess unlabeled data or create DMatrix: %s", str(e))
         # Handle error appropriately, e.g., skip prediction for this client or use an empty DMatrix
         unlabeled_dmatrix = xgb.DMatrix(np.empty((0,0))) # Create an empty DMatrix as fallback
 
