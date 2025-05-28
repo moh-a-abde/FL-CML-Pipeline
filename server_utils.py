@@ -23,6 +23,9 @@ from visualization_utils import (
     plot_class_distribution
 )
 
+# Global variable to track metrics history for early stopping
+METRICS_HISTORY = []
+
 def setup_output_directory():
     """
     Creates a date and time-based directory structure for outputs.
@@ -200,6 +203,10 @@ def evaluate_metrics_aggregation(eval_metrics):
     log(INFO, "  Loss (mlogloss): %f", aggregated_metrics["mlogloss"])
     if aggregated_conf_matrix is not None:
         log(INFO, "  Confusion Matrix:\n%s", aggregated_conf_matrix)
+    
+    # Add metrics to history for early stopping tracking
+    add_metrics_to_history(aggregated_metrics)
+    
     # Save aggregated results
     save_evaluation_results(aggregated_metrics, "aggregated")
     if not (isinstance(loss, (int, float)) and isinstance(aggregated_metrics, dict)):
@@ -658,3 +665,66 @@ class CyclicClientManager(SimpleClientManager):
 
         # Return all available clients
         return [self.clients[cid] for cid in available_cids]
+
+def check_convergence(metrics_history: List[Dict], patience: int = 3, min_delta: float = 0.001) -> bool:
+    """
+    Check if training has converged based on loss history.
+    
+    Args:
+        metrics_history (List[Dict]): List of metrics from previous rounds
+        patience (int): Number of rounds to wait for improvement before stopping
+        min_delta (float): Minimum change in loss to be considered an improvement
+        
+    Returns:
+        bool: True if training should stop (converged), False otherwise
+    """
+    if len(metrics_history) < patience + 1:
+        return False
+    
+    # Extract recent losses (mlogloss)
+    recent_losses = []
+    for metrics in metrics_history[-(patience + 1):]:
+        loss = metrics.get('mlogloss', metrics.get('loss', float('inf')))
+        recent_losses.append(loss)
+    
+    # Calculate improvements between consecutive rounds
+    improvements = []
+    for i in range(len(recent_losses) - 1):
+        improvement = recent_losses[i] - recent_losses[i + 1]
+        improvements.append(improvement)
+    
+    # Check if all recent improvements are below threshold
+    converged = all(imp < min_delta for imp in improvements)
+    
+    if converged:
+        log(INFO, "Early stopping triggered: No significant improvement in last %d rounds", patience)
+        log(INFO, "Recent losses: %s", recent_losses)
+        log(INFO, "Recent improvements: %s", improvements)
+    
+    return converged
+
+def reset_metrics_history():
+    """Reset the global metrics history (useful for new training runs)."""
+    global METRICS_HISTORY
+    METRICS_HISTORY = []
+    log(INFO, "Metrics history reset for new training run")
+
+def add_metrics_to_history(metrics: Dict):
+    """Add metrics from current round to history for convergence tracking."""
+    global METRICS_HISTORY
+    METRICS_HISTORY.append(metrics.copy())
+    log(INFO, "Added metrics to history. Total rounds tracked: %d", len(METRICS_HISTORY))
+
+def should_stop_early(patience: int = 3, min_delta: float = 0.001) -> bool:
+    """
+    Check if early stopping should be triggered based on current metrics history.
+    
+    Args:
+        patience (int): Number of rounds to wait for improvement
+        min_delta (float): Minimum improvement threshold
+        
+    Returns:
+        bool: True if training should stop early
+    """
+    global METRICS_HISTORY
+    return check_convergence(METRICS_HISTORY, patience, min_delta)

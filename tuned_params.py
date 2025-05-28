@@ -5,7 +5,7 @@ NUM_LOCAL_ROUND = 82
 
 TUNED_PARAMS = {
     'objective': 'multi:softprob',
-    'num_class': 11,
+    'num_class': 10,
     'eta': 0.0017574056471531343,
     'max_depth': 5,
     'min_child_weight': 19,

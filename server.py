@@ -16,6 +16,8 @@ from server_utils import (
     CyclicClientManager,
     setup_output_directory,
     save_results_pickle,
+    reset_metrics_history,
+    should_stop_early,
 )
 
 from dataset import transform_dataset_to_dmatrix, load_csv_data, FeatureProcessor, create_global_feature_processor, load_global_feature_processor
@@ -26,6 +28,9 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 # Create output directory structure
 output_dir = setup_output_directory()
+
+# Reset metrics history for new training run
+reset_metrics_history()
 
 # Parse arguments for experimental settings
 args = server_args_parser()
@@ -66,6 +71,11 @@ def custom_eval_config(rnd: int):
     return eval_config(rnd, output_dir)
 
 class CustomFedXgbBagging(FedXgbBagging):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.early_stopping_patience = 3
+        self.early_stopping_min_delta = 0.001
+        
     def aggregate_evaluate(self, server_round, results, failures):
         if self.evaluate_metrics_aggregation_fn is not None:
             eval_metrics = []
@@ -99,6 +109,14 @@ class CustomFedXgbBagging(FedXgbBagging):
             loss, metrics = aggregated_result
             if not isinstance(metrics, dict):
                 raise TypeError("Metrics returned from aggregation must be a dictionary.")
+            
+            # Check for early stopping after aggregating metrics
+            if should_stop_early(self.early_stopping_patience, self.early_stopping_min_delta):
+                log(INFO, "Early stopping triggered at round %d", server_round)
+                # Note: Flower doesn't have a built-in way to stop training early
+                # This will log the early stopping condition, but training will continue
+                # In a production system, you might want to implement a custom server loop
+                
             return loss, metrics
         return super().aggregate_evaluate(server_round, results, failures)
 

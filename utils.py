@@ -5,23 +5,23 @@ import argparse
 NUM_LOCAL_ROUND = 20  # Increased from 2 for better convergence
 BST_PARAMS = {
     "objective": "multi:softprob",
-    "num_class": 11,  # Updated for engineered dataset which has 11 classes (0-10)
-    "eta": 0.05,  # Reduced learning rate to prevent overfitting
-    "max_depth": 6,  # Increased from 3 to allow more complex trees
-    "min_child_weight": 10,  # Increased to prevent fitting to small samples
-    "gamma": 1.0,  # Increased minimum loss reduction for split
-    "subsample": 0.7,  # Sample fewer rows per iteration
-    "colsample_bytree": 0.6,  # Sample fewer features per tree
-    "colsample_bylevel": 0.6,  # Sample fewer features per level
+    "num_class": 10,  # Fixed from 11 - dataset has classes 0-9 (10 classes total)
+    "eta": 0.05,  # Reasonable learning rate
+    "max_depth": 8,  # Increased from 6 for more complex patterns
+    "min_child_weight": 5,  # Decreased from 10 for better learning
+    "gamma": 0.5,  # Decreased from 1.0 for less aggressive pruning
+    "subsample": 0.8,  # Increased from 0.7 for more data per tree
+    "colsample_bytree": 0.8,  # Increased from 0.6 for more features per tree
+    "colsample_bylevel": 0.8,  # Increased from 0.6 for more features per level
     "nthread": 16,
     "tree_method": "hist",
     "eval_metric": ["mlogloss", "merror"],
-    "max_delta_step": 5,
-    "reg_alpha": 0.8,  # Decreased L1 regularization from 2.0
-    "reg_lambda": 0.8,  # Decreased L2 regularization from 5.0
+    "max_delta_step": 1,  # Decreased from 5 for better convergence
+    "reg_alpha": 0.1,  # Decreased from 0.8 for less L1 regularization
+    "reg_lambda": 1.0,  # Increased from 0.8 for better L2 regularization
     "base_score": 0.5,  # Neutral starting point
-    "scale_pos_weight": 1.0,  # Simplified for multi-class with >3 classes
-    "grow_policy": "lossguide",  # Alternative tree growing policy
+    "scale_pos_weight": 1.0,  # Simplified for multi-class
+    "grow_policy": "depthwise",  # Changed from lossguide for more balanced trees
     "normalize_type": "tree",  # Helps with interpretability
     "random_state": 42  # Fixed seed for reproducibility
 }

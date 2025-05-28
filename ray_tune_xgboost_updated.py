@@ -100,7 +100,7 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
     params = {
         # Fixed parameters
         'objective': 'multi:softprob',
-        'num_class': 11,  # UNSW_NB15 has 11 classes (0-10)
+        'num_class': 10,  # Fixed from 11 - dataset has classes 0-9 (10 classes total)
         'eval_metric': ['mlogloss', 'merror'],
         
         # Tunable parameters from config - convert float values to integers where needed
@@ -123,20 +123,21 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
     # Store evaluation results
     results = {}
     
-    # Train the model
+    # Train the model with early stopping
     bst = xgb.train(
         params,
         train_data,
         num_boost_round=int(config['num_boost_round']),
-        evals=[(test_data, 'eval'), (train_data, 'train')],
+        evals=[(train_data, 'train'), (test_data, 'eval')],
         evals_result=results,
+        early_stopping_rounds=30,  # Stop if no improvement for 30 rounds
         verbose_eval=False
     )
     
-    # Get the final evaluation metrics
-    final_iteration = len(results['eval']['mlogloss']) - 1
-    eval_mlogloss = results['eval']['mlogloss'][final_iteration]
-    eval_merror = results['eval']['merror'][final_iteration]
+    # Get the best iteration metrics (early stopping may have stopped before num_boost_round)
+    best_iteration = getattr(bst, 'best_iteration', len(results['eval']['mlogloss']) - 1)
+    eval_mlogloss = results['eval']['mlogloss'][best_iteration]
+    eval_merror = results['eval']['merror'][best_iteration]
     
     # Make predictions for more detailed metrics
     y_pred_proba = bst.predict(test_data)  # Get probabilities from multi:softprob
@@ -276,14 +277,14 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
 
     # Define the search space using hyperopt's hp module
     search_space = {
-        "max_depth": hp.quniform("max_depth", 3, 10, 1),
-        "min_child_weight": hp.quniform("min_child_weight", 1, 20, 1),
-        "reg_alpha": hp.loguniform("reg_alpha", np.log(1e-3), np.log(10.0)),
-        "reg_lambda": hp.loguniform("reg_lambda", np.log(1e-3), np.log(10.0)),
-        "eta": hp.loguniform("eta", np.log(1e-3), np.log(0.3)),
-        "subsample": hp.uniform("subsample", 0.5, 1.0),
-        "colsample_bytree": hp.uniform("colsample_bytree", 0.5, 1.0),
-        "num_boost_round": hp.quniform("num_boost_round", 1, 10, 1)  # Modified range for FL compatibility
+        "max_depth": hp.quniform("max_depth", 4, 12, 1),            # Expanded range for deeper trees
+        "min_child_weight": hp.quniform("min_child_weight", 1, 10, 1),  # Reduced upper bound
+        "reg_alpha": hp.loguniform("reg_alpha", np.log(0.01), np.log(10.0)),
+        "reg_lambda": hp.loguniform("reg_lambda", np.log(0.01), np.log(10.0)),
+        "eta": hp.uniform("eta", 0.01, 0.3),                        # More practical learning rate range
+        "subsample": hp.uniform("subsample", 0.6, 1.0),             # Improved lower bound
+        "colsample_bytree": hp.uniform("colsample_bytree", 0.6, 1.0), # Improved lower bound
+        "num_boost_round": hp.quniform("num_boost_round", 50, 200, 10)  # CRITICAL FIX: Realistic range!
     }
 
     if gpu_fraction is not None and gpu_fraction > 0:
@@ -383,7 +384,7 @@ def train_final_model(config, train_features, train_labels, test_features, test_
     params = {
         # Fixed parameters
         'objective': 'multi:softprob',
-        'num_class': 11,  # UNSW_NB15 has 11 classes (0-10)
+        'num_class': 10,  # Fixed from 11 - dataset has classes 0-9 (10 classes total)
         'eval_metric': ['mlogloss', 'merror'],
         
         # Best parameters from tuning - convert float values to integers where needed
@@ -403,13 +404,16 @@ def train_final_model(config, train_features, train_labels, test_features, test_
     if config.get('tree_method') == 'gpu_hist':
         params['tree_method'] = 'gpu_hist'
     
-    # Train the final model
+    # Train the final model with early stopping
     logger.info("Training final model with best parameters")
+    eval_results = {}
     final_model = xgb.train(
         params,
         train_data,
         num_boost_round=int(config['num_boost_round']),
-        evals=[(test_data, 'eval'), (train_data, 'train')],
+        evals=[(train_data, 'train'), (test_data, 'eval')],
+        evals_result=eval_results,
+        early_stopping_rounds=30,  # Stop if no improvement for 30 rounds
         verbose_eval=True
     )
     

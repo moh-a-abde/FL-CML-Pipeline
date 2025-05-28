@@ -108,6 +108,15 @@ jobs:
           # Use the same dataset that federated learning will use for consistency
           FINAL_DATASET="data/received/final_dataset.csv"
           
+          # Detect CI environment and adjust sample count accordingly
+          if [ "$CI" = "true" ]; then
+            SAMPLES=15  # Increased from 5 for better optimization while avoiding timeout
+            echo "CI detected: Using $SAMPLES samples for validation (increased for better results)"
+          else
+            SAMPLES=50
+            echo "Local run: Using $SAMPLES samples for thorough optimization"
+          fi
+          
           # Check if the final dataset exists
           if [ -f "$FINAL_DATASET" ]; then
             echo "Using final dataset for hyperparameter tuning: $FINAL_DATASET"
@@ -116,7 +125,7 @@ jobs:
             mkdir -p tune_results
             
             # Run Ray Tune with the final dataset for consistency
-            bash run_ray_tune.sh --data-file "$FINAL_DATASET" --num-samples 5 --cpus-per-trial 2 --output-dir "./tune_results"
+            bash run_ray_tune.sh --data-file "$FINAL_DATASET" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
             
           else
             echo "Final dataset not found at $FINAL_DATASET, checking for fallback data..."
@@ -130,7 +139,7 @@ jobs:
               echo "Using UNSW_NB15 data files for hyperparameter tuning"
               # Create output directory for Ray Tune results
               mkdir -p tune_results
-              bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples 5 --cpus-per-trial 2 --output-dir "./tune_results"
+              bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
             else
               echo "No suitable data found, creating synthetic data for testing"
               
@@ -160,8 +169,8 @@ jobs:
               # Create output directory for Ray Tune results
               mkdir -p tune_results
               
-              # Use a small number of samples in CI for speed
-              bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples 5 --cpus-per-trial 2 --output-dir "./tune_results"
+              # Use the determined number of samples
+              bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
             fi
           fi
           
