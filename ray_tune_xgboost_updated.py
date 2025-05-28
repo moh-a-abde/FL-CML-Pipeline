@@ -225,27 +225,16 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         logger.info(f"Training data size: {len(train_features)}")
         logger.info(f"Validation data size: {len(test_features)}")
     else:
-        # Fall back to original behavior with single file and splitting
-        logger.info(f"Loading data from {data_file}")
-        data = load_csv_data(data_file)["train"].to_pandas()
+        # Replace the old temporal splitting logic with consistent data loading
+        # Use the same data loading logic as the Ray Tune trials for consistency
+        from dataset import load_csv_data
         
-        # Ensure label column is correctly handled - case insensitive check
-        if 'label' not in data.columns and 'Label' in data.columns:
-            data['label'] = data['Label']
-            
-        # Use temporal splitting to avoid data leakage
-        from sklearn.model_selection import train_test_split as sklearn_split
+        logger.info("Loading data using consistent splitting logic...")
+        dataset = load_csv_data(data_file)
         
-        # Check if Stime column exists for temporal splitting
-        if 'Stime' in data.columns:
-            logger.info("Using temporal splitting based on Stime to avoid data leakage")
-            data_sorted = data.sort_values('Stime').reset_index(drop=True)
-            train_size = int(0.8 * len(data_sorted))
-            train_split_orig = data_sorted.iloc[:train_size].copy()
-            test_split_orig = data_sorted.iloc[train_size:].copy()
-        else:
-            logger.warning("No Stime column found, using random split")
-            train_split_orig, test_split_orig = sklearn_split(data, test_size=0.2, random_state=42)
+        # Extract the processed data and convert to pandas for compatibility
+        train_split_orig = dataset['train'].to_pandas()
+        test_split_orig = dataset['test'].to_pandas()
         
         # Load the global processor and transform data
         processor = load_global_feature_processor(processor_path)
