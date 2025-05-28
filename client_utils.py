@@ -171,21 +171,46 @@ class XgbClient(fl.client.Client):
             For bagging: returns only the last N trees
             For cyclic: returns the entire model
         """
-        # Update trees based on local training data
-        for i in range(self.num_local_round):
-            bst_input.update(self.train_dmatrix, bst_input.num_boosted_rounds())
-
-        # Handle model extraction based on training method
-        bst = (
-            bst_input[
-                bst_input.num_boosted_rounds()
-                - self.num_local_round : bst_input.num_boosted_rounds()
-            ]
-            if self.train_method == "bagging"
-            else bst_input
+        # Get training data with weights
+        y_train = self.train_dmatrix.get_label()
+        y_train_int = y_train.astype(int)
+        
+        # Compute sample weights for class imbalance
+        try:
+            sample_weights = compute_sample_weight('balanced', y_train_int)
+        except Exception as e:
+            log(INFO, f"Error computing sample weights in _local_boost: {e}. Using uniform weights.")
+            sample_weights = np.ones(len(y_train_int))
+            
+        # Create weighted DMatrix for local training
+        dtrain_weighted = xgb.DMatrix(
+            self.train_dmatrix.get_data(), 
+            label=y_train, 
+            weight=sample_weights, 
+            feature_names=self.train_dmatrix.feature_names
+        )
+        
+        # Use xgb.train with early stopping for better performance
+        bst = xgb.train(
+            self.params,
+            dtrain_weighted,
+            num_boost_round=self.num_local_round,
+            xgb_model=bst_input,  # Continue training from existing model
+            evals=[(self.valid_dmatrix, "validate"), (dtrain_weighted, "train")],
+            early_stopping_rounds=10,  # Reduced for faster convergence in FL
+            verbose_eval=False  # Reduced verbosity for performance
         )
 
-        return bst
+        # Handle model extraction based on training method
+        if self.train_method == "bagging":
+            # For bagging, extract only the last N trees
+            total_trees = bst.num_boosted_rounds()
+            start_tree = max(0, total_trees - self.num_local_round)
+            bst_extracted = bst[start_tree:total_trees]
+            return bst_extracted
+        else:
+            # For cyclic, return the entire model
+            return bst
 
     def fit(self, ins: FitIns) -> FitRes:
         """

@@ -256,16 +256,16 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
         # Default mapping for UNSW_NB15 multi-class predictions
         label_mapping = {
             0: 'Normal', 
-            1: 'Reconnaissance', 
-            2: 'Backdoor', 
-            3: 'DoS', 
-            4: 'Exploits', 
-            5: 'Analysis', 
-            6: 'Fuzzers', 
-            7: 'Worms', 
-            8: 'Shellcode', 
-            9: 'Generic',
-            10: 'Class_10'  # Added for the engineered dataset which has 11 classes
+            1: 'Generic', 
+            2: 'Exploits', 
+            3: 'Reconnaissance', 
+            4: 'Fuzzers', 
+            5: 'DoS', 
+            6: 'Analysis', 
+            7: 'Backdoor', 
+            8: 'Backdoors', 
+            9: 'Worms',
+            10: 'Shellcode'  # Added for the engineered dataset which has 11 classes
         }
         # Safely convert predictions to integers
         predictions_dict['prediction_type'] = [label_mapping.get(int(label), f'unknown_{label}') for label in predicted_labels]
