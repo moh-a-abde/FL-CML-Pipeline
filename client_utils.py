@@ -236,8 +236,8 @@ class XgbClient(fl.client.Client):
 
         class_counts = np.bincount(y_train_int)
         
-        # Log class distribution for all classes
-        class_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic']
+        # Log class distribution for all classes - FIXED: Match server mapping order
+        class_names = ['Normal', 'Generic', 'Exploits', 'Reconnaissance', 'Fuzzers', 'DoS', 'Analysis', 'Backdoor', 'Backdoors', 'Worms', 'Shellcode']
         for i, count in enumerate(class_counts):
             if i < len(class_names):
                 class_name = class_names[i]
@@ -245,23 +245,9 @@ class XgbClient(fl.client.Client):
                 class_name = f'unknown_{i}'
             log(INFO, f"Training data class {class_name}: {count}")
         
-        # --- Debugging Sample Weight Calculation ---
-        log(INFO, f"Type of y_train before weight calc: {type(y_train)}")
-        log(INFO, f"Shape of y_train: {y_train.shape if hasattr(y_train, 'shape') else 'N/A'}")
-        try:
-            log(INFO, f"Unique values in y_train: {np.unique(y_train)}")
-        except Exception as e:
-            log(INFO, f"Could not get unique values of y_train: {e}")
-            
-        log(INFO, f"Type of y_train_int: {type(y_train_int)}")
-        log(INFO, f"Shape of y_train_int: {y_train_int.shape}")
+        # --- Reduced Debugging for Performance ---
         log(INFO, f"Unique values in y_train_int: {np.unique(y_train_int)}")
-        log(INFO, f"dtype of y_train_int: {y_train_int.dtype}")
-        # Only log min/max if array is not empty
-        if y_train_int.size > 0:
-            log(INFO, f"Min/Max values in y_train_int: {np.min(y_train_int)} / {np.max(y_train_int)}")
-        else:
-            log(INFO, "y_train_int is empty, cannot calculate Min/Max.")
+        log(INFO, f"Min/Max values in y_train_int: {np.min(y_train_int)} / {np.max(y_train_int)}")
         # --- End Debugging ---
 
         # Compute sample weights for class imbalance
@@ -285,14 +271,14 @@ class XgbClient(fl.client.Client):
         global_round = int(ins.config["global_round"])
         
         if global_round == 1:
-            # First round: train from scratch with sample weights
+            # First round: train from scratch with sample weights - REDUCED early stopping for FL
             bst = xgb.train(
                 self.params,
                 dtrain_weighted,
                 num_boost_round=self.num_local_round,
                 evals=[(self.valid_dmatrix, "validate"), (dtrain_weighted, "train")],
-                early_stopping_rounds=20,
-                verbose_eval=True
+                early_stopping_rounds=10,  # Reduced from 20 for faster FL
+                verbose_eval=False  # Reduced verbosity for performance
             )
         else:
             # Subsequent rounds: update existing model
@@ -341,7 +327,7 @@ class XgbClient(fl.client.Client):
         
         # Log ground truth distribution
         true_counts = np.bincount(y_true.astype(int))
-        class_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic']
+        class_names = ['Normal', 'Generic', 'Exploits', 'Reconnaissance', 'Fuzzers', 'DoS', 'Analysis', 'Backdoor', 'Backdoors', 'Worms', 'Shellcode']
         num_classes_actual = len(class_names) # Or get from self.params if needed
         for i, count in enumerate(true_counts):
             if i < len(class_names):
