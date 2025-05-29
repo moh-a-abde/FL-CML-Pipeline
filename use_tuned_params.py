@@ -69,6 +69,18 @@ def create_xgboost_params(tuned_params):
         'reg_lambda': tuned_params['reg_lambda']
     })
     
+    # Add new hyperparameters if they exist in tuned_params
+    if 'gamma' in tuned_params:
+        xgb_params['gamma'] = tuned_params['gamma']
+    if 'scale_pos_weight' in tuned_params:
+        xgb_params['scale_pos_weight'] = tuned_params['scale_pos_weight']
+    if 'max_delta_step' in tuned_params:
+        xgb_params['max_delta_step'] = int(tuned_params['max_delta_step'])
+    if 'colsample_bylevel' in tuned_params:
+        xgb_params['colsample_bylevel'] = tuned_params['colsample_bylevel']
+    if 'colsample_bynode' in tuned_params:
+        xgb_params['colsample_bynode'] = tuned_params['colsample_bynode']
+    
     # Add num_boost_round if it exists in tuned_params
     if 'num_boost_round' in tuned_params:
         xgb_params['num_boost_round'] = int(tuned_params['num_boost_round'])  # Convert to int

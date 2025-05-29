@@ -5,6 +5,25 @@ This script implements Ray Tune for hyperparameter optimization of XGBoost model
 federated learning pipeline. It leverages the existing data processing pipeline while
 adding a tuning layer to find optimal hyperparameters.
 
+RECENT MAJOR IMPROVEMENTS FOR 90% ACCURACY TARGET:
+- Increased default number of samples from 10 to 150 for extensive exploration
+- Expanded hyperparameter search space with much wider ranges:
+  * max_depth: 3-15 (was 4-12)
+  * min_child_weight: 1-15 (was 1-10) 
+  * reg_alpha/reg_lambda: 0.001-50 (was 0.01-10)
+  * eta: 0.005-0.8 log-uniform (was 0.01-0.3 uniform)
+  * subsample: 0.5-1.0 (was 0.6-1.0)
+  * colsample_bytree: 0.4-1.0 (was 0.6-1.0)
+- Added new hyperparameters for comprehensive optimization:
+  * gamma: 0.001-10.0 (minimum loss reduction)
+  * scale_pos_weight: 0.1-10.0 (class balance)
+  * max_delta_step: 0-5 (conservative updates)
+  * colsample_bylevel: 0.5-1.0 (column sampling by level)
+  * colsample_bynode: 0.5-1.0 (column sampling by node)
+- Limited num_boost_round to 3-10 for quick testing (was 50-200)
+- Adjusted scheduler and early stopping for smaller boost rounds
+- Uses log-uniform distributions for better parameter exploration
+
 Key Components:
 - Ray Tune integration for hyperparameter search
 - XGBoost parameter space definition
@@ -109,8 +128,13 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
         'eta': config['eta'],
         'subsample': config['subsample'],
         'colsample_bytree': config['colsample_bytree'],
+        'colsample_bylevel': config.get('colsample_bylevel', 1.0),
+        'colsample_bynode': config.get('colsample_bynode', 1.0),
         'reg_alpha': config['reg_alpha'],
         'reg_lambda': config['reg_lambda'],
+        'gamma': config.get('gamma', 0.0),
+        'scale_pos_weight': config.get('scale_pos_weight', 1.0),
+        'max_delta_step': int(config.get('max_delta_step', 0)),
         
         # Fixed parameters for reproducibility
         'seed': 42
@@ -130,7 +154,7 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
         num_boost_round=int(config['num_boost_round']),
         evals=[(train_data, 'train'), (test_data, 'eval')],
         evals_result=results,
-        early_stopping_rounds=30,  # Stop if no improvement for 30 rounds
+        early_stopping_rounds=3,  # Reduced from 30 to 3 since max num_boost_round is only 10
         verbose_eval=False
     )
     
@@ -160,7 +184,7 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
         "accuracy": accuracy
     }
 
-def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=100, cpus_per_trial=1, gpu_fraction=None, output_dir="./tune_results"):
+def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=150, cpus_per_trial=1, gpu_fraction=None, output_dir="./tune_results"):
     """
     Run hyperparameter tuning for XGBoost using Ray Tune with consistent preprocessing.
     """
@@ -266,14 +290,19 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
 
     # Define the search space using hyperopt's hp module
     search_space = {
-        "max_depth": hp.quniform("max_depth", 4, 12, 1),            # Expanded range for deeper trees
-        "min_child_weight": hp.quniform("min_child_weight", 1, 10, 1),  # Reduced upper bound
-        "reg_alpha": hp.loguniform("reg_alpha", np.log(0.01), np.log(10.0)),
-        "reg_lambda": hp.loguniform("reg_lambda", np.log(0.01), np.log(10.0)),
-        "eta": hp.uniform("eta", 0.01, 0.3),                        # More practical learning rate range
-        "subsample": hp.uniform("subsample", 0.6, 1.0),             # Improved lower bound
-        "colsample_bytree": hp.uniform("colsample_bytree", 0.6, 1.0), # Improved lower bound
-        "num_boost_round": hp.quniform("num_boost_round", 50, 200, 10)  # CRITICAL FIX: Realistic range!
+        "max_depth": hp.quniform("max_depth", 3, 15, 1),            # Much wider range: 3-15 instead of 4-12
+        "min_child_weight": hp.quniform("min_child_weight", 1, 15, 1),  # Increased upper bound: 1-15 instead of 1-10
+        "reg_alpha": hp.loguniform("reg_alpha", np.log(0.001), np.log(50.0)), # Much wider range: 0.001-50 instead of 0.01-10
+        "reg_lambda": hp.loguniform("reg_lambda", np.log(0.001), np.log(50.0)), # Much wider range: 0.001-50 instead of 0.01-10
+        "eta": hp.loguniform("eta", np.log(0.005), np.log(0.8)),     # Wider range with log distribution: 0.005-0.8 instead of 0.01-0.3
+        "subsample": hp.uniform("subsample", 0.5, 1.0),             # Wider range: 0.5-1.0 instead of 0.6-1.0
+        "colsample_bytree": hp.uniform("colsample_bytree", 0.4, 1.0), # Wider range: 0.4-1.0 instead of 0.6-1.0
+        "gamma": hp.loguniform("gamma", np.log(0.001), np.log(10.0)), # Minimum loss reduction for split
+        "scale_pos_weight": hp.loguniform("scale_pos_weight", np.log(0.1), np.log(10.0)), # Balance class weights
+        "max_delta_step": hp.quniform("max_delta_step", 0, 5, 1),    # Conservative step for updates
+        "colsample_bylevel": hp.uniform("colsample_bylevel", 0.5, 1.0), # Column sampling by level
+        "colsample_bynode": hp.uniform("colsample_bynode", 0.5, 1.0),   # Column sampling by node
+        "num_boost_round": hp.quniform("num_boost_round", 3, 10, 1)  # LIMITED TO MAX 10 for quick testing: 3-10 instead of 50-200
     }
 
     if gpu_fraction is not None and gpu_fraction > 0:
@@ -297,8 +326,8 @@ def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=10
         mode="min"
     )
     scheduler = ASHAScheduler(
-        max_t=200,
-        grace_period=10,
+        max_t=10,        # Reduced from 200 to 10 since our max num_boost_round is 10
+        grace_period=3,  # Reduced from 10 to 3 for quicker elimination
         reduction_factor=2,
         metric="mlogloss",
         mode="min"
@@ -381,8 +410,13 @@ def train_final_model(config, train_features, train_labels, test_features, test_
         'eta': config['eta'],
         'subsample': config['subsample'],
         'colsample_bytree': config['colsample_bytree'],
+        'colsample_bylevel': config.get('colsample_bylevel', 1.0),
+        'colsample_bynode': config.get('colsample_bynode', 1.0),
         'reg_alpha': config['reg_alpha'],
         'reg_lambda': config['reg_lambda'],
+        'gamma': config.get('gamma', 0.0),
+        'scale_pos_weight': config.get('scale_pos_weight', 1.0),
+        'max_delta_step': int(config.get('max_delta_step', 0)),
         
         # Set the seed for reproducibility
         'seed': 42
@@ -401,7 +435,7 @@ def train_final_model(config, train_features, train_labels, test_features, test_
         num_boost_round=int(config['num_boost_round']),
         evals=[(train_data, 'train'), (test_data, 'eval')],
         evals_result=eval_results,
-        early_stopping_rounds=30,  # Stop if no improvement for 30 rounds
+        early_stopping_rounds=3,  # Reduced from 30 to 3 since max num_boost_round is only 10
         verbose_eval=True
     )
     
@@ -436,9 +470,9 @@ def main():
     parser.add_argument("--data-file", type=str, help="Path to single CSV data file (optional if train and test files are provided)")
     parser.add_argument("--train-file", type=str, help="Path to training CSV data file")
     parser.add_argument("--test-file", type=str, help="Path to testing CSV data file")
-    parser.add_argument("--num-samples", type=int, default=10, help="Number of hyperparameter combinations to try")
+    parser.add_argument("--num-samples", type=int, default=150, help="Number of hyperparameter combinations to try")
     parser.add_argument("--cpus-per-trial", type=int, default=1, help="CPUs per trial")
-    parser.add_argument("--gpu-fraction", type=float, default=None, help="GPU fraction per trial (0.1 for 10%)")
+    parser.add_argument("--gpu-fraction", type=float, default=None, help="GPU fraction per trial (0.1 for 10%%)")
     parser.add_argument("--output-dir", type=str, default="./tune_results", help="Output directory for results")
     args = parser.parse_args()
     

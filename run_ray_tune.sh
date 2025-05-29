@@ -5,7 +5,7 @@
 
 # Default values
 DATA_FILE="data/received/final_dataset.csv"
-NUM_SAMPLES=50
+NUM_SAMPLES=150
 CPUS_PER_TRIAL=2
 OUTPUT_DIR="./tune_results"
 TRAIN_FILE=""
