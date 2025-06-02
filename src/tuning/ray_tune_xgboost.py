@@ -26,6 +26,7 @@ import ray
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune.stopper import TrialPlateauStopper
+from ray.air import session
 
 # Scikit-learn imports  
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
@@ -268,7 +269,7 @@ class EnhancedXGBoostTrainer:
             final_eval_loss = evals_result['eval']['mlogloss'][-1]
             
             # Report metrics to Ray Tune
-            tune.report(
+            session.report(
                 accuracy=accuracy,
                 **{metric_name: main_metric},
                 train_loss=final_train_loss,
@@ -279,7 +280,7 @@ class EnhancedXGBoostTrainer:
         except Exception as e:
             print(f"Training failed with error: {e}")
             # Report poor performance for failed trials
-            tune.report(accuracy=0.0, f1_weighted=0.0, train_loss=float('inf'), eval_loss=float('inf'))
+            session.report(accuracy=0.0, f1_weighted=0.0, train_loss=float('inf'), eval_loss=float('inf'))
 
     def tune_hyperparameters(self):
         """Run hyperparameter tuning using Ray Tune."""
@@ -309,8 +310,7 @@ class EnhancedXGBoostTrainer:
         # Configure trial stopping criteria
         stopper = TrialPlateauStopper(
             metric="f1_weighted",
-            mode="max",
-            patience=10
+            mode="max"
         )
         
         print(f"Starting hyperparameter tuning with {self.num_samples} trials...")
@@ -543,7 +543,10 @@ def main():
             "eta": 0.1,
             "max_depth": 6,
             "min_child_weight": 1,
+            "subsample": 0.8,
             "colsample_bytree": 0.8,
+            "colsample_bylevel": 0.8,
+            "colsample_bynode": 0.8,
             "reg_alpha": 0.1,
             "reg_lambda": 1.0,
             "gamma": 0.0,

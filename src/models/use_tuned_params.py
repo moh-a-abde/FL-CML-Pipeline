@@ -104,14 +104,15 @@ def create_xgboost_params(tuned_params):
     xgb_params = get_default_model_params()
     
     # Update with tuned parameters - convert float values to ints for integer parameters
+    # Use .get() with defaults to handle missing parameters gracefully
     xgb_params.update({
-        'max_depth': int(tuned_params['max_depth']),  # HyperOpt returns float, convert to int
-        'min_child_weight': int(tuned_params['min_child_weight']),  # HyperOpt returns float, convert to int
-        'eta': tuned_params['eta'],  # Learning rate
-        'subsample': tuned_params['subsample'],
-        'colsample_bytree': tuned_params['colsample_bytree'],
-        'reg_alpha': tuned_params['reg_alpha'],
-        'reg_lambda': tuned_params['reg_lambda']
+        'max_depth': int(tuned_params.get('max_depth', 6)),
+        'min_child_weight': int(tuned_params.get('min_child_weight', 1)),
+        'eta': tuned_params.get('eta', 0.1),
+        'subsample': tuned_params.get('subsample', 0.8),
+        'colsample_bytree': tuned_params.get('colsample_bytree', 0.8),
+        'reg_alpha': tuned_params.get('reg_alpha', 0.1),
+        'reg_lambda': tuned_params.get('reg_lambda', 1.0)
     })
     
     # Add new hyperparameters if they exist in tuned_params
@@ -128,7 +129,7 @@ def create_xgboost_params(tuned_params):
     
     # Add num_boost_round if it exists in tuned_params
     if 'num_boost_round' in tuned_params:
-        xgb_params['num_boost_round'] = int(tuned_params['num_boost_round'])  # Convert to int
+        xgb_params['num_boost_round'] = int(tuned_params['num_boost_round'])
     
     # Add GPU support if specified in tuned parameters
     if 'tree_method' in tuned_params:
