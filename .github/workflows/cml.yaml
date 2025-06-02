@@ -124,8 +124,8 @@ jobs:
             # Create output directory for Ray Tune results
             mkdir -p tune_results
             
-            # Run Ray Tune with the final dataset for consistency
-            bash run_ray_tune.sh --data-file "$FINAL_DATASET" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
+            # Run Ray Tune with the final dataset for consistency (updated path)
+            bash scripts/run_ray_tune.sh --data-file "$FINAL_DATASET" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
             
           else
             echo "Final dataset not found at $FINAL_DATASET, checking for fallback data..."
@@ -139,7 +139,7 @@ jobs:
               echo "Using UNSW_NB15 data files for hyperparameter tuning"
               # Create output directory for Ray Tune results
               mkdir -p tune_results
-              bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
+              bash scripts/run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
             else
               echo "No suitable data found, creating synthetic data for testing"
               
@@ -169,14 +169,14 @@ jobs:
               # Create output directory for Ray Tune results
               mkdir -p tune_results
               
-              # Use the determined number of samples
-              bash run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
+              # Use the determined number of samples (updated path)
+              bash scripts/run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
             fi
           fi
           
-          # Apply the tuned parameters to the federated learning system
+          # Apply the tuned parameters to the federated learning system (updated path)
           if [ -f "tune_results/best_params.json" ]; then
-            python use_tuned_params.py --params-file "./tune_results/best_params.json"
+            python src/models/use_tuned_params.py --params-file "./tune_results/best_params.json"
             echo "Successfully applied tuned parameters to federated learning"
           else
             echo "Warning: No tuned parameters found, will use default parameters"
@@ -189,8 +189,8 @@ jobs:
           # Create output directories to ensure they exist
           mkdir -p outputs results tune_results
           
-          # Run the federated learning with tuned parameters
-          ./run_bagging.sh
+          # Run the federated learning with tuned parameters (updated path)
+          bash scripts/run_bagging.sh
           
           # List what was created for debugging
           echo "Contents of outputs directory:"

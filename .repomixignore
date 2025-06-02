@@ -19,3 +19,4 @@ tune_results/
 __pycache__/
 .cache/ 
 .cursor/
+.repomixignore

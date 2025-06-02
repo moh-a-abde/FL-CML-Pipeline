@@ -59,7 +59,7 @@ def main(cfg: DictConfig) -> None:
     # Step 1: Create global feature processor
     log(INFO, "Step 1: Creating global feature processor for consistent preprocessing")
     if not run_command([
-        "python", "create_global_processor.py",
+        "python", "src/core/create_global_processor.py",
         "--data-file", data_file_path,
         "--output-dir", config.outputs.base_dir,
         "--force"
@@ -71,7 +71,7 @@ def main(cfg: DictConfig) -> None:
     if config.tuning.enabled:
         log(INFO, "Step 2: Running hyperparameter tuning with consistent preprocessing")
         tuning_command = [
-            "python", "ray_tune_xgboost_updated.py",
+            "python", "src/tuning/ray_tune_xgboost.py",
             "--data-file", data_file_path,
             "--num-samples", str(config.tuning.num_samples),
             "--cpus-per-trial", str(config.tuning.cpus_per_trial),
@@ -84,7 +84,7 @@ def main(cfg: DictConfig) -> None:
         # Step 3: Generate tuned parameters file
         log(INFO, "Step 3: Generating tuned parameters file")
         if not run_command([
-            "python", "use_tuned_params.py"
+            "python", "src/models/use_tuned_params.py"
         ], "Tuned parameters generation"):
             log(INFO, "Failed to generate tuned parameters. Using default parameters.")
     else:

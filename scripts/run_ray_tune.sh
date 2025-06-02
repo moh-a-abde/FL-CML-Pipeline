@@ -56,7 +56,7 @@ if [[ -n "$TRAIN_FILE" && -f "$TRAIN_FILE" ]]; then
     PROCESSOR_DATA_FILE="$TRAIN_FILE"
 fi
 
-python create_global_processor.py \
+python src/core/create_global_processor.py \
     --data-file "$PROCESSOR_DATA_FILE" \
     --output-dir "outputs" \
     --force
@@ -72,7 +72,7 @@ echo "Global feature processor created successfully."
 echo "Step 2: Running Ray Tune optimization..."
 
 # Build the Python command based on available files
-PYTHON_CMD="python ray_tune_xgboost_updated.py"
+PYTHON_CMD="python src/tuning/ray_tune_xgboost.py"
 PYTHON_CMD="$PYTHON_CMD --num-samples $NUM_SAMPLES"
 PYTHON_CMD="$PYTHON_CMD --cpus-per-trial $CPUS_PER_TRIAL"
 PYTHON_CMD="$PYTHON_CMD --output-dir \"$OUTPUT_DIR\""
@@ -97,7 +97,7 @@ echo "Ray Tune optimization completed successfully."
 
 # Step 3: Generate updated parameters file
 echo "Step 3: Generating tuned parameters file..."
-python use_tuned_params.py
+python src/models/use_tuned_params.py
 
 if [ $? -ne 0 ]; then
     echo "Failed to generate tuned parameters. Continuing anyway."
