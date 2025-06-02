@@ -10,9 +10,16 @@ Usage:
 """
 
 import os
+import sys
 import json
 import argparse
 import logging
+
+# Add project root directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(current_dir))  # Go up two levels to project root
+sys.path.insert(0, project_root)
+
 from src.config.config_manager import ConfigManager
 
 # Configure logging

@@ -32,8 +32,10 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from sklearn.model_selection import StratifiedKFold
 from sklearn.utils.class_weight import compute_class_weight
 
-# Add parent directory to path for local imports
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add project root directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(current_dir))  # Go up two levels to project root
+sys.path.insert(0, project_root)
 
 # Import local modules
 from src.core.dataset import load_csv_data, transform_dataset_to_dmatrix, create_global_feature_processor, load_global_feature_processor

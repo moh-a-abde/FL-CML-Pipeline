@@ -10,9 +10,10 @@ import argparse
 import os
 import sys
 
-# Add current directory to path for imports
+# Add project root directory to path for imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(current_dir)
+project_root = os.path.dirname(os.path.dirname(current_dir))  # Go up two levels to project root
+sys.path.insert(0, project_root)
 
 # Import local modules
 from src.core.dataset import create_global_feature_processor, load_global_feature_processor

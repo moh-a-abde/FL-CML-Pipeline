@@ -328,7 +328,7 @@ class ConfigManager:
             'colsample_bylevel': model_params.colsample_bylevel,
             'nthread': model_params.nthread,
             'tree_method': model_params.tree_method,
-            'eval_metric': model_params.eval_metric,
+            'eval_metric': 'mlogloss',
             'max_delta_step': model_params.max_delta_step,
             'reg_alpha': model_params.reg_alpha,
             'reg_lambda': model_params.reg_lambda,

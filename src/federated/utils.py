@@ -515,10 +515,17 @@ def get_evaluate_fn(test_data, config_manager=None):
                 }
             
             bst = xgb.Booster(params=model_params)
+            para_b = None
             for para in parameters.tensors:
                 para_b = bytearray(para)
-
-            bst.load_model(para_b)
+                break  # Take the first parameter tensor
+            
+            if para_b is not None:
+                bst.load_model(para_b)
+            else:
+                # No parameters provided, create a new model with default params
+                log(WARNING, "No model parameters provided, using fresh model")
+                bst = xgb.Booster(params=model_params)
             
             # Get predictions
             y_pred_proba = bst.predict(test_data)

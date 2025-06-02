@@ -47,7 +47,7 @@ def get_default_model_params():
     return {
         'objective': 'multi:softprob',  # Multi-class classification with probabilities
         'num_class': 11,  # Classes: 0-10 (Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic, plus class 10)
-        'eval_metric': ['mlogloss', 'merror'],  # Multi-class metrics
+        'eval_metric': 'mlogloss',  # Use single metric instead of list
         'learning_rate': 0.05,
         'max_depth': 6,
         'min_child_weight': 1,

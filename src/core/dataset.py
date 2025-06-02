@@ -705,4 +705,28 @@ def load_global_feature_processor(processor_path: str) -> FeatureProcessor:
         raise
     except Exception as e:
         log(ERROR, f"Error loading feature processor: {e}")
-        raise 
+        raise
+
+def separate_xy(data):
+    """
+    Separate features (X) and labels (y) from a dataset.
+    This is a convenience function that wraps preprocess_data.
+    
+    Args:
+        data: Input dataset (pandas DataFrame or Hugging Face Dataset)
+        
+    Returns:
+        tuple: (features, labels) where features is a numpy array and labels is a numpy array
+    """
+    # Convert Hugging Face Dataset to pandas DataFrame if needed
+    if not isinstance(data, pd.DataFrame):
+        data = data.to_pandas()
+    
+    # Use preprocess_data to get features and labels
+    features, labels = preprocess_data(data, processor=None, is_training=False)
+    
+    # Convert to numpy arrays for compatibility with existing code
+    features_array = features.values if features is not None else None
+    labels_array = labels.values if labels is not None else None
+    
+    return features_array, labels_array 

@@ -1,10 +1,16 @@
 import warnings
 import os
+import sys
 from logging import INFO
 import xgboost as xgb
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
+
+# Add project root directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(current_dir))  # Go up two levels to project root
+sys.path.insert(0, project_root)
 
 import flwr as fl
 from flwr.common.logger import log
@@ -34,8 +40,6 @@ except ImportError:
     logging.getLogger(__name__).info("Using NUM_LOCAL_ROUND from ConfigManager")
 
 from src.federated.utils import (
-    create_simulation_partitions,
-    ServerUtilities,
     setup_output_directory,
     eval_config,
     fit_config,
@@ -43,7 +47,7 @@ from src.federated.utils import (
     get_evaluate_fn,
     CyclicClientManager
 )
-from .client_utils import XgbClient
+from src.federated.client_utils import XgbClient
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -81,6 +85,7 @@ def get_client_fn(
             num_train,
             num_val,
             num_local_round,
+            cid,
             params,
             train_method,
         )

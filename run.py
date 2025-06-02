@@ -11,6 +11,7 @@ This script ensures that:
 
 import subprocess
 import sys
+import os
 import hydra
 from omegaconf import DictConfig
 from flwr.common.logger import log
@@ -22,8 +23,16 @@ def run_command(command, description):
     log(INFO, "Running: %s", description)
     log(INFO, "Command: %s", " ".join(command))
     
+    # Set up environment with PYTHONPATH to include project root
+    env = os.environ.copy()
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    if 'PYTHONPATH' in env:
+        env['PYTHONPATH'] = f"{project_root}:{env['PYTHONPATH']}"
+    else:
+        env['PYTHONPATH'] = project_root
+    
     try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        result = subprocess.run(command, check=True, capture_output=True, text=True, env=env)
         log(INFO, "✓ %s completed successfully", description)
         if result.stdout:
             log(INFO, "Output: %s", result.stdout.strip())
