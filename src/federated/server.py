@@ -31,25 +31,13 @@ from src.federated.utils import (
     save_results_pickle,
     reset_metrics_history,
     should_stop_early,
+    save_evaluation_results,
+    save_predictions_to_csv,
+    METRICS_HISTORY
 )
 
 # Import dataset and utility functions
 from src.core.dataset import transform_dataset_to_dmatrix, load_csv_data, FeatureProcessor, create_global_feature_processor, load_global_feature_processor
-
-from src.federated.utils import (
-    make_and_save_prediction,
-    send_prediction_to_server,
-    save_predictions_to_csv,
-    wait_for_predictions,
-    calculate_and_log_final_metrics,
-    evaluate_model_on_test_data,
-    save_and_export_model,
-    create_xgb_dmatrix,
-    METRICS_HISTORY,
-    class_accuracies_list,
-    weighted_avg_metrics_list
-)
-from src.federated.utils import save_evaluation_results
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
