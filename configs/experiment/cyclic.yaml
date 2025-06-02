@@ -1,0 +1,51 @@
+# @package _global_
+# Cyclic Federated Learning Experiment Configuration
+
+# Override base configuration for cyclic training
+federated:
+  train_method: "cyclic"
+  
+  # Cyclic-specific server settings
+  pool_size: 3  # Smaller pool for cyclic training
+  num_rounds: 30  # More rounds needed for cyclic convergence
+  num_clients_per_round: 1  # Only one client trains per round in cyclic
+  num_evaluate_clients: 3  # All clients evaluate
+  centralised_eval: false  # Use distributed evaluation for cyclic
+  
+  # Cyclic training uses all available clients sequentially
+  fraction_fit: 1.0
+  fraction_evaluate: 1.0
+
+# Disable hyperparameter tuning for cyclic (uses defaults)
+tuning:
+  enabled: false
+  num_samples: 30
+  cpus_per_trial: 1  # Less resources needed
+
+# Pipeline steps for cyclic experiment (skip tuning)
+pipeline:
+  steps:
+    - create_global_processor
+    - generate_tuned_params  # Use existing tuned params if available
+    - federated_learning
+
+# More conservative early stopping for cyclic
+early_stopping:
+  enabled: true
+  patience: 10  # More patience needed for cyclic convergence
+  min_delta: 0.0005  # Smaller delta for cyclic
+
+# Model adjustments for cyclic training
+model:
+  num_local_rounds: 10  # Fewer local rounds per client in cyclic
+  params:
+    eta: 0.1  # Higher learning rate for cyclic training
+    max_depth: 6  # Slightly shallower trees
+
+# Logging for cyclic experiment
+logging:
+  level: INFO
+
+# Outputs for cyclic experiment
+outputs:
+  experiment_name: "cyclic_federated_learning" 

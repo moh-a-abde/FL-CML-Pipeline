@@ -1,0 +1,46 @@
+# @package _global_
+# Development/Testing Configuration
+# Quick settings for testing during development
+
+# Override base configuration for development testing
+federated:
+  train_method: "bagging"
+  
+  # Minimal settings for quick testing
+  pool_size: 2
+  num_rounds: 3  # Very few rounds for quick testing
+  num_clients_per_round: 2
+  num_evaluate_clients: 2
+  centralised_eval: true
+
+# Minimal hyperparameter tuning for testing
+tuning:
+  enabled: false  # Disable tuning in dev mode
+  num_samples: 5
+  cpus_per_trial: 1
+
+# Minimal model settings
+model:
+  num_local_rounds: 5  # Fewer local rounds
+  params:
+    max_depth: 3  # Shallow trees for fast training
+    num_boost_round: 10  # Very few boosting rounds
+
+# Pipeline steps for development (minimal)
+pipeline:
+  steps:
+    - create_global_processor
+    - federated_learning  # Skip tuning for speed
+
+# No early stopping in dev mode
+early_stopping:
+  enabled: false
+
+# Debug logging
+logging:
+  level: DEBUG
+
+# Outputs for development
+outputs:
+  experiment_name: "development_testing"
+  create_timestamped_dirs: false  # Reuse same output dir 

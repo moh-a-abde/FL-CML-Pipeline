@@ -1,0 +1,52 @@
+# @package _global_
+# Bagging Federated Learning Experiment Configuration
+
+# Override base configuration for bagging training
+federated:
+  train_method: "bagging"
+  
+  # Bagging-specific server settings
+  pool_size: 5
+  num_rounds: 20  # More rounds for bagging convergence
+  num_clients_per_round: 5
+  num_evaluate_clients: 5
+  centralised_eval: true
+  
+  # Bagging works well with more clients per round
+  fraction_fit: 1.0
+  fraction_evaluate: 1.0
+
+# Enable hyperparameter tuning for bagging experiments
+tuning:
+  enabled: true
+  num_samples: 50
+  cpus_per_trial: 2
+  
+  # ASHA scheduler works well for bagging
+  scheduler:
+    type: "ASHA"
+    max_t: 200
+    grace_period: 50
+    reduction_factor: 3
+
+# Pipeline steps for bagging experiment
+pipeline:
+  steps:
+    - create_global_processor
+    - hyperparameter_tuning
+    - generate_tuned_params
+    - federated_learning
+
+# Early stopping is more aggressive for bagging
+early_stopping:
+  enabled: true
+  patience: 5  # More patience for bagging
+  min_delta: 0.001
+
+# Logging for bagging experiment
+logging:
+  level: INFO
+
+# Outputs for bagging experiment
+outputs:
+  experiment_name: "bagging_federated_learning" 

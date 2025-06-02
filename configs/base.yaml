@@ -1,0 +1,112 @@
+# FL-CML-Pipeline Base Configuration
+# This file consolidates all configuration options from legacy argument parsers
+
+defaults:
+  - _self_
+
+# Data configuration
+data:
+  path: ${hydra:runtime.cwd}/data/received
+  filename: final_dataset.csv
+  train_test_split: 0.8
+  stratified: true
+  temporal_window_size: 1000
+  seed: 42
+
+# Model configuration (XGBoost parameters from BST_PARAMS)
+model:
+  type: xgboost
+  num_local_rounds: 20
+  params:
+    objective: "multi:softprob"
+    num_class: 11
+    eta: 0.05
+    max_depth: 8
+    min_child_weight: 5
+    gamma: 0.5
+    subsample: 0.8
+    colsample_bytree: 0.8
+    colsample_bylevel: 0.8
+    nthread: 16
+    tree_method: "hist"
+    eval_metric: ["mlogloss", "merror"]
+    max_delta_step: 1
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    base_score: 0.5
+    scale_pos_weight: 1.0
+    grow_policy: "depthwise"
+    normalize_type: "tree"
+    random_state: 42
+
+# Federated learning configuration
+federated:
+  train_method: "bagging"  # choices: ["bagging", "cyclic"]
+  
+  # Server configuration
+  pool_size: 5
+  num_rounds: 5
+  num_clients_per_round: 5
+  num_evaluate_clients: 5
+  centralised_eval: true
+  
+  # Client configuration
+  num_partitions: 10
+  partitioner_type: "uniform"  # choices: ["uniform", "linear", "square", "exponential"]
+  test_fraction: 0.2
+  scaled_lr: false
+  
+  # Simulation specific
+  num_cpus_per_client: 2
+
+# Hyperparameter tuning configuration
+tuning:
+  enabled: false
+  num_samples: 30
+  cpus_per_trial: 2
+  max_concurrent_trials: 4
+  output_dir: "./tune_results"
+  
+  # Ray Tune scheduler
+  scheduler:
+    type: "ASHA"
+    max_t: 200
+    grace_period: 50
+    reduction_factor: 3
+
+# Pipeline configuration
+pipeline:
+  steps:
+    - create_global_processor
+    - hyperparameter_tuning  # optional based on tuning.enabled
+    - generate_tuned_params
+    - federated_learning
+  
+  # Step-specific configurations
+  global_processor:
+    force_recreate: true
+    output_dir: "outputs"
+  
+  preprocessing:
+    consistent_across_phases: true
+    global_processor_path: null  # Will be set dynamically
+
+# Logging configuration
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: ${hydra:runtime.cwd}/logs/${now:%Y-%m-%d_%H-%M-%S}.log
+
+# Output configuration  
+outputs:
+  base_dir: ${hydra:runtime.cwd}/outputs
+  create_timestamped_dirs: true
+  save_results_pickle: true
+  save_model: true
+  generate_visualizations: true
+
+# Early stopping configuration
+early_stopping:
+  enabled: true
+  patience: 3
+  min_delta: 0.001 
