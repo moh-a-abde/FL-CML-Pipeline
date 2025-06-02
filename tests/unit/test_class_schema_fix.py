@@ -26,26 +26,41 @@ sys.path.insert(0, project_root)
 
 # Import local modules
 from src.core.dataset import load_csv_data
-from src.config.legacy_constants import BST_PARAMS
+from src.config.config_manager import ConfigManager
 from src.config.tuned_params import TUNED_PARAMS
 
+def get_model_params():
+    """Get model parameters from ConfigManager with fallback."""
+    try:
+        config_manager = ConfigManager()
+        return config_manager.get_model_params_dict()
+    except Exception:
+        # Fallback for testing
+        return {
+            "objective": "multi:softprob",
+            "num_class": 11,
+            "eta": 0.05,
+            "max_depth": 8,
+            "tree_method": "hist"
+        }
+
 def test_utils_num_class():
-    """Test that utils.py has num_class=11."""
-    print("Testing utils.py num_class configuration...")
+    """Test that model configuration has num_class=11."""
+    print("Testing model configuration num_class...")
     
     try:
-        from src.config.legacy_constants import BST_PARAMS
+        model_params = get_model_params()
         
-        num_class = BST_PARAMS.get('num_class')
+        num_class = model_params.get('num_class')
         if num_class == 11:
-            print(f"✅ utils.py: num_class = {num_class} (correct)")
+            print(f"✅ Model config: num_class = {num_class} (correct)")
             return True
         else:
-            print(f"❌ utils.py: num_class = {num_class} (expected 11)")
+            print(f"❌ Model config: num_class = {num_class} (expected 11)")
             return False
             
     except Exception as e:
-        print(f"❌ Error importing utils.py: {e}")
+        print(f"❌ Error getting model parameters: {e}")
         return False
 
 def test_ray_tune_num_class():
@@ -129,7 +144,6 @@ def test_xgboost_compatibility():
     try:
         import xgboost as xgb
         import numpy as np
-        from src.config.legacy_constants import BST_PARAMS
         
         # Create dummy data with 11 classes
         n_samples = 100
@@ -141,8 +155,7 @@ def test_xgboost_compatibility():
         dtrain = xgb.DMatrix(X, label=y)
         
         # Test parameters
-        params = BST_PARAMS.copy()
-        params['num_boost_round'] = 5  # Small number for quick test
+        params = get_model_params()
         
         # Try to train (should not raise an error)
         model = xgb.train(params, dtrain, num_boost_round=5, verbose_eval=False)

@@ -8,7 +8,6 @@ from flwr.common import Parameters, Scalar
 from flwr.server.client_manager import SimpleClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.criterion import Criterion
-from src.config.legacy_constants import BST_PARAMS
 import os
 import json
 import shutil
@@ -306,12 +305,13 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     
     return output_path
 
-def load_saved_model(model_path):
+def load_saved_model(model_path, config_manager=None):
     """
     Load a saved XGBoost model from disk.
     
     Args:
         model_path (str): Path to the saved model file (.json or .bin)
+        config_manager (ConfigManager, optional): ConfigManager instance for getting model parameters
         
     Returns:
         xgb.Booster: Loaded XGBoost model
@@ -345,9 +345,19 @@ def load_saved_model(model_path):
         except Exception as e2:
             log(INFO, "Error loading model using bytearray: %s", str(e2))
             
-            # If that fails too, try with params
+            # If that fails too, try with params from ConfigManager
             try:
-                bst = xgb.Booster(params=BST_PARAMS)
+                if config_manager is not None:
+                    model_params = config_manager.get_model_params_dict()
+                    bst = xgb.Booster(params=model_params)
+                else:
+                    # Fallback to basic params if no ConfigManager available
+                    basic_params = {
+                        "objective": "multi:softprob",
+                        "num_class": 11,
+                        "tree_method": "hist"
+                    }
+                    bst = xgb.Booster(params=basic_params)
                 bst.load_model(model_path)
                 log(INFO, "Model loaded successfully with params")
                 return bst
@@ -355,9 +365,9 @@ def load_saved_model(model_path):
                 log(INFO, "All loading attempts failed")
                 raise ValueError(f"Failed to load model: {str(e)}, {str(e2)}, {str(e3)}")
 
-def predict_with_saved_model(model_path, dmatrix, output_path):
+def predict_with_saved_model(model_path, dmatrix, output_path, config_manager=None):
     # Load the model
-    model = load_saved_model(model_path)
+    model = load_saved_model(model_path, config_manager)
     
     # Make predictions
     raw_predictions = model.predict(dmatrix)
@@ -484,7 +494,7 @@ def predict_with_saved_model(model_path, dmatrix, output_path):
     
     return predictions
 
-def get_evaluate_fn(test_data):
+def get_evaluate_fn(test_data, config_manager=None):
     """Return a function for centralised evaluation."""
 
     def evaluate_model(
@@ -493,7 +503,18 @@ def get_evaluate_fn(test_data):
         if server_round == 0:
             return 0, {}
         else:
-            bst = xgb.Booster(params=BST_PARAMS)
+            # Get model parameters from ConfigManager if available
+            if config_manager is not None:
+                model_params = config_manager.get_model_params_dict()
+            else:
+                # Fallback to basic params if no ConfigManager available
+                model_params = {
+                    "objective": "multi:softprob",
+                    "num_class": 11,
+                    "tree_method": "hist"
+                }
+            
+            bst = xgb.Booster(params=model_params)
             for para in parameters.tensors:
                 para_b = bytearray(para)
 
@@ -527,9 +548,9 @@ def get_evaluate_fn(test_data):
                      # Note: XGBoost predict() with multi:softmax directly gives labels.
                      # To get probabilities, the objective might need to be multi:softprob
                      log(WARNING, "Predict output seems 1D, attempting to handle for multi-class probability plots...")
-                     if BST_PARAMS.get('objective') == 'multi:softmax':
+                     if model_params.get('objective') == 'multi:softmax':
                          # Create dummy probabilities centered around the predicted class
-                         num_classes = BST_PARAMS.get('num_class', 11) # Default to 11 if not set
+                         num_classes = model_params.get('num_class', 11) # Default to 11 if not set
                          pred_proba = np.zeros((len(predictions), num_classes))
                          for i, label in enumerate(predictions):
                              if 0 <= int(label) < num_classes: # Check bounds
@@ -551,14 +572,14 @@ def get_evaluate_fn(test_data):
                  except Exception as e:
                      log(WARNING, f"Error processing probabilities: {e}. ROC/PR plots skipped.")
                      pred_proba = None
-            elif pred_proba.shape[1] != BST_PARAMS.get('num_class', 11):
-                 log(WARNING, f"Probability shape mismatch ({pred_proba.shape[1]} columns vs {BST_PARAMS.get('num_class', 11)} classes). Plots may fail.")
+            elif pred_proba.shape[1] != model_params.get('num_class', 11):
+                 log(WARNING, f"Probability shape mismatch ({pred_proba.shape[1]} columns vs {model_params.get('num_class', 11)} classes). Plots may fail.")
                  # Attempt to proceed, but plots requiring probabilities might error out
 
             # Calculate metrics
             # Ensure y_test is integer type for log_loss if using one-hot encoding
             y_test_int = y_true.astype(int)
-            num_classes_actual = BST_PARAMS.get('num_class', 11)
+            num_classes_actual = model_params.get('num_class', 11)
 
             if pred_proba is not None and len(pred_proba.shape) > 1 and pred_proba.shape[1] == num_classes_actual:
                  try:

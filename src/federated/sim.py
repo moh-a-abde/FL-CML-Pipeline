@@ -21,13 +21,7 @@ from src.core.dataset import (
     create_global_feature_processor,
     load_global_feature_processor,
 )
-from src.config.legacy_constants import (
-    client_args_parser,
-    BST_PARAMS,
-    NUM_CLIENTS,
-    server_args_parser,
-    dataset_path
-)
+from src.config.config_manager import get_config_manager, load_config
 
 # Try to import NUM_LOCAL_ROUND from tuned_params if available, otherwise from utils
 try:
@@ -35,16 +29,21 @@ try:
     import logging
     logging.getLogger(__name__).info("Using NUM_LOCAL_ROUND from tuned_params.py")
 except ImportError:
-    from src.config.legacy_constants import NUM_LOCAL_ROUND
+    # We'll use the value from ConfigManager instead
     import logging
-    logging.getLogger(__name__).info("Using default NUM_LOCAL_ROUND from utils.py")
+    logging.getLogger(__name__).info("Using NUM_LOCAL_ROUND from ConfigManager")
 
 from src.federated.utils import (
     create_simulation_partitions,
     ServerUtilities,
-    setup_output_directory
+    setup_output_directory,
+    eval_config,
+    fit_config,
+    evaluate_metrics_aggregation,
+    get_evaluate_fn,
+    CyclicClientManager
 )
-from client_utils import XgbClient
+from .client_utils import XgbClient
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -89,22 +88,34 @@ def get_client_fn(
     return client_fn
 
 def main():
-    # Parse arguments for experimental settings
-    args = sim_args_parser()
-
+    # Load configuration using ConfigManager
+    log(INFO, "Loading configuration for federated simulation...")
+    config = load_config()  # Load base configuration
+    
+    log(INFO, "Configuration loaded successfully:")
+    log(INFO, "Training method: %s", config.federated.train_method)
+    log(INFO, "Pool size: %d", config.federated.pool_size)
+    log(INFO, "Number of rounds: %d", config.federated.num_rounds)
+    log(INFO, "Clients per round: %d", config.federated.num_clients_per_round)
+    log(INFO, "Centralized evaluation: %s", config.federated.centralised_eval)
+    log(INFO, "Partitioner type: %s", config.federated.partitioner_type)
+    
+    # Get data file path
+    csv_file_path = os.path.join(config.data.path, config.data.filename)
+    log(INFO, "Loading dataset from: %s", csv_file_path)
+    
     # Load CSV dataset
-    csv_file_path = "data/shuffled_merged.csv"
-    #csv_file_path = get_latest_csv("/home/mohamed/Desktop/test_repo/data")
     dataset = load_csv_data(csv_file_path)
 
     # Conduct partitioning
     partitioner = instantiate_partitioner(
-        partitioner_type=args.partitioner_type, num_partitions=args.pool_size
+        partitioner_type=config.federated.partitioner_type, 
+        num_partitions=config.federated.pool_size
     )
     fds = dataset
 
     # Load centralised test set
-    if args.centralised_eval or args.centralised_eval_client:
+    if config.federated.centralised_eval:
         log(INFO, "Loading centralised test set...")
         test_data = fds["test"]
         test_data.set_format("numpy")
@@ -118,12 +129,12 @@ def main():
 
     # Load and process all client partitions. This upfront cost is amortized soon
     # after the simulation begins since clients wont need to preprocess their partition.
-    for partition_id in tqdm(range(args.pool_size), desc="Extracting client partition"):
+    for partition_id in tqdm(range(config.federated.pool_size), desc="Extracting client partition"):
         # Extract partition for client with partition_id
         partition = fds["train"]
         partition.set_format("numpy")
 
-        if args.centralised_eval_client:
+        if config.federated.centralised_eval:
             # Use centralised test set for evaluation
             train_data = partition
             num_train = train_data.shape[0]
@@ -132,7 +143,7 @@ def main():
         else:
             # Train/test splitting
             train_data, valid_data, num_train, num_val = train_test_split(
-                partition, test_fraction=args.test_fraction, seed=args.seed
+                partition, test_fraction=config.federated.test_fraction, seed=config.data.seed
             )
             x_valid, y_valid = separate_xy(valid_data)
             valid_data_list.append(((x_valid, y_valid), num_val))
@@ -141,30 +152,30 @@ def main():
         train_data_list.append(((x_train, y_train), num_train))
 
     # Define strategy
-    if args.train_method == "bagging":
+    if config.federated.train_method == "bagging":
         # Bagging training
         strategy = FedXgbBagging(
             evaluate_function=(
-                get_evaluate_fn(test_dmatrix) if args.centralised_eval else None
+                get_evaluate_fn(test_dmatrix) if config.federated.centralised_eval else None
             ),
-            fraction_fit=(float(args.num_clients_per_round) / args.pool_size),
-            min_fit_clients=args.num_clients_per_round,
-            min_available_clients=args.pool_size,
+            fraction_fit=(float(config.federated.num_clients_per_round) / config.federated.pool_size),
+            min_fit_clients=config.federated.num_clients_per_round,
+            min_available_clients=config.federated.pool_size,
             min_evaluate_clients=(
-                args.num_evaluate_clients if not args.centralised_eval else 0
+                config.federated.num_evaluate_clients if not config.federated.centralised_eval else 0
             ),
-            fraction_evaluate=1.0 if not args.centralised_eval else 0.0,
+            fraction_evaluate=1.0 if not config.federated.centralised_eval else 0.0,
             on_evaluate_config_fn=eval_config,
             on_fit_config_fn=fit_config,
             evaluate_metrics_aggregation_fn=(
-                evaluate_metrics_aggregation if not args.centralised_eval else None
+                evaluate_metrics_aggregation if not config.federated.centralised_eval else None
             ),
         )
     else:
         # Cyclic training
         strategy = FedXgbCyclic(
             fraction_fit=1.0,
-            min_available_clients=args.pool_size,
+            min_available_clients=config.federated.pool_size,
             fraction_evaluate=1.0,
             evaluate_metrics_aggregation_fn=evaluate_metrics_aggregation,
             on_evaluate_config_fn=eval_config,
@@ -174,34 +185,43 @@ def main():
     # Resources to be assigned to each virtual client
     # In this example we use CPU by default
     client_resources = {
-        "num_cpus": args.num_cpus_per_client,
+        "num_cpus": config.federated.num_cpus_per_client,
         "num_gpus": 0.0,
     }
 
     # Hyper-parameters for xgboost training
-    num_local_round = NUM_LOCAL_ROUND
-    params = BST_PARAMS
+    num_local_round = config.model.num_local_rounds
+    
+    # Get model parameters from ConfigManager
+    config_manager = get_config_manager()
+    config_manager._config = config  # Set the config in manager
+    params = config_manager.get_model_params_dict()
 
     # Setup learning rate
-    if args.train_method == "bagging" and args.scaled_lr:
-        new_lr = params["eta"] / args.pool_size
+    if config.federated.train_method == "bagging" and config.federated.scaled_lr:
+        new_lr = params["eta"] / config.federated.pool_size
         params.update({"eta": new_lr})
+        log(INFO, "Scaled learning rate applied: %f", new_lr)
 
+    log(INFO, "Starting simulation with %d rounds...", config.federated.num_rounds)
+    
     # Start simulation
     fl.simulation.start_simulation(
         client_fn=get_client_fn(
             train_data_list,
             valid_data_list,
-            args.train_method,
+            config.federated.train_method,
             params,
             num_local_round,
         ),
-        num_clients=args.pool_size,
+        num_clients=config.federated.pool_size,
         client_resources=client_resources,
-        config=fl.server.ServerConfig(num_rounds=args.num_rounds),
+        config=fl.server.ServerConfig(num_rounds=config.federated.num_rounds),
         strategy=strategy,
-        client_manager=CyclicClientManager() if args.train_method == "cyclic" else None,
+        client_manager=CyclicClientManager() if config.federated.train_method == "cyclic" else None,
     )
+    
+    log(INFO, "Simulation completed successfully!")
 
 if __name__ == "__main__":
     main()

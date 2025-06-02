@@ -36,37 +36,52 @@ from src.federated.utils import save_predictions_to_csv
 import importlib.util
 from sklearn.utils.class_weight import compute_sample_weight
 
-# Default XGBoost parameters for UNSW_NB15 multi-class classification
-BST_PARAMS = {
-    'objective': 'multi:softprob',  # Multi-class classification with probabilities
-    'num_class': 11,  # Classes: 0-10 (Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic, plus class 10)
-    'eval_metric': ['mlogloss', 'merror'],  # Multi-class metrics
-    'learning_rate': 0.05,
-    'max_depth': 6,
-    'min_child_weight': 1,
-    'subsample': 0.8,
-    'colsample_bytree': 0.8,
-    'scale_pos_weight': 1.0  # Removed class-specific weights as it's not compatible with multi-class with >3 classes
-}
 
-# Try to import tuned parameters if available
-try:
-    # Check if tuned_params.py exists
-    tuned_params_path = os.path.join(os.path.dirname(__file__), "tuned_params.py")
-    if os.path.exists(tuned_params_path):
-        # Dynamically import the tuned parameters
-        spec = importlib.util.spec_from_file_location("tuned_params", tuned_params_path)
-        tuned_params_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(tuned_params_module)
-        
-        # Use the tuned parameters
-        TUNED_PARAMS = tuned_params_module.TUNED_PARAMS
-        log(INFO, "Using tuned XGBoost parameters from Ray Tune optimization")
-    else:
-        TUNED_PARAMS = BST_PARAMS.copy()
-except Exception as e:
-    log(INFO, f"Could not load tuned parameters: {str(e)}")
-    TUNED_PARAMS = BST_PARAMS.copy()
+def get_default_model_params():
+    """
+    Get default XGBoost parameters for UNSW_NB15 multi-class classification.
+    
+    Returns:
+        dict: Default XGBoost parameters
+    """
+    return {
+        'objective': 'multi:softprob',  # Multi-class classification with probabilities
+        'num_class': 11,  # Classes: 0-10 (Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic, plus class 10)
+        'eval_metric': ['mlogloss', 'merror'],  # Multi-class metrics
+        'learning_rate': 0.05,
+        'max_depth': 6,
+        'min_child_weight': 1,
+        'subsample': 0.8,
+        'colsample_bytree': 0.8,
+        'scale_pos_weight': 1.0  # Removed class-specific weights as it's not compatible with multi-class with >3 classes
+    }
+
+
+def load_tuned_params():
+    """
+    Try to load tuned parameters if available.
+    
+    Returns:
+        dict: Tuned parameters if available, else default parameters
+    """
+    try:
+        # Check if tuned_params.py exists
+        tuned_params_path = os.path.join(os.path.dirname(__file__), "tuned_params.py")
+        if os.path.exists(tuned_params_path):
+            # Dynamically import the tuned parameters
+            spec = importlib.util.spec_from_file_location("tuned_params", tuned_params_path)
+            tuned_params_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(tuned_params_module)
+            
+            # Use the tuned parameters
+            log(INFO, "Using tuned XGBoost parameters from Ray Tune optimization")
+            return tuned_params_module.TUNED_PARAMS
+        else:
+            return get_default_model_params()
+    except Exception as e:
+        log(INFO, f"Could not load tuned parameters: {str(e)}")
+        return get_default_model_params()
+
 
 class XgbClient(fl.client.Client):
     """
@@ -100,7 +115,8 @@ class XgbClient(fl.client.Client):
         train_method="cyclic",
         is_prediction_only=False,
         unlabeled_dmatrix=None,
-        use_tuned_params=True
+        use_tuned_params=True,
+        config_manager=None
     ):
         """
         Initialize the XGBoost Flower client.
@@ -112,11 +128,12 @@ class XgbClient(fl.client.Client):
             num_val (int): Number of validation samples
             num_local_round (int): Number of local training rounds
             cid: Client ID for logging purposes
-            params (dict): XGBoost parameters (defaults to BST_PARAMS if None)
+            params (dict): XGBoost parameters (defaults to ConfigManager or fallback if None)
             train_method (str): Training method ('bagging' or 'cyclic')
             is_prediction_only (bool): Flag indicating if the client is used for prediction only
             unlabeled_dmatrix: Unlabeled data in DMatrix format
             use_tuned_params (bool): Whether to use tuned parameters if available
+            config_manager (ConfigManager): ConfigManager instance for getting model parameters
         """
         self.train_dmatrix = train_dmatrix
         self.valid_dmatrix = valid_dmatrix
@@ -125,14 +142,16 @@ class XgbClient(fl.client.Client):
         self.num_local_round = num_local_round
         self.cid = cid
         
-        # Use tuned parameters if available and requested
+        # Set model parameters based on priority: provided params > ConfigManager > tuned params > defaults
         if params is not None:
             self.params = params
+        elif config_manager is not None:
+            self.params = config_manager.get_model_params_dict()
+            log(INFO, "Using XGBoost parameters from ConfigManager")
         elif use_tuned_params:
-            self.params = TUNED_PARAMS.copy()
-            log(INFO, "Using tuned parameters for XGBoost training")
+            self.params = load_tuned_params()
         else:
-            self.params = BST_PARAMS.copy()
+            self.params = get_default_model_params()
             
         self.train_method = train_method
         self.is_prediction_only = is_prediction_only

@@ -13,7 +13,7 @@ import os
 import json
 import argparse
 import logging
-from src.config.legacy_constants import BST_PARAMS
+from src.config.config_manager import ConfigManager
 
 # Configure logging
 logging.basicConfig(
@@ -21,6 +21,43 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+def get_default_model_params():
+    """
+    Get default model parameters using ConfigManager or fallback values.
+    
+    Returns:
+        dict: Default XGBoost parameters
+    """
+    try:
+        # Try to get parameters from ConfigManager
+        config_manager = ConfigManager()
+        return config_manager.get_model_params_dict()
+    except (ImportError, AttributeError, ValueError, KeyError) as e:
+        logger.warning("Could not load parameters from ConfigManager: %s", e)
+        # Fallback to hardcoded defaults
+        return {
+            "objective": "multi:softprob",
+            "num_class": 11,
+            "eta": 0.05,
+            "max_depth": 8,
+            "min_child_weight": 5,
+            "gamma": 0.5,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "colsample_bylevel": 0.8,
+            "nthread": 16,
+            "tree_method": "hist",
+            "eval_metric": ["mlogloss", "merror"],
+            "max_delta_step": 1,
+            "reg_alpha": 0.1,
+            "reg_lambda": 1.0,
+            "base_score": 0.5,
+            "scale_pos_weight": 1.0,
+            "grow_policy": "depthwise",
+            "normalize_type": "tree",
+            "random_state": 42
+        }
 
 def load_tuned_params(params_file):
     """
@@ -34,10 +71,10 @@ def load_tuned_params(params_file):
     """
     if not os.path.exists(params_file):
         if params_file == "./tune_results/best_params.json":
-            logger.error(f"Default parameters file not found: {params_file}")
+            logger.error("Default parameters file not found: %s", params_file)
             logger.error("This usually means Ray Tune hasn't been run yet or completed successfully.")
             logger.error("Please run the Ray Tune optimization first or specify a different --params-file")
-        raise FileNotFoundError(f"Parameters file not found: {params_file}")
+        raise FileNotFoundError("Parameters file not found: %s" % params_file)
     
     logger.info("Loading optimized parameters from %s", params_file)
     with open(params_file, 'r', encoding='utf-8') as f:
@@ -55,8 +92,8 @@ def create_xgboost_params(tuned_params):
     Returns:
         dict: XGBoost parameters dictionary for use in the existing system
     """
-    # Start with the base parameters
-    xgb_params = BST_PARAMS.copy()
+    # Start with the base parameters from ConfigManager or defaults
+    xgb_params = get_default_model_params()
     
     # Update with tuned parameters - convert float values to ints for integer parameters
     xgb_params.update({
@@ -131,14 +168,15 @@ def save_updated_params(params, output_file):
 
 def backup_original_params():
     """
-    Backup the original parameters to a Python file for reference.
+    Backup the original parameters to a JSON file for reference.
     
     Returns:
         str: Path to the backup file
     """
     backup_file = "original_bst_params.json"
+    original_params = get_default_model_params()
     with open(backup_file, 'w', encoding='utf-8') as f:
-        json.dump(BST_PARAMS, f, indent=2)
+        json.dump(original_params, f, indent=2)
     
     logger.info("Original parameters backed up to %s", backup_file)
     return backup_file

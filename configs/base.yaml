@@ -3,10 +3,11 @@
 
 defaults:
   - _self_
+  # No default experiment - will be specified by ConfigManager
 
 # Data configuration
 data:
-  path: ${hydra:runtime.cwd}/data/received
+  path: ./data/received  # Changed from ${hydra:runtime.cwd}/data/received to avoid interpolation issues
   filename: final_dataset.csv
   train_test_split: 0.8
   stratified: true
@@ -95,11 +96,11 @@ pipeline:
 logging:
   level: INFO
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-  file: ${hydra:runtime.cwd}/logs/${now:%Y-%m-%d_%H-%M-%S}.log
+  file: ./logs/fl-cml-pipeline.log  # Changed from ${hydra:runtime.cwd}/logs/${now:%Y-%m-%d_%H-%M-%S}.log
 
 # Output configuration  
 outputs:
-  base_dir: ${hydra:runtime.cwd}/outputs
+  base_dir: ./outputs  # Changed from ${hydra:runtime.cwd}/outputs
   create_timestamped_dirs: true
   save_results_pickle: true
   save_model: true

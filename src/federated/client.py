@@ -34,25 +34,25 @@ from src.core.dataset import (
     instantiate_partitioner,
 )
 from datasets import Dataset
-from src.config.legacy_constants import client_args_parser, BST_PARAMS
+from src.config.config_manager import get_config_manager, load_config
 from .client_utils import XGBClient
 
-def load_data(client_id: int, data_file: str, partition_type: str = "uniform", 
-              num_clients: int = 2, global_processor_path: str = None) -> Tuple[xgb.DMatrix, xgb.DMatrix, FeatureProcessor]:
+def load_data(client_id: int, config, global_processor_path: str = None) -> Tuple[xgb.DMatrix, xgb.DMatrix, FeatureProcessor]:
     """
     Load and partition data for a specific client.
     
     Args:
         client_id (int): The ID of the client (0-indexed)
-        data_file (str): Path to the data file
-        partition_type (str): Type of data partitioning ("uniform", "linear", "square", "exponential")
-        num_clients (int): Total number of clients
+        config: Configuration object from ConfigManager
         global_processor_path (str): Path to the global feature processor
         
     Returns:
         Tuple[xgb.DMatrix, xgb.DMatrix, FeatureProcessor]: Training data, test data, and processor
     """
     log(INFO, f"Loading data for client {client_id}")
+    
+    # Get data file path from config
+    data_file = os.path.join(config.data.path, config.data.filename)
     
     # Load global feature processor if available
     processor = None
@@ -66,7 +66,10 @@ def load_data(client_id: int, data_file: str, partition_type: str = "uniform",
     dataset = load_csv_data(data_file)
     
     # Create partitioner
-    partitioner = instantiate_partitioner(partition_type, num_clients)
+    partitioner = instantiate_partitioner(
+        config.federated.partitioner_type, 
+        config.federated.num_partitions
+    )
     
     # Apply the partitioner to the dataset
     partitioner.dataset = dataset
@@ -86,40 +89,28 @@ def load_data(client_id: int, data_file: str, partition_type: str = "uniform",
     
     return train_data, test_data, processor
 
-def start_client(
-    server_address: str,
-    client_id: int,
-    data_file: str,
-    partition_type: str = "uniform",
-    num_clients: int = 2,
-    global_processor_path: str = None,
-    use_https: bool = False
-):
+def start_client(config, client_id: int, global_processor_path: str = None, use_https: bool = False):
     """
     Start a Flower client for federated XGBoost learning.
     
     Args:
-        server_address (str): Address of the Flower server
+        config: Configuration object from ConfigManager
         client_id (int): Unique identifier for this client
-        data_file (str): Path to the training data file
-        partition_type (str): Type of data partitioning
-        num_clients (int): Total number of clients in the federation
         global_processor_path (str): Path to the global feature processor
         use_https (bool): Whether to use HTTPS for server communication
     """
     log(INFO, f"Starting client {client_id}")
-    log(INFO, f"Server address: {server_address}")
-    log(INFO, f"Data file: {data_file}")
-    log(INFO, f"Partition type: {partition_type}")
-    log(INFO, f"Number of clients: {num_clients}")
+    log(INFO, f"Server address: 0.0.0.0:8080")  # Default server address
+    log(INFO, f"Data path: {config.data.path}")
+    log(INFO, f"Data filename: {config.data.filename}")
+    log(INFO, f"Partition type: {config.federated.partitioner_type}")
+    log(INFO, f"Number of partitions: {config.federated.num_partitions}")
     log(INFO, f"Global processor: {global_processor_path}")
     
     # Load client data
     train_data, test_data, processor = load_data(
         client_id=client_id,
-        data_file=data_file,
-        partition_type=partition_type,
-        num_clients=num_clients,
+        config=config,
         global_processor_path=global_processor_path
     )
     
@@ -132,6 +123,7 @@ def start_client(
     )
     
     # Connect to server
+    server_address = "0.0.0.0:8080"  # Default server address
     if use_https:
         fl.client.start_client(
             server_address=server_address,
@@ -147,37 +139,44 @@ def start_client(
 def main():
     """Main function to start the federated learning client."""
     
-    # Parse command line arguments
-    args = client_args_parser()
+    # Load configuration using ConfigManager
+    log(INFO, "Loading configuration for federated client...")
+    config = load_config()  # Load base configuration
     
-    log(INFO, f"Starting Federated XGBoost Client {args.client_id}")
-    log(INFO, f"Arguments: {vars(args)}")
+    log(INFO, "Configuration loaded successfully:")
+    log(INFO, "Data path: %s", config.data.path)
+    log(INFO, "Data filename: %s", config.data.filename)
+    log(INFO, "Partition type: %s", config.federated.partitioner_type)
+    log(INFO, "Number of partitions: %d", config.federated.num_partitions)
+    
+    # For demonstration, start client 0 (in real deployment, this would be passed as argument)
+    client_id = 0  # This could be passed as environment variable or command line arg
     
     # Validate data file exists
-    if not os.path.exists(args.data_file):
-        log(ERROR, f"Data file not found: {args.data_file}")
+    data_file = os.path.join(config.data.path, config.data.filename)
+    if not os.path.exists(data_file):
+        log(ERROR, f"Data file not found: {data_file}")
         return
     
+    # Set up global processor path
+    global_processor_path = os.path.join(config.outputs.base_dir, "global_feature_processor.pkl")
+    
     # Create global processor if it doesn't exist
-    if args.global_processor_path:
-        processor_dir = os.path.dirname(args.global_processor_path)
-        if not os.path.exists(processor_dir):
-            os.makedirs(processor_dir, exist_ok=True)
-        
-        if not os.path.exists(args.global_processor_path):
-            log(INFO, f"Creating global feature processor at {args.global_processor_path}")
-            create_global_feature_processor(args.data_file, processor_dir)
+    processor_dir = os.path.dirname(global_processor_path)
+    if not os.path.exists(processor_dir):
+        os.makedirs(processor_dir, exist_ok=True)
+    
+    if not os.path.exists(global_processor_path):
+        log(INFO, f"Creating global feature processor at {global_processor_path}")
+        create_global_feature_processor(data_file, processor_dir)
     
     # Start the client
     try:
         start_client(
-            server_address=args.server_address,
-            client_id=args.client_id,
-            data_file=args.data_file,
-            partition_type=args.partition_type,
-            num_clients=args.num_clients,
-            global_processor_path=args.global_processor_path,
-            use_https=args.use_https
+            config=config,
+            client_id=client_id,
+            global_processor_path=global_processor_path,
+            use_https=False
         )
     except KeyboardInterrupt:
         log(INFO, "Client stopped by user")

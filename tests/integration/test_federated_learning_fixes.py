@@ -175,32 +175,40 @@ def test_server_integration():
     return all_passed
 
 def test_bst_params_consistency():
-    """Test that BST_PARAMS in utils.py has been updated with better defaults."""
-    print("\nTesting BST_PARAMS configuration...")
+    """Test that model parameters have been updated with better defaults."""
+    print("\nTesting model parameters configuration...")
     
     try:
-        from src.config.legacy_constants import BST_PARAMS
+        # Import ConfigManager to get current model parameters
+        from src.config.config_manager import ConfigManager
         
-        checks = [
-            ('num_class', BST_PARAMS.get('num_class') == 11, f"Expected 11, got {BST_PARAMS.get('num_class')}"),
-            ('eta reasonable', 0.01 <= BST_PARAMS.get('eta', 0) <= 0.3, f"eta = {BST_PARAMS.get('eta')}"),
-            ('max_depth increased', BST_PARAMS.get('max_depth', 0) >= 8, f"max_depth = {BST_PARAMS.get('max_depth')}"),
-            ('subsample increased', BST_PARAMS.get('subsample', 0) >= 0.8, f"subsample = {BST_PARAMS.get('subsample')}"),
-            ('colsample_bytree increased', BST_PARAMS.get('colsample_bytree', 0) >= 0.8, f"colsample_bytree = {BST_PARAMS.get('colsample_bytree')}"),
+        config_manager = ConfigManager()
+        model_params = config_manager.get_model_params_dict()
+        
+        # Test key parameters
+        tests = [
+            ('num_class', model_params.get('num_class') == 11, f"Expected 11, got {model_params.get('num_class')}"),
+            ('eta reasonable', 0.01 <= model_params.get('eta', 0) <= 0.3, f"eta = {model_params.get('eta')}"),
+            ('max_depth increased', model_params.get('max_depth', 0) >= 8, f"max_depth = {model_params.get('max_depth')}"),
+            ('subsample increased', model_params.get('subsample', 0) >= 0.8, f"subsample = {model_params.get('subsample')}"),
+            ('colsample_bytree increased', model_params.get('colsample_bytree', 0) >= 0.8, f"colsample_bytree = {model_params.get('colsample_bytree')}"),
         ]
         
         all_passed = True
-        for check_name, condition, details in checks:
+        for test_name, condition, detail in tests:
             if condition:
-                print(f"✅ {check_name}: {details}")
+                print(f"✅ {test_name}: {detail}")
             else:
-                print(f"❌ {check_name}: {details}")
+                print(f"❌ {test_name}: {detail}")
                 all_passed = False
         
         return all_passed
         
     except ImportError as e:
-        print(f"❌ Failed to import BST_PARAMS: {e}")
+        print(f"❌ Failed to import ConfigManager: {e}")
+        return False
+    except (AttributeError, ValueError, KeyError, TypeError) as e:
+        print(f"❌ Failed to get model parameters: {e}")
         return False
 
 def run_all_tests():

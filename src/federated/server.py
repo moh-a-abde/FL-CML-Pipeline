@@ -20,7 +20,7 @@ from flwr.common import Parameters, FitRes, EvaluateRes, parameters_to_ndarrays,
 from flwr.server.strategy import FedXgbBagging, FedXgbCyclic
 from flwr.server.client_proxy import ClientProxy
 
-from src.config.legacy_constants import server_args_parser, BST_PARAMS
+from src.config.config_manager import get_config_manager, load_config
 from src.federated.utils import (
     eval_config,
     fit_config,
@@ -41,24 +41,39 @@ from src.core.dataset import transform_dataset_to_dmatrix, load_csv_data, Featur
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
+# Load configuration using ConfigManager
+log(INFO, "Loading configuration for federated server...")
+config = load_config()  # Load base configuration
+
+log(INFO, "Configuration loaded successfully:")
+log(INFO, "Training method: %s", config.federated.train_method)
+log(INFO, "Pool size: %d", config.federated.pool_size)
+log(INFO, "Number of rounds: %d", config.federated.num_rounds)
+log(INFO, "Clients per round: %d", config.federated.num_clients_per_round)
+log(INFO, "Centralized evaluation: %s", config.federated.centralised_eval)
+
+# Get configuration values for server
+train_method = config.federated.train_method
+pool_size = config.federated.pool_size
+num_rounds = config.federated.num_rounds
+num_clients_per_round = config.federated.num_clients_per_round
+num_evaluate_clients = config.federated.num_evaluate_clients
+centralised_eval = config.federated.centralised_eval
+
+# Get model parameters from ConfigManager
+config_manager = get_config_manager()
+config_manager._config = config  # Set the config in manager
+BST_PARAMS = config_manager.get_model_params_dict()
+
 # Create output directory structure
 output_dir = setup_output_directory()
 
 # Reset metrics history for new training run
 reset_metrics_history()
 
-# Parse arguments for experimental settings
-args = server_args_parser()
-train_method = args.train_method
-pool_size = args.pool_size
-num_rounds = args.num_rounds
-num_clients_per_round = args.num_clients_per_round
-num_evaluate_clients = args.num_evaluate_clients
-centralised_eval = args.centralised_eval
-
 # Create global feature processor before starting federated learning
 log(INFO, "Creating global feature processor for consistent preprocessing across all clients...")
-test_csv_path = "data/received/final_dataset.csv"
+test_csv_path = os.path.join(config.data.path, config.data.filename)
 global_processor_path = create_global_feature_processor(test_csv_path, output_dir)
 global_processor = load_global_feature_processor(global_processor_path)
 
