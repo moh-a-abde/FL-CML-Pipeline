@@ -39,8 +39,9 @@ def get_default_model_params():
     try:
         # Try to get parameters from ConfigManager
         config_manager = ConfigManager()
+        config_manager.load_config()  # Load the configuration first
         return config_manager.get_model_params_dict()
-    except (ImportError, AttributeError, ValueError, KeyError) as e:
+    except (ImportError, AttributeError, ValueError, KeyError, RuntimeError) as e:
         logger.warning("Could not load parameters from ConfigManager: %s", e)
         # Fallback to hardcoded defaults
         return {
@@ -55,7 +56,7 @@ def get_default_model_params():
             "colsample_bylevel": 0.8,
             "nthread": 16,
             "tree_method": "hist",
-            "eval_metric": ["mlogloss", "merror"],
+            "eval_metric": "mlogloss",
             "max_delta_step": 1,
             "reg_alpha": 0.1,
             "reg_lambda": 1.0,

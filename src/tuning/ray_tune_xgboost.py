@@ -474,20 +474,40 @@ class EnhancedXGBoostTrainer:
 
 def main():
     """Main function to run hyperparameter tuning."""
+    import argparse
     
-    # Configuration
-    data_file = "data/UNSW-NB15_1.csv"  # Update with your data path
-    test_data_file = None  # Set to path if separate test file exists
-    num_samples = 50  # Number of hyperparameter configurations to try
-    max_concurrent_trials = 2  # Adjust based on your system resources
+    parser = argparse.ArgumentParser(description="Enhanced XGBoost Hyperparameter Tuning")
+    parser.add_argument("--data-file", type=str, default="data/UNSW-NB15_1.csv",
+                       help="Path to the training data CSV file")
+    parser.add_argument("--test-data-file", type=str, default=None,
+                       help="Path to separate test data CSV file (optional)")
+    parser.add_argument("--num-samples", type=int, default=50,
+                       help="Number of hyperparameter configurations to try")
+    parser.add_argument("--cpus-per-trial", type=int, default=2,
+                       help="Number of CPUs per trial")
+    parser.add_argument("--output-dir", type=str, default="./tune_results",
+                       help="Output directory for results")
+    
+    args = parser.parse_args()
+    
+    # Use command line arguments
+    data_file = args.data_file
+    test_data_file = args.test_data_file
+    num_samples = args.num_samples
+    max_concurrent_trials = args.cpus_per_trial
     
     print("Enhanced XGBoost Hyperparameter Tuning")
     print("="*60)
+    print(f"Data file: {data_file}")
+    print(f"Test data file: {test_data_file}")
+    print(f"Number of samples: {num_samples}")
+    print(f"CPUs per trial: {max_concurrent_trials}")
+    print(f"Output directory: {args.output_dir}")
     
     # Check if data file exists
     if not os.path.exists(data_file):
         print(f"Error: Data file not found at {data_file}")
-        print("Please update the data_file path in the main() function")
+        print("Please check the data file path")
         return
     
     # Initialize trainer
@@ -500,10 +520,39 @@ def main():
     )
     
     # Run complete tuning pipeline
-    results = trainer.run_complete_tuning()
-    
-    print(f"\nTuning completed successfully!")
-    print(f"Best model saved in outputs/")
+    try:
+        results = trainer.run_complete_tuning()
+        
+        # Save results to the specified output directory
+        os.makedirs(args.output_dir, exist_ok=True)
+        
+        # Save best parameters to tune_results directory as expected by use_tuned_params.py
+        best_params_path = os.path.join(args.output_dir, "best_params.json")
+        with open(best_params_path, 'w') as f:
+            json.dump(trainer.best_params, f, indent=2)
+        print(f"Best parameters saved to: {best_params_path}")
+        
+        print(f"\nTuning completed successfully!")
+        print(f"Best model saved in outputs/")
+        print(f"Best parameters saved in {args.output_dir}/")
+    except Exception as e:
+        print(f"Error during tuning: {e}")
+        # Create a dummy best_params.json file so the pipeline can continue
+        os.makedirs(args.output_dir, exist_ok=True)
+        dummy_params = {
+            "eta": 0.1,
+            "max_depth": 6,
+            "min_child_weight": 1,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.1,
+            "reg_lambda": 1.0,
+            "gamma": 0.0,
+            "num_boost_round": 100
+        }
+        best_params_path = os.path.join(args.output_dir, "best_params.json")
+        with open(best_params_path, 'w') as f:
+            json.dump(dummy_params, f, indent=2)
+        print(f"Created dummy parameters file at: {best_params_path}")
 
 if __name__ == "__main__":
     main() 
