@@ -8,7 +8,7 @@ from flwr.common import Parameters, Scalar
 from flwr.server.client_manager import SimpleClientManager
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.criterion import Criterion
-from utils import BST_PARAMS
+from src.config.legacy_constants import BST_PARAMS
 import os
 import json
 import shutil
@@ -346,7 +346,6 @@ def load_saved_model(model_path):
             
             # If that fails too, try with params
             try:
-                from utils import BST_PARAMS
                 bst = xgb.Booster(params=BST_PARAMS)
                 bst.load_model(model_path)
                 log(INFO, "Model loaded successfully with params")

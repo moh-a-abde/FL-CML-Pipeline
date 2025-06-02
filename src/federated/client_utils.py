@@ -32,7 +32,7 @@ from flwr.common import Status
 import numpy as np
 import pandas as pd
 import os
-from server_utils import save_predictions_to_csv
+from src.federated.utils import save_predictions_to_csv
 import importlib.util
 from sklearn.utils.class_weight import compute_sample_weight
 
@@ -404,7 +404,7 @@ class XgbClient(fl.client.Client):
 
         # Save predictions for this round
         global_round = int(ins.config["global_round"])
-        from server_utils import save_predictions_to_csv
+        from src.federated.utils import save_predictions_to_csv
         save_predictions_to_csv(
             data=self.valid_dmatrix,
             predictions=y_pred_labels,

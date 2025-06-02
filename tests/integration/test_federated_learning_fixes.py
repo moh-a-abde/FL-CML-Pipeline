@@ -18,7 +18,7 @@ def test_num_local_round_increased():
     
     # Import utils to check NUM_LOCAL_ROUND
     try:
-        from utils import NUM_LOCAL_ROUND
+        from src.config.legacy_constants import NUM_LOCAL_ROUND
         
         if NUM_LOCAL_ROUND >= 20:
             print(f"✅ NUM_LOCAL_ROUND = {NUM_LOCAL_ROUND} (increased from 2)")
@@ -74,7 +74,7 @@ def test_early_stopping_functions():
     print("\nTesting early stopping functionality...")
     
     try:
-        from server_utils import (
+        from src.federated.utils import (
             check_convergence, 
             reset_metrics_history, 
             add_metrics_to_history, 
@@ -179,7 +179,7 @@ def test_bst_params_consistency():
     print("\nTesting BST_PARAMS configuration...")
     
     try:
-        from utils import BST_PARAMS
+        from src.config.legacy_constants import BST_PARAMS
         
         checks = [
             ('num_class', BST_PARAMS.get('num_class') == 11, f"Expected 11, got {BST_PARAMS.get('num_class')}"),

@@ -14,6 +14,8 @@ import sys
 import numpy as np
 from hyperopt import hp
 import xgboost as xgb
+from src.config.legacy_constants import BST_PARAMS
+from src.config.tuned_params import TUNED_PARAMS, NUM_LOCAL_ROUND
 
 def test_search_space():
     """Test that the search space has realistic ranges"""
@@ -29,8 +31,6 @@ def test_search_space():
 def test_bst_params_consistency():
     """Test that BST_PARAMS has consistent values"""
     print("\nTesting BST_PARAMS consistency...")
-    
-    from utils import BST_PARAMS
     
     # Check num_class is 10
     assert BST_PARAMS["num_class"] == 10, f"num_class should be 10, got {BST_PARAMS['num_class']}"
@@ -100,8 +100,6 @@ def test_tuned_params_consistency():
     print("\nTesting tuned_params.py consistency...")
     
     if os.path.exists('tuned_params.py'):
-        from tuned_params import TUNED_PARAMS, NUM_LOCAL_ROUND
-        
         # Check num_class consistency
         if 'num_class' in TUNED_PARAMS:
             assert TUNED_PARAMS['num_class'] == 10, f"tuned_params num_class should be 10, got {TUNED_PARAMS['num_class']}"

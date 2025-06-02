@@ -26,13 +26,15 @@ sys.path.insert(0, project_root)
 
 # Import local modules
 from src.core.dataset import load_csv_data
+from src.config.legacy_constants import BST_PARAMS
+from src.config.tuned_params import TUNED_PARAMS
 
 def test_utils_num_class():
     """Test that utils.py has num_class=11."""
     print("Testing utils.py num_class configuration...")
     
     try:
-        from utils import BST_PARAMS
+        from src.config.legacy_constants import BST_PARAMS
         
         num_class = BST_PARAMS.get('num_class')
         if num_class == 11:
@@ -52,7 +54,7 @@ def test_ray_tune_num_class():
     
     try:
         # Read the file and check for num_class: 11
-        with open('ray_tune_xgboost_updated.py', 'r') as f:
+        with open('src/tuning/ray_tune_xgboost.py', 'r') as f:
             content = f.read()
             
         # Count occurrences of num_class: 11
@@ -75,7 +77,7 @@ def test_tuned_params_num_class():
     print("Testing tuned_params.py num_class configuration...")
     
     try:
-        from tuned_params import TUNED_PARAMS
+        from src.config.tuned_params import TUNED_PARAMS
         
         num_class = TUNED_PARAMS.get('num_class')
         if num_class == 11:
@@ -127,7 +129,7 @@ def test_xgboost_compatibility():
     try:
         import xgboost as xgb
         import numpy as np
-        from utils import BST_PARAMS
+        from src.config.legacy_constants import BST_PARAMS
         
         # Create dummy data with 11 classes
         n_samples = 100
@@ -167,7 +169,7 @@ def test_client_utils_consistency():
     
     try:
         # Read the file and check for num_class
-        with open('client_utils.py', 'r') as f:
+        with open('src/federated/client_utils.py', 'r') as f:
             content = f.read()
             
         if "'num_class': 11" in content:

@@ -20,8 +20,8 @@ from flwr.common import Parameters, FitRes, EvaluateRes, parameters_to_ndarrays,
 from flwr.server.strategy import FedXgbBagging, FedXgbCyclic
 from flwr.server.client_proxy import ClientProxy
 
-from utils import server_args_parser, BST_PARAMS
-from server_utils import (
+from src.config.legacy_constants import server_args_parser, BST_PARAMS
+from src.federated.utils import (
     eval_config,
     fit_config,
     evaluate_metrics_aggregation,
@@ -35,6 +35,21 @@ from server_utils import (
 
 # Import dataset and utility functions
 from src.core.dataset import transform_dataset_to_dmatrix, load_csv_data, FeatureProcessor, create_global_feature_processor, load_global_feature_processor
+
+from src.federated.utils import (
+    make_and_save_prediction,
+    send_prediction_to_server,
+    save_predictions_to_csv,
+    wait_for_predictions,
+    calculate_and_log_final_metrics,
+    evaluate_model_on_test_data,
+    save_and_export_model,
+    create_xgb_dmatrix,
+    METRICS_HISTORY,
+    class_accuracies_list,
+    weighted_avg_metrics_list
+)
+from src.federated.utils import save_evaluation_results
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -348,19 +363,7 @@ else:
 
 # Also save the final evaluation results
 if hasattr(history, 'metrics_distributed') and history.metrics_distributed:
-    from server_utils import save_evaluation_results
-    final_round = num_rounds
-    
-    # Check if metrics_distributed is a dictionary or a list
-    if isinstance(history.metrics_distributed, dict):
-        final_metrics = history.metrics_distributed
-    elif isinstance(history.metrics_distributed, list) and len(history.metrics_distributed) > 0:
-        final_metrics = history.metrics_distributed[-1][1]  # Get the metrics from the last round
-    else:
-        final_metrics = {}
-        log(INFO, "No metrics available to save")
-    
-    save_evaluation_results(final_metrics, final_round, output_dir)
+    save_evaluation_results(history.metrics_distributed[-1][1], num_rounds, output_dir)
 else:
     log(INFO, "No metrics available to save")
 
@@ -376,7 +379,7 @@ if centralised_eval and hasattr(global_processor, 'unique_labels'):
     log(INFO, "Using class names from engineered dataset: %s", CLASS_NAMES)
 
 # Import visualization functions and other necessary modules
-from visualization_utils import (
+from src.utils.visualization import (
     plot_learning_curves,
     plot_confusion_matrix as vis_plot_confusion_matrix, # Alias to avoid conflict
     plot_roc_curves,

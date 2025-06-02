@@ -34,7 +34,7 @@ from src.core.dataset import (
     instantiate_partitioner,
 )
 from datasets import Dataset
-from utils import client_args_parser, BST_PARAMS
+from src.config.legacy_constants import client_args_parser, BST_PARAMS
 from .client_utils import XGBClient
 
 def load_data(client_id: int, data_file: str, partition_type: str = "uniform", 

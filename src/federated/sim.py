@@ -21,27 +21,28 @@ from src.core.dataset import (
     create_global_feature_processor,
     load_global_feature_processor,
 )
-from utils import (
-    sim_args_parser,
+from src.config.legacy_constants import (
+    client_args_parser,
     BST_PARAMS,
+    NUM_CLIENTS,
+    server_args_parser,
+    dataset_path
 )
 
 # Try to import NUM_LOCAL_ROUND from tuned_params if available, otherwise from utils
 try:
-    from tuned_params import NUM_LOCAL_ROUND
+    from src.config.tuned_params import NUM_LOCAL_ROUND
     import logging
     logging.getLogger(__name__).info("Using NUM_LOCAL_ROUND from tuned_params.py")
 except ImportError:
-    from utils import NUM_LOCAL_ROUND
+    from src.config.legacy_constants import NUM_LOCAL_ROUND
     import logging
     logging.getLogger(__name__).info("Using default NUM_LOCAL_ROUND from utils.py")
 
-from server_utils import (
-    eval_config,
-    fit_config,
-    evaluate_metrics_aggregation,
-    get_evaluate_fn,
-    CyclicClientManager,
+from src.federated.utils import (
+    create_simulation_partitions,
+    ServerUtilities,
+    setup_output_directory
 )
 from client_utils import XgbClient
 

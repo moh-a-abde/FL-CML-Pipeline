@@ -26,7 +26,7 @@ from sklearn.metrics import (
     confusion_matrix, classification_report
 )
 
-from server_utils import load_saved_model
+from src.federated.utils import load_saved_model
 from src.core.dataset import transform_dataset_to_dmatrix, load_csv_data
 
 

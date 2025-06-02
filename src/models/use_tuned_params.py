@@ -13,7 +13,7 @@ import os
 import json
 import argparse
 import logging
-from utils import BST_PARAMS
+from src.config.legacy_constants import BST_PARAMS
 
 # Configure logging
 logging.basicConfig(
