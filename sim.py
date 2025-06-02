@@ -10,13 +10,16 @@ import flwr as fl
 from flwr.common.logger import log
 from flwr.server.strategy import FedXgbBagging, FedXgbCyclic
 
-from dataset import (
+from src.core.dataset import (
     instantiate_partitioner,
     train_test_split,
     transform_dataset_to_dmatrix,
     separate_xy,
     resplit,
     load_csv_data,
+    FeatureProcessor,
+    create_global_feature_processor,
+    load_global_feature_processor,
 )
 from utils import (
     sim_args_parser,

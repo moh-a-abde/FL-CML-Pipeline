@@ -27,7 +27,7 @@ from sklearn.metrics import (
 )
 
 from server_utils import load_saved_model
-from dataset import transform_dataset_to_dmatrix, load_csv_data
+from src.core.dataset import transform_dataset_to_dmatrix, load_csv_data
 
 
 def parse_args():

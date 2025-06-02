@@ -12,6 +12,20 @@ This script tests:
 
 import sys
 import os
+import pandas as pd
+import numpy as np
+import warnings
+
+# Suppress warnings for cleaner test output
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
+# Add project root to path (go up two levels from tests/unit/)
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, project_root)
+
+# Import local modules
+from src.core.dataset import load_csv_data
 
 def test_utils_num_class():
     """Test that utils.py has num_class=11."""
@@ -80,8 +94,6 @@ def test_dataset_classes():
     print("Testing dataset class count...")
     
     try:
-        from dataset import load_csv_data
-        
         # Load the dataset
         dataset_path = "data/received/final_dataset.csv"
         if not os.path.exists(dataset_path):

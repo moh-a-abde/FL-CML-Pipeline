@@ -428,3 +428,7 @@ class XgbClient(fl.client.Client):
             num_examples=self.num_val,
             metrics=metrics
         )
+
+
+# Alias for backward compatibility
+XGBClient = XgbClient 

@@ -7,7 +7,16 @@ This test ensures that all classes are present in both train and test splits.
 import unittest
 import pandas as pd
 import numpy as np
-from dataset import load_csv_data
+import sys
+import os
+import warnings
+
+# Add project root to path (go up two levels from tests/unit/)
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, project_root)
+
+# Import local modules
+from src.core.dataset import load_csv_data
 
 class TestDataIntegrity(unittest.TestCase):
     """Test data integrity to prevent critical data leakage issues."""

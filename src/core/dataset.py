@@ -498,38 +498,20 @@ def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_tr
     log(INFO, f"[transform_dataset_to_dmatrix] is_training={is_training}")
     log(INFO, f"[transform_dataset_to_dmatrix] Features shape: {x.shape}")
     if y is not None:
-        log(INFO, f"[transform_dataset_to_dmatrix] Labels type: {type(y)}")
-        log(INFO, f"[transform_dataset_to_dmatrix] Labels shape: {y.shape if hasattr(y, 'shape') else 'N/A'}")
-        log(INFO, f"[transform_dataset_to_dmatrix] Labels head: {y[:5] if hasattr(y, '__len__') and len(y) > 0 else 'N/A'}")
+        log(INFO, f"[transform_dataset_to_dmatrix] Labels shape: {y.shape}")
+        log(INFO, f"[transform_dataset_to_dmatrix] Labels dtype: {y.dtype}")
+        unique_labels, counts = np.unique(y, return_counts=True)
+        log(INFO, f"[transform_dataset_to_dmatrix] Unique labels: {unique_labels.tolist()}")
+        log(INFO, f"[transform_dataset_to_dmatrix] Label counts: {counts.tolist()}")
     else:
-        log(INFO, "[transform_dataset_to_dmatrix] Labels are None.")
-    # --- End Logging ---
+        log(INFO, "[transform_dataset_to_dmatrix] No labels provided (unlabeled data)")
 
-    # Handle case where preprocess_data might return None for labels (e.g., unlabeled data)
-    if y is None:
-        log(INFO, "No labels found in data. Creating DMatrix without labels.")
-        return xgb.DMatrix(x, missing=np.nan)
+    # Create DMatrix
+    dmatrix = xgb.DMatrix(x, label=y)
     
-    # For validation data, log label distribution to help identify issues
-    if not is_training:
-        # Count occurrences of each label
-        label_counts = np.bincount(y.astype(int))
-        # Use the correct class names for UNSW_NB15 dataset if possible
-        if hasattr(processor, 'dataset_type') and processor.dataset_type == "unsw_nb15":
-            label_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic'] 
-        else:
-            # For engineered dataset, use numeric labels as names
-            label_names = [str(i) for i in range(len(label_counts))]
-            
-        log(INFO, "Label distribution in validation data:")
-        for i, count in enumerate(label_counts):
-            if i < len(label_names):
-                class_name = label_names[i]
-            else:
-                class_name = f'unknown_{i}'
-            log(INFO, f"  {class_name}: {count}")
+    log(INFO, f"[transform_dataset_to_dmatrix] Created DMatrix with {dmatrix.num_row()} rows and {dmatrix.num_col()} features")
     
-    return xgb.DMatrix(x, label=y, missing=np.nan)
+    return dmatrix
 
 def train_test_split(
     data,
@@ -537,251 +519,190 @@ def train_test_split(
     random_state: int = 42,
 ) -> Tuple[xgb.DMatrix, xgb.DMatrix, FeatureProcessor]:
     """
-    Split dataset into train and test sets, preprocess, and return DMatrices and the fitted processor.
+    Split dataset into training and testing sets with proper feature processing.
+    Returns training DMatrix, testing DMatrix, and fitted feature processor.
+    
+    Note: This function is DEPRECATED in favor of load_csv_data() which implements
+    hybrid temporal-stratified splitting to prevent data leakage. This function
+    remains for backward compatibility but should not be used for new code.
     
     Args:
-        data: Input dataset (Hugging Face Dataset or pandas DataFrame)
+        data: Input dataset (pandas DataFrame or Hugging Face Dataset)
         test_fraction (float): Fraction of data to use for testing
         random_state (int): Random seed for reproducibility
         
     Returns:
-        Tuple[xgb.DMatrix, xgb.DMatrix, FeatureProcessor]: 
-            - Training DMatrix
-            - Test DMatrix
-            - Fitted FeatureProcessor instance
+        tuple: (train_dmatrix, test_dmatrix, fitted_processor)
     """
-    # Convert to pandas if needed
+    log(WARNING, "train_test_split() is DEPRECATED. Use load_csv_data() with hybrid temporal-stratified splitting instead.")
+    
+    # Convert to pandas DataFrame if needed
     if not isinstance(data, pd.DataFrame):
         data = data.to_pandas()
     
-    # Use sklearn's train_test_split with shuffle=True to ensure data is properly randomized
-    log(INFO, "Original data shape before splitting: %s", data.shape)
-    
-    # Set random seed for consistency
-    np.random.seed(random_state)
-    
     # Auto-detect dataset type
     if 'attack_cat' in data.columns:
-        dataset_type = "unsw_nb15"
+        processor = FeatureProcessor(dataset_type="unsw_nb15")
     elif 'tcp_seq_diff' in data.columns:
-        dataset_type = "engineered"
+        processor = FeatureProcessor(dataset_type="engineered")
     else:
-        dataset_type = "unsw_nb15"  # Default
-        log(WARNING, "Could not auto-detect dataset type. Defaulting to 'unsw_nb15'.")
+        log(WARNING, "Could not automatically detect dataset type. Defaulting to 'unsw_nb15'.")
+        processor = FeatureProcessor(dataset_type="unsw_nb15")
     
-    # Initialize appropriate feature processor
-    processor = FeatureProcessor(dataset_type=dataset_type)
-        
-    # Check if 'label' column exists in data
-    label_col = 'label' if dataset_type == "engineered" else 'label' 
-    if label_col not in data.columns:
-        log(INFO, "Warning: No '%s' column found in data. Available columns: %s", 
-            label_col, data.columns.tolist())
-    else:
-        # Report class distribution
-        label_counts = data[label_col].value_counts().to_dict()
-        log(INFO, "Class distribution in original data: %s", label_counts)
+    # Preprocess the data
+    x, y = preprocess_data(data, processor=processor, is_training=True)
     
-    # Check for data leakage indicators
-    if 'uid' in data.columns:
-        uid_label_counts = data.groupby('uid')[label_col].value_counts()
-        uid_with_multiple_labels = uid_label_counts.index.get_level_values(0).duplicated(keep=False)
-        if not any(uid_with_multiple_labels):
-            log(WARNING, "CRITICAL: Each UID has only one label, indicating potential perfect data leakage through UIDs")
-    
-    # Generate a completely different random_state for validation split
-    validation_random_state = (random_state * 17 + 3) % 10000
-    log(INFO, "Using different random states for train/validation split: %d/%d", 
-        random_state, validation_random_state)
-    
-    # Split data ensuring complete partition separation
-    if 'uid' in data.columns:
-        # If we have UIDs, use them to ensure no data leakage across train/test
-        log(INFO, "Using UID-based splitting to ensure no data leakage")
-        unique_uids = data['uid'].unique()
-        np.random.seed(validation_random_state)
-        np.random.shuffle(unique_uids)
-        test_size = int(len(unique_uids) * test_fraction)
-        test_uids = unique_uids[:test_size]
-        train_uids = unique_uids[test_size:]
-        
-        # Split based on UIDs
-        train_data = data[data['uid'].isin(train_uids)].copy()
-        test_data = data[data['uid'].isin(test_uids)].copy()
-        
-        log(INFO, "Split by UIDs: %d train UIDs, %d test UIDs", len(train_uids), len(test_uids))
-    else:
-        # If no UIDs, use standard stratified split
-        train_data, test_data = train_test_split_pandas(
-            data,
-            test_size=test_fraction,
-            random_state=validation_random_state,
-            shuffle=True,  # Ensure data is shuffled for a proper split
-            stratify=data[label_col] if label_col in data.columns else None  # Use stratified split if possible
+    if y is not None:
+        # Use stratified split to maintain class distribution
+        x_train, x_test, y_train, y_test = train_test_split_pandas(
+            x, y, test_size=test_fraction, random_state=random_state,
+            stratify=y
         )
-    
-    # Log the shapes to verify they're different sets
-    log(INFO, "Train data shape: %s, Test data shape: %s", train_data.shape, test_data.shape)
-    
-    # Verify label distributions to ensure proper stratification
-    if label_col in data.columns:
-        train_label_counts = train_data[label_col].value_counts().to_dict()
-        test_label_counts = test_data[label_col].value_counts().to_dict()
-        log(INFO, "Class distribution in train data: %s", train_label_counts)
-        log(INFO, "Class distribution in test data: %s", test_label_counts)
-    
-    # Check for unique values in both sets to verify they're actually different
-    if 'uid' in data.columns:
-        train_uids = set(train_data['uid'].unique())
-        test_uids = set(test_data['uid'].unique())
-        common_uids = train_uids.intersection(test_uids)
-        if common_uids:
-            log(WARNING, "WARNING: Found %d UIDs in both train and test sets! This indicates data leakage.", 
-                len(common_uids))
-        else:
-            log(INFO, "Good: Train and test sets have completely separate UIDs (no overlap).")
-    
-    # Fit processor on training data and transform both sets
-    # Note: transform calls fit implicitly if is_training=True and not fitted
-    train_dmatrix = transform_dataset_to_dmatrix(train_data, processor=processor, is_training=True)
-    test_dmatrix = transform_dataset_to_dmatrix(test_data, processor=processor, is_training=False)
-    
-    # Log number of examples for verification
-    log(INFO, "Train DMatrix has %d rows, Test DMatrix has %d rows", 
-        train_dmatrix.num_row(), test_dmatrix.num_row())
-    
-    # Return the fitted processor along with DMatrices
-    return train_dmatrix, test_dmatrix, processor
+        
+        # Create DMatrix objects
+        train_dmatrix = xgb.DMatrix(x_train, label=y_train)
+        test_dmatrix = xgb.DMatrix(x_test, label=y_test)
+        
+        log(INFO, f"Split dataset: {train_dmatrix.num_row()} training samples, {test_dmatrix.num_row()} testing samples")
+        log(INFO, f"Features: {train_dmatrix.num_col()}")
+        
+        return train_dmatrix, test_dmatrix, processor
+    else:
+        # No labels available - split features only
+        x_train, x_test = train_test_split_pandas(
+            x, test_size=test_fraction, random_state=random_state
+        )
+        
+        train_dmatrix = xgb.DMatrix(x_train)
+        test_dmatrix = xgb.DMatrix(x_test)
+        
+        log(INFO, f"Split unlabeled dataset: {train_dmatrix.num_row()} training samples, {test_dmatrix.num_row()} testing samples")
+        log(INFO, f"Features: {train_dmatrix.num_col()}")
+        
+        return train_dmatrix, test_dmatrix, processor
 
 def resplit(dataset: DatasetDict) -> DatasetDict:
     """
-    Increase the quantity of centralized test samples by reallocating from training set.
-
-    Args:
-        dataset (DatasetDict): Input dataset with train/test splits
-
-    Returns:
-        DatasetDict: Dataset with adjusted train/test split sizes
-
-    Note:
-        Moves 10K samples from training to test set (if available)
-    """
-    train_size = dataset["train"].num_rows
-    # test_size = dataset["test"].num_rows  # Removed unused variable
-
-    # Ensure we don't exceed the number of samples in the training set
-    additional_test_samples = min(10000, train_size)
+    Resplit an existing DatasetDict to redistribute data between train/test splits.
+    This function combines train and test data, then applies a new stratified split.
     
-    return DatasetDict(
-        {
-            "train": dataset["train"].select(
-                range(0, train_size - additional_test_samples)
-            ),
-            "test": concatenate_datasets(
-                [
-                    dataset["train"].select(
-                        range(
-                            train_size - additional_test_samples,
-                            train_size,
-                        )
-                    ),
-                    dataset["test"],
-                ]
-            ),
-        }
-    )
+    Note: This function bypasses the hybrid temporal-stratified splitting logic 
+    that prevents data leakage. Use with caution and consider whether the original
+    load_csv_data() approach is more appropriate for your use case.
+    
+    Args:
+        dataset (DatasetDict): Dataset dictionary with 'train' and 'test' splits
+        
+    Returns:
+        DatasetDict: New dataset dictionary with redistributed train/test splits
+    """
+    log(WARNING, "resplit() bypasses temporal-stratified splitting. Consider using load_csv_data() instead.")
+    
+    # Combine train and test data
+    combined_dataset = concatenate_datasets([dataset["train"], dataset["test"]])
+    
+    # Convert to pandas for stratified splitting
+    combined_df = combined_dataset.to_pandas()
+    
+    # Determine stratification column
+    if 'label' in combined_df.columns:
+        stratify_col = 'label'
+    elif 'attack_cat' in combined_df.columns:
+        stratify_col = 'attack_cat'
+    else:
+        stratify_col = None
+        log(WARNING, "No label column found for stratification. Using random split.")
+    
+    # Split the combined dataset
+    if stratify_col:
+        try:
+            train_df, test_df = train_test_split_pandas(
+                combined_df, test_size=0.2, random_state=42,
+                stratify=combined_df[stratify_col]
+            )
+            log(INFO, f"Resplit dataset with stratification on '{stratify_col}'")
+        except ValueError as e:
+            log(WARNING, f"Stratification failed: {e}. Using random split.")
+            train_df, test_df = train_test_split_pandas(
+                combined_df, test_size=0.2, random_state=42
+            )
+    else:
+        train_df, test_df = train_test_split_pandas(
+            combined_df, test_size=0.2, random_state=42
+        )
+    
+    # Convert back to DatasetDict
+    return DatasetDict({
+        "train": Dataset.from_pandas(train_df),
+        "test": Dataset.from_pandas(test_df)
+    })
 
 def create_global_feature_processor(data_file: str, output_dir: str = "outputs") -> str:
     """
-    Create a global feature processor fitted on the full training dataset.
-    This ensures consistent preprocessing across Ray Tune and Federated Learning.
+    Create and save a global feature processor fitted on the entire dataset.
+    This ensures consistent preprocessing across all federated learning clients.
     
     Args:
-        data_file (str): Path to the dataset file
-        output_dir (str): Directory to save the processor
+        data_file (str): Path to the CSV file containing the full dataset
+        output_dir (str): Directory to save the fitted processor
         
     Returns:
         str: Path to the saved processor file
     """
-    log(INFO, f"Creating global feature processor from: {data_file}")
+    log(INFO, f"Creating global feature processor from {data_file}")
     
-    # Load full dataset
-    dataset = load_csv_data(data_file)
-    train_data = dataset["train"]
-    train_df = train_data.to_pandas()
+    # Load the full dataset
+    df = pd.read_csv(data_file)
+    log(INFO, f"Loaded dataset with {len(df)} samples and {len(df.columns)} features")
     
     # Auto-detect dataset type
-    if 'attack_cat' in train_df.columns:
-        dataset_type = "unsw_nb15"
-    elif 'tcp_seq_diff' in train_df.columns:
-        dataset_type = "engineered"
+    if 'attack_cat' in df.columns:
+        processor = FeatureProcessor(dataset_type="unsw_nb15")
+        log(INFO, "Detected original UNSW_NB15 dataset")
+    elif 'tcp_seq_diff' in df.columns:
+        processor = FeatureProcessor(dataset_type="engineered")
+        log(INFO, "Detected engineered dataset")
     else:
-        dataset_type = "unsw_nb15"  # Default
-        log(WARNING, "Could not auto-detect dataset type. Defaulting to 'unsw_nb15'.")
+        processor = FeatureProcessor(dataset_type="unsw_nb15")
+        log(WARNING, "Could not detect dataset type. Defaulting to 'unsw_nb15'")
     
-    # Create and fit processor on full training data
-    processor = FeatureProcessor(dataset_type=dataset_type)
-    processor.fit(train_df)
+    # Fit the processor on the full dataset
+    processor.fit(df)
+    log(INFO, "Fitted feature processor on full dataset")
     
-    # Save processor to file
+    # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
-    processor_path = os.path.join(output_dir, "global_feature_processor.pkl")
     
+    # Save the fitted processor
+    processor_path = os.path.join(output_dir, "global_feature_processor.pkl")
     with open(processor_path, 'wb') as f:
         pickle.dump(processor, f)
     
-    log(INFO, f"Global feature processor saved to: {processor_path}")
-    log(INFO, f"Processor type: {dataset_type}")
-    log(INFO, f"Categorical features: {len(processor.categorical_features)}")
-    log(INFO, f"Numerical features: {len(processor.numerical_features)}")
-    
+    log(INFO, f"Saved global feature processor to {processor_path}")
     return processor_path
 
 def load_global_feature_processor(processor_path: str) -> FeatureProcessor:
     """
-    Load a pre-fitted global feature processor.
+    Load a previously saved feature processor.
     
     Args:
         processor_path (str): Path to the saved processor file
         
     Returns:
-        FeatureProcessor: The loaded processor
+        FeatureProcessor: Loaded and fitted processor
     """
-    if not os.path.exists(processor_path):
-        raise FileNotFoundError(f"Global feature processor not found at: {processor_path}")
-    
-    with open(processor_path, 'rb') as f:
-        processor = pickle.load(f)
-    
-    log(INFO, f"Loaded global feature processor from: {processor_path}")
-    return processor
-
-# Comment out or remove ModelPredictor if not used or complete
-# class ModelPredictor:
-#     """
-#     Handles model prediction and dataset labeling
-#     """
-#     def __init__(self, model_path: str):
-#         self.model = xgb.Booster()
-#         self.model.load_model(model_path)
-    
-#     def predict_and_save(
-#         self,
-#         input_data: Union[str, pd.DataFrame],
-#         output_path: str,
-#         include_confidence: bool = True
-#     ):
-#         """
-#         Predict on new data and save labeled dataset
-#         """
-#         # Load/preprocess input data
-#         # data = self._prepare_data(input_data) # Requires _prepare_data method
+    try:
+        with open(processor_path, 'rb') as f:
+            processor = pickle.load(f)
+        log(INFO, f"Loaded global feature processor from {processor_path}")
         
-#         # Generate predictions
-#         # predictions = self.model.predict(data)
-#         # confidence = None
-#         # if include_confidence:
-#         #     confidence = self.model.predict(data, output_margin=True)
+        if not processor.is_fitted:
+            log(WARNING, "Loaded processor is not fitted!")
         
-#         # Save labeled dataset
-#         # self._save_output(data, predictions, confidence, output_path) # Requires _save_output method
+        return processor
+    except FileNotFoundError:
+        log(ERROR, f"Feature processor file not found: {processor_path}")
+        raise
+    except Exception as e:
+        log(ERROR, f"Error loading feature processor: {e}")
+        raise 

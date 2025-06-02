@@ -2,17 +2,20 @@
 """
 create_global_processor.py
 
-Script to create a global feature processor that ensures consistent preprocessing 
-across Ray Tune hyperparameter optimization and Federated Learning phases.
-
-This addresses the disconnection between individual client training and federated
-learning by ensuring all phases use the same preprocessing statistics.
+This script creates a global feature processor that can be used across all clients
+in the federated learning setup to ensure consistent data preprocessing.
 """
 
 import argparse
 import os
 import sys
-from dataset import create_global_feature_processor, load_global_feature_processor
+
+# Add current directory to path for imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+
+# Import local modules
+from src.core.dataset import create_global_feature_processor, load_global_feature_processor
 from flwr.common.logger import log
 from logging import INFO
 

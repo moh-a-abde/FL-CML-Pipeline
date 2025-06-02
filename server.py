@@ -1,11 +1,24 @@
+"""
+Server implementation for XGBoost federated learning.
+
+This module implements the Flower server for federated XGBoost training,
+including aggregation strategies, evaluation, and model persistence.
+"""
+
 import warnings
 from logging import INFO, WARNING
 import os
-
+import sys
+import json
+import time
+import numpy as np
+import xgboost as xgb
+from typing import Dict, List, Tuple, Union, Optional, Any
 import flwr as fl
 from flwr.common.logger import log
+from flwr.common import Parameters, FitRes, EvaluateRes, parameters_to_ndarrays, ndarrays_to_parameters
 from flwr.server.strategy import FedXgbBagging, FedXgbCyclic
-import xgboost as xgb
+from flwr.server.client_proxy import ClientProxy
 
 from utils import server_args_parser, BST_PARAMS
 from server_utils import (
@@ -20,9 +33,8 @@ from server_utils import (
     should_stop_early,
 )
 
-from dataset import transform_dataset_to_dmatrix, load_csv_data, FeatureProcessor, create_global_feature_processor, load_global_feature_processor
-
-
+# Import dataset and utility functions
+from src.core.dataset import transform_dataset_to_dmatrix, load_csv_data, FeatureProcessor, create_global_feature_processor, load_global_feature_processor
 
 warnings.filterwarnings("ignore", category=UserWarning)
 

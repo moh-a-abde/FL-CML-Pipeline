@@ -1,495 +1,507 @@
 """
-ray_tune_xgboost.py
+Ray Tune XGBoost Training with Improved Hyperparameter Optimization
 
-This script implements Ray Tune for hyperparameter optimization of XGBoost models in the
-federated learning pipeline. It leverages the existing data processing pipeline while
-adding a tuning layer to find optimal hyperparameters.
-
-RECENT MAJOR IMPROVEMENTS FOR 90% ACCURACY TARGET:
-- Increased default number of samples from 10 to 150 for extensive exploration
-- Expanded hyperparameter search space with much wider ranges:
-  * max_depth: 3-15 (was 4-12)
-  * min_child_weight: 1-15 (was 1-10) 
-  * reg_alpha/reg_lambda: 0.001-50 (was 0.01-10)
-  * eta: 0.005-0.8 log-uniform (was 0.01-0.3 uniform)
-  * subsample: 0.5-1.0 (was 0.6-1.0)
-  * colsample_bytree: 0.4-1.0 (was 0.6-1.0)
-- Added new hyperparameters for comprehensive optimization:
-  * gamma: 0.001-10.0 (minimum loss reduction)
-  * scale_pos_weight: 0.1-10.0 (class balance)
-  * max_delta_step: 0-5 (conservative updates)
-  * colsample_bylevel: 0.5-1.0 (column sampling by level)
-  * colsample_bynode: 0.5-1.0 (column sampling by node)
-- Limited num_boost_round to 3-10 for quick testing (was 50-200)
-- Adjusted scheduler and early stopping for smaller boost rounds
-- Uses log-uniform distributions for better parameter exploration
-
-Key Components:
-- Ray Tune integration for hyperparameter search
-- XGBoost parameter space definition
-- Multi-class evaluation metrics (precision, recall, F1)
-- Optimal model selection and persistence
-
-Recent Fixes:
-- Fixed Ray Tune worker file access issues by passing data directly to trial functions
-  instead of trying to reload files from worker environments
-- Ensured consistent preprocessing across hyperparameter tuning and federated learning phases
-- Fixed processor path issues by using absolute paths for Ray Tune workers
-- Added robust label column handling to work with different feature processor behaviors
+Enhanced implementation with expanded search spaces, better early stopping,
+and robust error handling for federated learning environments.
 """
 
 import os
-import argparse
+import sys
+import warnings
 import json
-import xgboost as xgb
-import pandas as pd
+import pickle
+import time
+from typing import Dict, Any, Optional, Tuple, List
 import numpy as np
+import pandas as pd
+import xgboost as xgb
+from functools import partial
+
+# Suppress warnings for cleaner output
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
+# Ray Tune imports
+import ray
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
-from ray.tune.search.hyperopt import HyperOptSearch
-from hyperopt import hp
-from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, log_loss
-import logging
-from ray.air.config import RunConfig
+from ray.tune.stopper import TrialPlateauStopper
 
-# Import existing data processing code
-from dataset import load_csv_data, transform_dataset_to_dmatrix, create_global_feature_processor, load_global_feature_processor
-from utils import BST_PARAMS
+# Scikit-learn imports  
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.model_selection import StratifiedKFold
+from sklearn.utils.class_weight import compute_class_weight
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Add parent directory to path for local imports
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# Import local modules
+from src.core.dataset import load_csv_data, transform_dataset_to_dmatrix, create_global_feature_processor, load_global_feature_processor
+
+# Ray setup - reduce verbosity and resource warnings
+ray.init(
+    ignore_reinit_error=True,
+    log_to_driver=False,
+    configure_logging=False,
+    local_mode=False  # Set to True for debugging
 )
-logger = logging.getLogger(__name__)
 
-def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
-    """
-    Training function for XGBoost that can be used with Ray Tune.
-    Args:
-        config (dict): Hyperparameters to use for training
-        train_df (pd.DataFrame): Training data as DataFrame
-        test_df (pd.DataFrame): Test data as DataFrame
-    """
-    logger.info(f"Starting trial with config: {config}")
+# Global constants for the enhanced hyperparameter search
+ENHANCED_PARAM_SPACE = {
+    # Learning rate - expanded range for better exploration
+    'eta': tune.loguniform(0.01, 0.5),
     
-    # Load the global feature processor instead of creating a new one
-    processor_path = config.get('global_processor_path', 'outputs/global_feature_processor.pkl')
-    try:
-        processor = load_global_feature_processor(processor_path)
-        logger.info("Using global feature processor for consistent preprocessing")
-    except FileNotFoundError:
-        logger.warning(f"Global processor not found at {processor_path}, creating new one")
-        from dataset import FeatureProcessor
-        processor = FeatureProcessor()
-        processor.fit(train_df)
+    # Tree depth - wider range for complex patterns
+    'max_depth': tune.randint(3, 15),
     
-    # Transform data using the global processor
-    train_processed = processor.transform(train_df, is_training=True)
-    test_processed = processor.transform(test_df, is_training=False)
+    # Minimum child weight - helps with overfitting
+    'min_child_weight': tune.randint(1, 15),
     
-    # Debug: Check what columns are available after processing
-    logger.info(f"Train processed columns: {list(train_processed.columns)}")
-    logger.info(f"Test processed columns: {list(test_processed.columns)}")
+    # Subsample ratios - prevent overfitting
+    'colsample_bytree': tune.uniform(0.5, 1.0),
+    'colsample_bylevel': tune.uniform(0.5, 1.0),
+    'colsample_bynode': tune.uniform(0.5, 1.0),
     
-    # Handle label column extraction more robustly
-    if 'label' in train_processed.columns:
-        train_features = train_processed.drop(columns=['label'])
-        train_labels = train_processed['label'].astype(int)
-    else:
-        # If label column doesn't exist after processing, use original data
-        logger.warning("Label column not found in processed data, using original labels")
-        train_features = train_processed
-        train_labels = train_df['label'].astype(int) if 'label' in train_df.columns else train_df['Label'].astype(int)
+    # Regularization - L1 and L2
+    'reg_alpha': tune.loguniform(1e-8, 100),  # L1 regularization
+    'reg_lambda': tune.loguniform(1e-8, 100),  # L2 regularization
     
-    if 'label' in test_processed.columns:
-        test_features = test_processed.drop(columns=['label'])
-        test_labels = test_processed['label'].astype(int)
-    else:
-        # If label column doesn't exist after processing, use original data
-        logger.warning("Label column not found in processed test data, using original labels")
-        test_features = test_processed
-        test_labels = test_df['label'].astype(int) if 'label' in test_df.columns else test_df['Label'].astype(int)
+    # Gamma - minimum loss reduction required to make split
+    'gamma': tune.loguniform(1e-8, 1.0),
     
-    # Create DMatrix objects inside the function to avoid pickling issues
-    train_data = xgb.DMatrix(train_features, label=train_labels, missing=np.nan)
-    test_data = xgb.DMatrix(test_features, label=test_labels, missing=np.nan)
-    
-    # Prepare the XGBoost parameters
-    params = {
-        # Fixed parameters
-        'objective': 'multi:softprob',
-        'num_class': 11,  # Fixed to match dataset - has classes 0-10 (11 classes total)
-        'eval_metric': ['mlogloss', 'merror'],
-        
-        # Tunable parameters from config - convert float values to integers where needed
-        'max_depth': int(config['max_depth']),
-        'min_child_weight': int(config['min_child_weight']),
-        'eta': config['eta'],
-        'subsample': config['subsample'],
-        'colsample_bytree': config['colsample_bytree'],
-        'colsample_bylevel': config.get('colsample_bylevel', 1.0),
-        'colsample_bynode': config.get('colsample_bynode', 1.0),
-        'reg_alpha': config['reg_alpha'],
-        'reg_lambda': config['reg_lambda'],
-        'gamma': config.get('gamma', 0.0),
-        'scale_pos_weight': config.get('scale_pos_weight', 1.0),
-        'max_delta_step': int(config.get('max_delta_step', 0)),
-        
-        # Fixed parameters for reproducibility
-        'seed': 42
-    }
-    
-    # Optional GPU support if available
-    if config.get('tree_method') == 'gpu_hist':
-        params['tree_method'] = 'gpu_hist'
-    
-    # Store evaluation results
-    results = {}
-    
-    # Train the model with early stopping
-    bst = xgb.train(
-        params,
-        train_data,
-        num_boost_round=int(config['num_boost_round']),
-        evals=[(train_data, 'train'), (test_data, 'eval')],
-        evals_result=results,
-        early_stopping_rounds=3,  # Reduced from 30 to 3 since max num_boost_round is only 10
-        verbose_eval=False
-    )
-    
-    # Get the best iteration metrics (early stopping may have stopped before num_boost_round)
-    best_iteration = getattr(bst, 'best_iteration', len(results['eval']['mlogloss']) - 1)
-    eval_mlogloss = results['eval']['mlogloss'][best_iteration]
-    eval_merror = results['eval']['merror'][best_iteration]
-    
-    # Make predictions for more detailed metrics
-    y_pred_proba = bst.predict(test_data)  # Get probabilities from multi:softprob
-    y_pred_labels = np.argmax(y_pred_proba, axis=1)  # Convert probabilities to predicted labels
-    y_true = test_data.get_label()
-    
-    # Compute multi-class metrics using predicted labels
-    precision = precision_score(y_true, y_pred_labels, average='weighted', zero_division=0)
-    recall = recall_score(y_true, y_pred_labels, average='weighted', zero_division=0)
-    f1 = f1_score(y_true, y_pred_labels, average='weighted', zero_division=0)
-    accuracy = accuracy_score(y_true, y_pred_labels)
-    
-    # Return metrics to Ray Tune instead of using tune.report
-    return {
-        "mlogloss": eval_mlogloss,
-        "merror": eval_merror,
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-        "accuracy": accuracy
-    }
+    # Number of boosting rounds
+    'num_boost_round': tune.randint(50, 500)
+}
 
-def tune_xgboost(train_file=None, test_file=None, data_file=None, num_samples=150, cpus_per_trial=1, gpu_fraction=None, output_dir="./tune_results"):
-    """
-    Run hyperparameter tuning for XGBoost using Ray Tune with consistent preprocessing.
-    """
-    # Create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Step 1: Create global feature processor for consistent preprocessing
-    logger.info("Creating global feature processor for consistent preprocessing...")
-    if data_file:
-        processor_path = create_global_feature_processor(data_file, output_dir)
-    elif train_file:
-        processor_path = create_global_feature_processor(train_file, output_dir)
-    else:
-        raise ValueError("Either data_file or train_file must be provided to create global processor")
-    
-    # Load and prepare data
-    if train_file and test_file:
-        logger.info(f"Loading training data from {train_file}")
-        train_data = load_csv_data(train_file)["train"].to_pandas()
-        
-        logger.info(f"Loading testing data from {test_file}")
-        test_data = load_csv_data(test_file)["train"].to_pandas()
-        
-        # Ensure label column is correctly handled - case insensitive check
-        for df in [train_data]:
-            if 'label' not in df.columns and 'Label' in df.columns:
-                df['label'] = df['Label']
-                
-        # Check if test data has a label column
-        if 'label' not in test_data.columns and 'Label' in test_data.columns:
-            test_data['label'] = test_data['Label']
-            
-        # If test data doesn't have a label column, create a dummy one
-        if 'label' not in test_data.columns:
-            logger.warning("Test data doesn't have a label column. Creating a dummy label column with zeros.")
-            test_data['label'] = 0
-                
-        # Load the global feature processor and process data
-        processor = load_global_feature_processor(processor_path)
-        
-        # Process the data using the global processor
-        train_processed = processor.transform(train_data, is_training=True)
-        test_processed = processor.transform(test_data, is_training=False)
-        
-        # Extract features and labels
-        if 'label' in train_processed.columns:
-            train_features = train_processed.drop(columns=['label'])
-            train_labels = train_processed['label'].astype(int)
-        else:
-            logger.warning("Label column not found in processed training data, using original labels")
-            train_features = train_processed
-            train_labels = train_data['label'].astype(int) if 'label' in train_data.columns else train_data['Label'].astype(int)
-        
-        if 'label' in test_processed.columns:
-            test_features = test_processed.drop(columns=['label'])
-            test_labels = test_processed['label'].astype(int)
-        else:
-            logger.warning("Label column not found in processed test data, using original labels")
-            test_features = test_processed
-            test_labels = test_data['label'].astype(int) if 'label' in test_data.columns else test_data['Label'].astype(int)
-        
-        logger.info(f"Training data size: {len(train_features)}")
-        logger.info(f"Validation data size: {len(test_features)}")
-    else:
-        # Replace the old temporal splitting logic with consistent data loading
-        # Use the same data loading logic as the Ray Tune trials for consistency
-        from dataset import load_csv_data
-        
-        logger.info("Loading data using consistent splitting logic...")
-        dataset = load_csv_data(data_file)
-        
-        # Extract the processed data and convert to pandas for compatibility
-        train_split_orig = dataset['train'].to_pandas()
-        test_split_orig = dataset['test'].to_pandas()
-        
-        # Load the global processor and transform data
-        processor = load_global_feature_processor(processor_path)
-        
-        train_processed = processor.transform(train_split_orig, is_training=True)
-        test_processed = processor.transform(test_split_orig, is_training=False)
-        
-        # Extract features and labels
-        if 'label' in train_processed.columns:
-            train_features = train_processed.drop(columns=['label'])
-            train_labels = train_processed['label'].astype(int)
-        else:
-            logger.warning("Label column not found in processed training data, using original labels from split")
-            train_features = train_processed
-            # Get labels from the original split data before processing
-            train_labels = train_split_orig['label'].astype(int)
-        
-        if 'label' in test_processed.columns:
-            test_features = test_processed.drop(columns=['label'])
-            test_labels = test_processed['label'].astype(int)
-        else:
-            logger.warning("Label column not found in processed test data, using original labels from split")
-            test_features = test_processed
-            # Get labels from the original split data before processing
-            test_labels = test_split_orig['label'].astype(int)
-        
-        logger.info(f"Training data size: {len(train_features)}")
-        logger.info(f"Validation data size: {len(test_features)}")
+# Import FeatureProcessor for consistent preprocessing
+from src.core.dataset import FeatureProcessor
 
-    # Define the search space using hyperopt's hp module
-    search_space = {
-        "max_depth": hp.quniform("max_depth", 3, 15, 1),            # Much wider range: 3-15 instead of 4-12
-        "min_child_weight": hp.quniform("min_child_weight", 1, 15, 1),  # Increased upper bound: 1-15 instead of 1-10
-        "reg_alpha": hp.loguniform("reg_alpha", np.log(0.001), np.log(50.0)), # Much wider range: 0.001-50 instead of 0.01-10
-        "reg_lambda": hp.loguniform("reg_lambda", np.log(0.001), np.log(50.0)), # Much wider range: 0.001-50 instead of 0.01-10
-        "eta": hp.loguniform("eta", np.log(0.005), np.log(0.8)),     # Wider range with log distribution: 0.005-0.8 instead of 0.01-0.3
-        "subsample": hp.uniform("subsample", 0.5, 1.0),             # Wider range: 0.5-1.0 instead of 0.6-1.0
-        "colsample_bytree": hp.uniform("colsample_bytree", 0.4, 1.0), # Wider range: 0.4-1.0 instead of 0.6-1.0
-        "gamma": hp.loguniform("gamma", np.log(0.001), np.log(10.0)), # Minimum loss reduction for split
-        "scale_pos_weight": hp.loguniform("scale_pos_weight", np.log(0.1), np.log(10.0)), # Balance class weights
-        "max_delta_step": hp.quniform("max_delta_step", 0, 5, 1),    # Conservative step for updates
-        "colsample_bylevel": hp.uniform("colsample_bylevel", 0.5, 1.0), # Column sampling by level
-        "colsample_bynode": hp.uniform("colsample_bynode", 0.5, 1.0),   # Column sampling by node
-        "num_boost_round": hp.quniform("num_boost_round", 3, 10, 1)  # LIMITED TO MAX 10 for quick testing: 3-10 instead of 50-200
-    }
-
-    if gpu_fraction is not None and gpu_fraction > 0:
-        search_space["tree_method"] = hp.choice("tree_method", ["gpu_hist"])
-
-    # Create a wrapper function that includes the original data DataFrames and processor path
-    def _train_with_data_wrapper(config):
-        # Add processor path to config - ensure it's absolute for Ray Tune workers
-        config['global_processor_path'] = os.path.abspath(processor_path)
-        # Pass copies of the original dataframes to the training function
-        if train_file and test_file:
-            return train_xgboost(config, train_data.copy(), test_data.copy())
-        else:
-            # For single data file mode, pass the original split data
-            return train_xgboost(config, train_split_orig.copy(), test_split_orig.copy())
-
-    # Set up HyperOptSearch
-    algo = HyperOptSearch(
-        search_space,
-        metric="mlogloss",
-        mode="min"
-    )
-    scheduler = ASHAScheduler(
-        max_t=10,        # Reduced from 200 to 10 since our max num_boost_round is 10
-        grace_period=3,  # Reduced from 10 to 3 for quicker elimination
-        reduction_factor=2,
-        metric="mlogloss",
-        mode="min"
-    )
+class EnhancedXGBoostTrainer:
+    """Enhanced XGBoost trainer with improved hyperparameter optimization."""
     
-    # Initialize the tuner
-    logger.info("Starting hyperparameter tuning")
+    def __init__(self, data_file: str, test_data_file: str = None, 
+                 num_samples: int = 100, max_concurrent_trials: int = 4,
+                 use_global_processor: bool = True):
+        """
+        Initialize the enhanced XGBoost trainer.
+        
+        Args:
+            data_file (str): Path to training data CSV file
+            test_data_file (str): Path to test data CSV file (optional)
+            num_samples (int): Number of hyperparameter configurations to try
+            max_concurrent_trials (int): Maximum concurrent Ray Tune trials
+            use_global_processor (bool): Whether to use global feature processor
+        """
+        self.data_file = data_file
+        self.test_data_file = test_data_file
+        self.num_samples = num_samples
+        self.max_concurrent_trials = max_concurrent_trials
+        self.use_global_processor = use_global_processor
+        
+        # Initialize data structures
+        self.train_data = None
+        self.test_data = None
+        self.global_processor = None
+        self.best_params = None
+        self.best_score = None
+        self.results_history = []
+        
+        print(f"Initialized Enhanced XGBoost Trainer")
+        print(f"Training data: {data_file}")
+        print(f"Test data: {test_data_file if test_data_file else 'Using train/test split'}")
+        print(f"Hyperparameter samples: {num_samples}")
+        print(f"Max concurrent trials: {max_concurrent_trials}")
+        print(f"Using global processor: {use_global_processor}")
     
-    # Run the tuning with updated API
-    tuner = tune.Tuner(
-        _train_with_data_wrapper,
-        tune_config=tune.TuneConfig(
-            scheduler=scheduler,
-            num_samples=num_samples,
-            search_alg=algo
-        ),
-        param_space={},  # search space is handled by HyperOptSearch
-        run_config=RunConfig(
-            storage_path=os.path.abspath(output_dir),
-            name="xgboost_tune"
+    def load_and_prepare_data(self):
+        """Load and prepare training and test data."""
+        print("\n" + "="*60)
+        print("LOADING AND PREPARING DATA")
+        print("="*60)
+        
+        # Create or load global feature processor
+        if self.use_global_processor:
+            processor_path = "outputs/global_feature_processor.pkl"
+            if os.path.exists(processor_path):
+                print(f"Loading existing global feature processor from {processor_path}")
+                self.global_processor = load_global_feature_processor(processor_path)
+            else:
+                print(f"Creating new global feature processor")
+                processor_path = create_global_feature_processor(self.data_file, "outputs")
+                self.global_processor = load_global_feature_processor(processor_path)
+        
+        # Load training data
+        print(f"\nLoading training data from: {self.data_file}")
+        dataset_dict = load_csv_data(self.data_file)
+        
+        # Convert to DMatrix format
+        train_dataset = dataset_dict["train"]
+        self.train_data = transform_dataset_to_dmatrix(
+            train_dataset, 
+            processor=self.global_processor,
+            is_training=True
         )
-    )
-    
-    # Execute the hyperparameter search
-    results = tuner.fit()
-    
-    # Get the best trial
-    best_result = results.get_best_result(metric="mlogloss", mode="min")
-    best_config = best_result.config
-    best_metrics = best_result.metrics
-    
-    # Log the best configuration and metrics
-    logger.info("Best hyperparameters found:")
-    logger.info(json.dumps(best_config, indent=2))
-    logger.info("Best metrics:")
-    logger.info(f"  mlogloss: {best_metrics['mlogloss']:.4f}")
-    logger.info(f"  merror: {best_metrics['merror']:.4f}")
-    logger.info(f"  precision: {best_metrics['precision']:.4f}")
-    logger.info(f"  recall: {best_metrics['recall']:.4f}")
-    logger.info(f"  f1: {best_metrics['f1']:.4f}")
-    logger.info(f"  accuracy: {best_metrics['accuracy']:.4f}")
-    
-    # Save the best hyperparameters to a file
-    best_params_file = os.path.join(output_dir, "best_params.json")
-    with open(best_params_file, 'w') as f:
-        json.dump(best_config, f, indent=2)
-    logger.info(f"Best parameters saved to {best_params_file}")
-    
-    # Train a final model with the best parameters
-    train_final_model(best_config, train_features, train_labels, test_features, test_labels, output_dir)
-    
-    return best_config
+        
+        print(f"Training data: {self.train_data.num_row()} samples, {self.train_data.num_col()} features")
+        
+        # Load test data
+        if self.test_data_file and os.path.exists(self.test_data_file):
+            print(f"\nLoading separate test data from: {self.test_data_file}")
+            # Load test data using the same processor
+            test_dataset_dict = load_csv_data(self.test_data_file)
+            test_dataset = test_dataset_dict["test"]  # Use test split from test file
+            self.test_data = transform_dataset_to_dmatrix(
+                test_dataset,
+                processor=self.global_processor,
+                is_training=False
+            )
+        else:
+            print(f"\nUsing train/test split from main dataset")
+            test_dataset = dataset_dict["test"]
+            self.test_data = transform_dataset_to_dmatrix(
+                test_dataset,
+                processor=self.global_processor,
+                is_training=False
+            )
+        
+        print(f"Test data: {self.test_data.num_row()} samples, {self.test_data.num_col()} features")
+        
+        # Verify data integrity
+        train_labels = self.train_data.get_label()
+        test_labels = self.test_data.get_label()
+        
+        print(f"\nData integrity check:")
+        print(f"Training labels - min: {train_labels.min()}, max: {train_labels.max()}, unique: {len(np.unique(train_labels))}")
+        print(f"Test labels - min: {test_labels.min()}, max: {test_labels.max()}, unique: {len(np.unique(test_labels))}")
+        
+        # Check for class distribution
+        train_unique, train_counts = np.unique(train_labels, return_counts=True)
+        test_unique, test_counts = np.unique(test_labels, return_counts=True)
+        
+        print(f"\nClass distribution:")
+        print(f"Training: {dict(zip(train_unique, train_counts))}")
+        print(f"Test: {dict(zip(test_unique, test_counts))}")
 
-def train_final_model(config, train_features, train_labels, test_features, test_labels, output_dir):
-    """
-    Train a final model using the best hyperparameters found.
-    
-    Args:
-        config (dict): Best hyperparameters
-        train_features (pd.DataFrame): Training features
-        train_labels (pd.Series): Training labels
-        test_features (pd.DataFrame): Test features
-        test_labels (pd.Series): Test labels
-        output_dir (str): Directory to save the model
-    """
-    # Create DMatrix objects
-    train_data = xgb.DMatrix(train_features, label=train_labels, missing=np.nan)
-    test_data = xgb.DMatrix(test_features, label=test_labels, missing=np.nan)
-    
-    # Prepare the XGBoost parameters
-    params = {
-        # Fixed parameters
-        'objective': 'multi:softprob',
-        'num_class': 11,  # Fixed to match dataset - has classes 0-10 (11 classes total)
-        'eval_metric': ['mlogloss', 'merror'],
+    def _train_with_data_wrapper(self, config: Dict[str, Any], train_data: xgb.DMatrix, test_data: xgb.DMatrix):
+        """
+        Wrapper function to train XGBoost with given hyperparameters.
+        This function is compatible with Ray Tune's training interface.
+        """
+        from src.core.dataset import load_csv_data
         
-        # Best parameters from tuning - convert float values to integers where needed
-        'max_depth': int(config['max_depth']),
-        'min_child_weight': int(config['min_child_weight']),
-        'eta': config['eta'],
-        'subsample': config['subsample'],
-        'colsample_bytree': config['colsample_bytree'],
-        'colsample_bylevel': config.get('colsample_bylevel', 1.0),
-        'colsample_bynode': config.get('colsample_bynode', 1.0),
-        'reg_alpha': config['reg_alpha'],
-        'reg_lambda': config['reg_lambda'],
-        'gamma': config.get('gamma', 0.0),
-        'scale_pos_weight': config.get('scale_pos_weight', 1.0),
-        'max_delta_step': int(config.get('max_delta_step', 0)),
+        try:
+            # Extract hyperparameters from config
+            params = {
+                'objective': 'multi:softprob',  # Multi-class classification
+                'eval_metric': 'mlogloss',      # Multi-class log loss
+                'eta': config['eta'],
+                'max_depth': int(config['max_depth']),
+                'min_child_weight': int(config['min_child_weight']),
+                'colsample_bytree': config['colsample_bytree'],
+                'colsample_bylevel': config.get('colsample_bylevel', 1.0),
+                'colsample_bynode': config.get('colsample_bynode', 1.0),
+                'reg_alpha': config.get('reg_alpha', 0),
+                'reg_lambda': config.get('reg_lambda', 1),
+                'gamma': config.get('gamma', 0),
+                'seed': 42,
+                'verbosity': 0  # Reduce XGBoost verbosity
+            }
+            
+            num_boost_round = int(config['num_boost_round'])
+            
+            # Determine number of classes for multi-class setup
+            train_labels = train_data.get_label()
+            num_classes = len(np.unique(train_labels))
+            params['num_class'] = num_classes
+            
+            # Early stopping configuration
+            early_stopping_rounds = max(10, num_boost_round // 10)
+            
+            # Create evaluation list for monitoring
+            evallist = [(train_data, 'train'), (test_data, 'eval')]
+            
+            # Train the model with early stopping
+            evals_result = {}
+            model = xgb.train(
+                params,
+                train_data,
+                num_boost_round=num_boost_round,
+                evals=evallist,
+                evals_result=evals_result,
+                early_stopping_rounds=early_stopping_rounds,
+                verbose_eval=False  # Disable verbose evaluation
+            )
+            
+            # Make predictions on test set
+            test_pred_proba = model.predict(test_data)
+            
+            # For multi-class, convert probabilities to class predictions
+            if len(test_pred_proba.shape) > 1:
+                test_pred = np.argmax(test_pred_proba, axis=1)
+            else:
+                test_pred = (test_pred_proba > 0.5).astype(int)
+            
+            # Get true labels
+            test_true = test_data.get_label().astype(int)
+            
+            # Calculate metrics
+            accuracy = accuracy_score(test_true, test_pred)
+            
+            # Calculate per-class metrics for multi-class
+            if num_classes > 2:
+                # Get weighted average F1 score for multi-class
+                from sklearn.metrics import f1_score
+                f1 = f1_score(test_true, test_pred, average='weighted')
+                
+                # Use F1 score as the main metric for multi-class problems
+                main_metric = f1
+                metric_name = 'f1_weighted'
+            else:
+                # For binary classification, use accuracy
+                main_metric = accuracy
+                metric_name = 'accuracy'
+            
+            # Get the final evaluation loss
+            final_train_loss = evals_result['train']['mlogloss'][-1]
+            final_eval_loss = evals_result['eval']['mlogloss'][-1]
+            
+            # Report metrics to Ray Tune
+            tune.report(
+                accuracy=accuracy,
+                **{metric_name: main_metric},
+                train_loss=final_train_loss,
+                eval_loss=final_eval_loss,
+                num_boost_round_used=model.best_iteration + 1 if hasattr(model, 'best_iteration') else num_boost_round
+            )
+            
+        except Exception as e:
+            print(f"Training failed with error: {e}")
+            # Report poor performance for failed trials
+            tune.report(accuracy=0.0, f1_weighted=0.0, train_loss=float('inf'), eval_loss=float('inf'))
+
+    def tune_hyperparameters(self):
+        """Run hyperparameter tuning using Ray Tune."""
+        print("\n" + "="*60)
+        print("HYPERPARAMETER TUNING")
+        print("="*60)
         
-        # Set the seed for reproducibility
-        'seed': 42
-    }
-    
-    # Optional GPU support if available
-    if config.get('tree_method') == 'gpu_hist':
-        params['tree_method'] = 'gpu_hist'
-    
-    # Train the final model with early stopping
-    logger.info("Training final model with best parameters")
-    eval_results = {}
-    final_model = xgb.train(
-        params,
-        train_data,
-        num_boost_round=int(config['num_boost_round']),
-        evals=[(train_data, 'train'), (test_data, 'eval')],
-        evals_result=eval_results,
-        early_stopping_rounds=3,  # Reduced from 30 to 3 since max num_boost_round is only 10
-        verbose_eval=True
-    )
-    
-    # Save the model
-    model_path = os.path.join(output_dir, "best_model.json")
-    final_model.save_model(model_path)
-    logger.info(f"Final model saved to {model_path}")
-    
-    # Evaluate the model
-    y_pred_proba = final_model.predict(test_data)  # Get probabilities from multi:softprob
-    y_pred_labels = np.argmax(y_pred_proba, axis=1)  # Convert probabilities to predicted labels
-    y_true = test_data.get_label()
-    
-    # Generate performance metrics
-    precision = precision_score(y_true, y_pred_labels, average='weighted', zero_division=0)
-    recall = recall_score(y_true, y_pred_labels, average='weighted', zero_division=0)
-    f1 = f1_score(y_true, y_pred_labels, average='weighted', zero_division=0)
-    accuracy = accuracy_score(y_true, y_pred_labels)
-    
-    # Log final performance
-    logger.info("Final model performance:")
-    logger.info(f"  Precision: {precision:.4f}")
-    logger.info(f"  Recall: {recall:.4f}")
-    logger.info(f"  F1 Score: {f1:.4f}")
-    logger.info(f"  Accuracy: {accuracy:.4f}")
-    
-    return final_model
+        if self.train_data is None:
+            self.load_and_prepare_data()
+        
+        # Create partial function with data
+        train_func = partial(
+            self._train_with_data_wrapper,
+            train_data=self.train_data,
+            test_data=self.test_data
+        )
+        
+        # Configure ASHA scheduler for early stopping
+        scheduler = ASHAScheduler(
+            metric="f1_weighted",  # Use F1 score as main metric
+            mode="max",
+            max_t=500,  # Maximum number of boosting rounds
+            grace_period=50,  # Minimum rounds before stopping
+            reduction_factor=2
+        )
+        
+        # Configure trial stopping criteria
+        stopper = TrialPlateauStopper(
+            metric="f1_weighted",
+            mode="max",
+            patience=10
+        )
+        
+        print(f"Starting hyperparameter tuning with {self.num_samples} trials...")
+        print(f"Search space: {ENHANCED_PARAM_SPACE}")
+        
+        # Run hyperparameter tuning
+        analysis = tune.run(
+            train_func,
+            config=ENHANCED_PARAM_SPACE,
+            num_samples=self.num_samples,
+            scheduler=scheduler,
+            stop=stopper,
+            resources_per_trial={"cpu": 1},
+            max_concurrent_trials=self.max_concurrent_trials,
+            verbose=1,
+            raise_on_failed_trial=False  # Continue even if some trials fail
+        )
+        
+        # Get best parameters
+        best_trial = analysis.get_best_trial("f1_weighted", "max", "last")
+        self.best_params = best_trial.config
+        self.best_score = best_trial.last_result["f1_weighted"]
+        
+        print(f"\n" + "="*60)
+        print("BEST HYPERPARAMETERS FOUND")
+        print("="*60)
+        print(f"Best F1 Score: {self.best_score:.4f}")
+        print(f"Best Parameters:")
+        for param, value in self.best_params.items():
+            print(f"  {param}: {value}")
+        
+        # Store results for analysis
+        self.results_history = analysis.results_df
+        
+        return analysis
+
+    def train_final_model(self):
+        """Train final model with best hyperparameters."""
+        print("\n" + "="*60)
+        print("TRAINING FINAL MODEL")
+        print("="*60)
+        
+        if self.best_params is None:
+            raise ValueError("No best parameters found. Run tune_hyperparameters() first.")
+        
+        # Prepare final parameters
+        final_params = {
+            'objective': 'multi:softprob',
+            'eval_metric': 'mlogloss',
+            'eta': self.best_params['eta'],
+            'max_depth': int(self.best_params['max_depth']),
+            'min_child_weight': int(self.best_params['min_child_weight']),
+            'colsample_bytree': self.best_params['colsample_bytree'],
+            'colsample_bylevel': self.best_params.get('colsample_bylevel', 1.0),
+            'colsample_bynode': self.best_params.get('colsample_bynode', 1.0),
+            'reg_alpha': self.best_params.get('reg_alpha', 0),
+            'reg_lambda': self.best_params.get('reg_lambda', 1),
+            'gamma': self.best_params.get('gamma', 0),
+            'seed': 42,
+            'verbosity': 1
+        }
+        
+        # Determine number of classes
+        train_labels = self.train_data.get_label()
+        num_classes = len(np.unique(train_labels))
+        final_params['num_class'] = num_classes
+        
+        num_boost_round = int(self.best_params['num_boost_round'])
+        
+        print(f"Training final model with {num_boost_round} boosting rounds...")
+        print(f"Number of classes: {num_classes}")
+        
+        # Train final model
+        evallist = [(self.train_data, 'train'), (self.test_data, 'eval')]
+        evals_result = {}
+        
+        final_model = xgb.train(
+            final_params,
+            self.train_data,
+            num_boost_round=num_boost_round,
+            evals=evallist,
+            evals_result=evals_result,
+            verbose_eval=50
+        )
+        
+        # Evaluate final model
+        test_pred_proba = final_model.predict(self.test_data)
+        
+        if len(test_pred_proba.shape) > 1:
+            test_pred = np.argmax(test_pred_proba, axis=1)
+        else:
+            test_pred = (test_pred_proba > 0.5).astype(int)
+        
+        test_true = self.test_data.get_label().astype(int)
+        
+        # Calculate comprehensive metrics
+        accuracy = accuracy_score(test_true, test_pred)
+        
+        print(f"\n" + "="*60)
+        print("FINAL MODEL PERFORMANCE")
+        print("="*60)
+        print(f"Test Accuracy: {accuracy:.4f}")
+        
+        # Detailed classification report
+        print("\nClassification Report:")
+        print(classification_report(test_true, test_pred))
+        
+        # Save final model and parameters
+        os.makedirs("outputs", exist_ok=True)
+        
+        model_path = "outputs/final_xgboost_model.json"
+        final_model.save_model(model_path)
+        print(f"\nFinal model saved to: {model_path}")
+        
+        params_path = "outputs/final_hyperparameters.json"
+        with open(params_path, 'w') as f:
+            json.dump(self.best_params, f, indent=2)
+        print(f"Best hyperparameters saved to: {params_path}")
+        
+        return final_model, final_params
+
+    def run_complete_tuning(self):
+        """Run complete hyperparameter tuning and training pipeline."""
+        print("Starting Enhanced XGBoost Hyperparameter Tuning Pipeline")
+        print(f"Data file: {self.data_file}")
+        
+        start_time = time.time()
+        
+        try:
+            # Step 1: Load and prepare data
+            self.load_and_prepare_data()
+            
+            # Step 2: Tune hyperparameters
+            analysis = self.tune_hyperparameters()
+            
+            # Step 3: Train final model
+            final_model, final_params = self.train_final_model()
+            
+            total_time = time.time() - start_time
+            
+            print(f"\n" + "="*60)
+            print("PIPELINE COMPLETED SUCCESSFULLY")
+            print("="*60)
+            print(f"Total time: {total_time/60:.2f} minutes")
+            print(f"Best F1 Score: {self.best_score:.4f}")
+            
+            return {
+                'model': final_model,
+                'params': final_params,
+                'best_score': self.best_score,
+                'analysis': analysis,
+                'total_time': total_time
+            }
+            
+        except Exception as e:
+            print(f"Pipeline failed with error: {e}")
+            raise
+        finally:
+            # Shutdown Ray
+            ray.shutdown()
 
 def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Ray Tune for XGBoost hyperparameter optimization")
-    parser.add_argument("--data-file", type=str, help="Path to single CSV data file (optional if train and test files are provided)")
-    parser.add_argument("--train-file", type=str, help="Path to training CSV data file")
-    parser.add_argument("--test-file", type=str, help="Path to testing CSV data file")
-    parser.add_argument("--num-samples", type=int, default=150, help="Number of hyperparameter combinations to try")
-    parser.add_argument("--cpus-per-trial", type=int, default=1, help="CPUs per trial")
-    parser.add_argument("--gpu-fraction", type=float, default=None, help="GPU fraction per trial (0.1 for 10%%)")
-    parser.add_argument("--output-dir", type=str, default="./tune_results", help="Output directory for results")
-    args = parser.parse_args()
+    """Main function to run hyperparameter tuning."""
     
-    # Validate arguments
-    if not args.data_file and not (args.train_file and args.test_file):
-        parser.error("Either --data-file or both --train-file and --test-file must be provided")
+    # Configuration
+    data_file = "data/UNSW-NB15_1.csv"  # Update with your data path
+    test_data_file = None  # Set to path if separate test file exists
+    num_samples = 50  # Number of hyperparameter configurations to try
+    max_concurrent_trials = 2  # Adjust based on your system resources
     
-    # Run the hyperparameter tuning
-    tune_xgboost(
-        train_file=args.train_file,
-        test_file=args.test_file,
-        data_file=args.data_file,
-        num_samples=args.num_samples,
-        cpus_per_trial=args.cpus_per_trial,
-        gpu_fraction=args.gpu_fraction,
-        output_dir=args.output_dir
+    print("Enhanced XGBoost Hyperparameter Tuning")
+    print("="*60)
+    
+    # Check if data file exists
+    if not os.path.exists(data_file):
+        print(f"Error: Data file not found at {data_file}")
+        print("Please update the data_file path in the main() function")
+        return
+    
+    # Initialize trainer
+    trainer = EnhancedXGBoostTrainer(
+        data_file=data_file,
+        test_data_file=test_data_file,
+        num_samples=num_samples,
+        max_concurrent_trials=max_concurrent_trials,
+        use_global_processor=True
     )
+    
+    # Run complete tuning pipeline
+    results = trainer.run_complete_tuning()
+    
+    print(f"\nTuning completed successfully!")
+    print(f"Best model saved in outputs/")
 
 if __name__ == "__main__":
     main() 
