@@ -32,7 +32,7 @@ from flwr.common import Status
 import numpy as np
 import pandas as pd
 import os
-from src.federated.utils import save_predictions_to_csv
+from src.federated.utils import save_predictions_to_csv, get_class_names_list
 import importlib.util
 from sklearn.utils.class_weight import compute_sample_weight
 
@@ -256,7 +256,7 @@ class XgbClient(fl.client.Client):
         class_counts = np.bincount(y_train_int)
         
         # Log class distribution for all classes - FIXED: Match server mapping order
-        class_names = ['Normal', 'Generic', 'Exploits', 'Reconnaissance', 'Fuzzers', 'DoS', 'Analysis', 'Backdoor', 'Backdoors', 'Worms', 'Shellcode']
+        class_names = get_class_names_list()
         for i, count in enumerate(class_counts):
             if i < len(class_names):
                 class_name = class_names[i]
@@ -346,7 +346,7 @@ class XgbClient(fl.client.Client):
         
         # Log ground truth distribution
         true_counts = np.bincount(y_true.astype(int))
-        class_names = ['Normal', 'Generic', 'Exploits', 'Reconnaissance', 'Fuzzers', 'DoS', 'Analysis', 'Backdoor', 'Backdoors', 'Worms', 'Shellcode']
+        class_names = get_class_names_list()
         num_classes_actual = len(class_names) # Or get from self.params if needed
         for i, count in enumerate(true_counts):
             if i < len(class_names):

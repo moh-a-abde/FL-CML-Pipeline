@@ -33,7 +33,8 @@ from src.federated.utils import (
     should_stop_early,
     save_evaluation_results,
     save_predictions_to_csv,
-    METRICS_HISTORY
+    METRICS_HISTORY,
+    get_class_names_list  # Import the authoritative class names function
 )
 
 # Import dataset and utility functions
@@ -367,19 +368,21 @@ else:
 # Also save the final evaluation results
 if hasattr(history, 'metrics_distributed') and history.metrics_distributed:
     save_evaluation_results(history.metrics_distributed[-1][1], num_rounds, output_dir)
+    # Also save as aggregated results for consistency
+    save_evaluation_results(history.metrics_distributed[-1][1], "aggregated", output_dir)
+elif hasattr(history, 'metrics_centralized') and history.metrics_centralized:
+    # For centralized evaluation, save the final centralized metrics as aggregated
+    final_centralized_metrics = history.metrics_centralized[-1][1] if len(history.metrics_centralized) > 0 else {}
+    save_evaluation_results(final_centralized_metrics, "aggregated", output_dir)
+    log(INFO, "Saved centralized evaluation results as aggregated for consistency")
 else:
     log(INFO, "No metrics available to save")
 
 log(INFO, "Generating additional visualizations...")
 
-# Define CLASS_NAMES based on the engineered dataset labels found during preprocessing
-# This is a placeholder - we'll use generic labels since engineered dataset has numeric classes
-CLASS_NAMES = [str(i) for i in range(11)]  # Using generic labels 0-10 as a fallback
-
-# Check if we can get real class names from the processor
-if centralised_eval and hasattr(global_processor, 'unique_labels'):
-    CLASS_NAMES = [str(label) for label in global_processor.unique_labels]
-    log(INFO, "Using class names from engineered dataset: %s", CLASS_NAMES)
+# Use the authoritative class names from the global mapping
+CLASS_NAMES = get_class_names_list()
+log(INFO, "Using authoritative class names: %s", CLASS_NAMES)
 
 # Import visualization functions and other necessary modules
 from src.utils.visualization import (

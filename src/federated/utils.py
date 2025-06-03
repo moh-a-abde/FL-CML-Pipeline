@@ -22,9 +22,34 @@ from src.utils.visualization import (
     plot_class_distribution,
     plot_learning_curves
 )
+import warnings
+
+# Suppress warnings for cleaner output
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 # Global variable to track metrics history for early stopping
 METRICS_HISTORY = []
+
+# Authoritative label mapping for UNSW_NB15 dataset (11 classes for engineered dataset)
+UNSW_NB15_LABEL_MAPPING = {
+    0: 'Normal',
+    1: 'Generic', 
+    2: 'Exploits',
+    3: 'Reconnaissance',
+    4: 'Fuzzers',
+    5: 'DoS',
+    6: 'Analysis',
+    7: 'Backdoor',
+    8: 'Backdoors',
+    9: 'Worms',
+    10: 'Shellcode'  # Engineered dataset has 11 classes (0-10)
+}
+
+# Helper function to get class names list
+def get_class_names_list():
+    """Get the list of class names in correct order."""
+    return [UNSW_NB15_LABEL_MAPPING[i] for i in range(len(UNSW_NB15_LABEL_MAPPING))]
 
 def setup_output_directory():
     """
@@ -253,22 +278,8 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
     if prediction_types is not None:
         predictions_dict['prediction_type'] = prediction_types
     else:
-        # Default mapping for UNSW_NB15 multi-class predictions
-        label_mapping = {
-            0: 'Normal', 
-            1: 'Generic', 
-            2: 'Exploits', 
-            3: 'Reconnaissance', 
-            4: 'Fuzzers', 
-            5: 'DoS', 
-            6: 'Analysis', 
-            7: 'Backdoor', 
-            8: 'Backdoors', 
-            9: 'Worms',
-            10: 'Shellcode'  # Added for the engineered dataset which has 11 classes
-        }
-        # Safely convert predictions to integers
-        predictions_dict['prediction_type'] = [label_mapping.get(int(label), f'unknown_{label}') for label in predicted_labels]
+        # Use the global authoritative label mapping
+        predictions_dict['prediction_type'] = [UNSW_NB15_LABEL_MAPPING.get(int(label), f'unknown_{label}') for label in predicted_labels]
     
     # Add true labels if available
     if true_labels is not None:
@@ -276,7 +287,7 @@ def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str =
         
         # Generate and save visualizations if we have true labels to compare with
         try:
-            class_names = list(label_mapping.values())
+            class_names = get_class_names_list()
             num_classes = len(class_names)
             
             # Convert to numpy arrays if they're not already
@@ -385,25 +396,11 @@ def predict_with_saved_model(model_path, dmatrix, output_path, config_manager=No
         log(INFO, "Processing multi-class probability predictions with shape: %s", raw_predictions.shape)
         predicted_labels = np.argmax(raw_predictions, axis=1)
         
-        # Default mapping for the engineered dataset
-        label_mapping = {
-            0: 'Normal', 
-            1: 'Reconnaissance', 
-            2: 'Backdoor', 
-            3: 'DoS', 
-            4: 'Exploits', 
-            5: 'Analysis', 
-            6: 'Fuzzers', 
-            7: 'Worms', 
-            8: 'Shellcode', 
-            9: 'Generic',
-            10: 'Class_10'  # Added for the engineered dataset which has 11 classes
-        }
-        
+        # Use the global authoritative label mapping
         # Save predictions to CSV with class names
         predictions_df = pd.DataFrame({
             'predicted_label': predicted_labels,
-            'prediction_type': [label_mapping.get(int(p), f'unknown_{p}') for p in predicted_labels],
+            'prediction_type': [UNSW_NB15_LABEL_MAPPING.get(int(p), f'unknown_{p}') for p in predicted_labels],
         })
         
         # Add probability columns for each class
@@ -426,25 +423,11 @@ def predict_with_saved_model(model_path, dmatrix, output_path, config_manager=No
             # Likely multi:softmax with direct class labels
             predicted_labels = np.round(raw_predictions).astype(int)
             
-            # Default mapping for the engineered dataset
-            label_mapping = {
-                0: 'Normal', 
-                1: 'Reconnaissance', 
-                2: 'Backdoor', 
-                3: 'DoS', 
-                4: 'Exploits', 
-                5: 'Analysis', 
-                6: 'Fuzzers', 
-                7: 'Worms', 
-                8: 'Shellcode', 
-                9: 'Generic',
-                10: 'Class_10'  # Added for the engineered dataset which has 11 classes
-            }
-            
+            # Use the global authoritative label mapping
             # Save predictions to CSV with class names
             predictions_df = pd.DataFrame({
                 'predicted_label': predicted_labels,
-                'prediction_type': [label_mapping.get(int(p), f'unknown_{p}') for p in predicted_labels],
+                'prediction_type': [UNSW_NB15_LABEL_MAPPING.get(int(p), f'unknown_{p}') for p in predicted_labels],
             })
     else:
         # Fallback for unexpected prediction format
@@ -464,7 +447,7 @@ def predict_with_saved_model(model_path, dmatrix, output_path, config_manager=No
         if true_labels is not None and 'predicted_label' in predictions_df.columns:
             output_dir = os.path.dirname(output_path)
             num_classes = max(11, np.max(true_labels) + 1)  # Ensure at least 11 classes for the engineered dataset
-            class_names = [label_mapping.get(i, f'Class_{i}') for i in range(num_classes)]
+            class_names = [UNSW_NB15_LABEL_MAPPING.get(i, f'Class_{i}') for i in range(num_classes)]
             
             predicted_labels = predictions_df['predicted_label'].values
             
@@ -629,8 +612,8 @@ def get_evaluate_fn(test_data, config_manager=None):
             # Instead of creating a separate plots directory, save directly in output_dir
             log(INFO, f"Saving evaluation plots to: {output_dir}")
 
-            # Update class names to include the 11th class
-            class_names = ['Normal', 'Reconnaissance', 'Backdoor', 'DoS', 'Exploits', 'Analysis', 'Fuzzers', 'Worms', 'Shellcode', 'Generic', 'Class_10'] 
+            # Update class names to use the global authoritative mapping
+            class_names = get_class_names_list()
 
             # Plot Confusion Matrix
             cm_path = os.path.join(output_dir, f"confusion_matrix_round_{server_round}.png")
