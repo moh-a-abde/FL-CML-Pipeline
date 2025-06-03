@@ -1,0 +1,12 @@
+{
+  "eta": 0.22739425647144482,
+  "max_depth": 12,
+  "min_child_weight": 6,
+  "colsample_bytree": 0.7971063889888208,
+  "colsample_bylevel": 0.7632997975138978,
+  "colsample_bynode": 0.5591294254162846,
+  "reg_alpha": 3.175861162922875e-06,
+  "reg_lambda": 0.20611881150439115,
+  "gamma": 4.794063443803187e-07,
+  "num_boost_round": 357
+}
