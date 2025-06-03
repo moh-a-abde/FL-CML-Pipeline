@@ -21,11 +21,11 @@ from contextlib import contextmanager
 class EnhancedLogger:
     """Enhanced logger for the federated learning pipeline."""
     
-    def __init__(self, name: str = "flwr", log_file: Optional[str] = None):
+    def __init__(self, name: str = "fl_pipeline", log_file: Optional[str] = None):
         """Initialize the enhanced logger.
         
         Args:
-            name: Logger name
+            name: Logger name (changed from "flwr" to avoid conflicts)
             log_file: Optional log file path
         """
         self.logger = logging.getLogger(name)
@@ -38,9 +38,9 @@ class EnhancedLogger:
         
     def _setup_logging(self, log_file: Optional[str] = None):
         """Setup enhanced logging with better formatting."""
-        # Clear existing handlers
-        for handler in self.logger.handlers[:]:
-            self.logger.removeHandler(handler)
+        # Only setup if not already configured
+        if self.logger.handlers:
+            return
             
         # Create formatter with enhanced format
         formatter = logging.Formatter(
@@ -62,6 +62,8 @@ class EnhancedLogger:
             self.logger.addHandler(file_handler)
             
         self.logger.setLevel(logging.INFO)
+        # Prevent propagation to parent loggers to avoid duplicates
+        self.logger.propagate = False
     
     def pipeline_start(self, config: Any):
         """Log pipeline start with configuration summary."""
@@ -152,33 +154,56 @@ class EnhancedLogger:
         self.logger.error("💥 Error: %s", error_msg)
         self.logger.error("─" * 80)
         
+    def _safe_format_number(self, value: Any, name: str) -> Optional[str]:
+        """Safely format a number with commas, handling errors gracefully."""
+        try:
+            num_value = int(value)
+            return f"{num_value:,}"
+        except (ValueError, TypeError) as e:
+            self.logger.warning("Could not format %s: %s", name, e)
+            return None
+
     def log_data_statistics(self, data_stats: Dict[str, Any]):
         """Log detailed data statistics."""
         self.logger.info("")
         self.logger.info("📊 DATASET STATISTICS")
         self.logger.info("─" * 50)
         
+        # Log basic statistics
         if 'total_samples' in data_stats:
-            self.logger.info("📈 Total Samples: %s", f"{data_stats['total_samples']:,}")
-        if 'features' in data_stats:
+            formatted = self._safe_format_number(data_stats['total_samples'], 'total_samples')
+            if formatted:
+                self.logger.info("📈 Total Samples: %s", formatted)
+                
+        if 'features' in data_stats and data_stats['features']:
             self.logger.info("🔢 Number of Features: %d", len(data_stats['features']))
-        if 'classes' in data_stats:
+            
+        if 'classes' in data_stats and data_stats['classes']:
             self.logger.info("🎯 Number of Classes: %d", len(data_stats['classes']))
+            
         if 'train_samples' in data_stats:
-            self.logger.info("🎓 Training Samples: %s", f"{data_stats['train_samples']:,}")
+            formatted = self._safe_format_number(data_stats['train_samples'], 'train_samples')
+            if formatted:
+                self.logger.info("🎓 Training Samples: %s", formatted)
+                
         if 'test_samples' in data_stats:
-            self.logger.info("🧪 Test Samples: %s", f"{data_stats['test_samples']:,}")
+            formatted = self._safe_format_number(data_stats['test_samples'], 'test_samples')
+            if formatted:
+                self.logger.info("🧪 Test Samples: %s", formatted)
             
         # Class distribution
         if 'class_distribution' in data_stats:
-            self.logger.info("")
-            self.logger.info("📊 Class Distribution:")
-            for class_id, counts in data_stats['class_distribution'].items():
-                train_count = counts.get('train', 0)
-                test_count = counts.get('test', 0)
-                total_count = counts.get('total', train_count + test_count)
-                self.logger.info("   Class %s: %s train, %s test, %s total", 
-                               class_id, f"{train_count:,}", f"{test_count:,}", f"{total_count:,}")
+            try:
+                self.logger.info("")
+                self.logger.info("📊 Class Distribution:")
+                for class_id, counts in data_stats['class_distribution'].items():
+                    train_count = int(counts.get('train', 0))
+                    test_count = int(counts.get('test', 0))
+                    total_count = int(counts.get('total', train_count + test_count))
+                    self.logger.info("   Class %s: %s train, %s test, %s total", 
+                                   class_id, f"{train_count:,}", f"{test_count:,}", f"{total_count:,}")
+            except (ValueError, TypeError) as e:
+                self.logger.warning("Could not format class_distribution: %s", e)
         
         self.logger.info("─" * 50)
         
@@ -263,4 +288,8 @@ def get_enhanced_logger(log_file: Optional[str] = None) -> EnhancedLogger:
 
 def setup_enhanced_logging(log_file: Optional[str] = None) -> EnhancedLogger:
     """Setup enhanced logging for the pipeline."""
+    # pylint: disable=global-statement
+    global _enhanced_logger
+    # Reset the global logger to ensure clean setup
+    _enhanced_logger = None
     return get_enhanced_logger(log_file) 

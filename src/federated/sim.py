@@ -116,24 +116,36 @@ def main():
     # Load CSV dataset
     dataset = load_csv_data(csv_file_path)
 
-    # Log dataset statistics
-    if hasattr(dataset, 'num_rows'):
-        total_samples = dataset.num_rows
-    else:
-        total_samples = len(dataset['train']) + len(dataset['test']) if 'test' in dataset else len(dataset['train'])
-    
-    # Extract features for logging
-    sample_data = dataset['train'][0] if 'train' in dataset else next(iter(dataset.values()))[0]
-    features = list(sample_data.keys()) if hasattr(sample_data, 'keys') else []
-    
-    data_stats = {
-        'total_samples': total_samples,
-        'features': features,
-        'train_samples': len(dataset['train']) if 'train' in dataset else 0,
-        'test_samples': len(dataset['test']) if 'test' in dataset else 0,
-    }
-    
-    enhanced_logger.log_data_statistics(data_stats)
+    # Log dataset statistics with proper error handling
+    try:
+        # Calculate total samples more robustly
+        if hasattr(dataset, 'num_rows'):
+            total_samples = dataset.num_rows
+        else:
+            train_samples = len(dataset['train']) if 'train' in dataset else 0
+            test_samples = len(dataset['test']) if 'test' in dataset else 0
+            total_samples = train_samples + test_samples
+        
+        # Extract features for logging
+        if 'train' in dataset and len(dataset['train']) > 0:
+            sample_data = dataset['train'][0]
+            features = list(sample_data.keys()) if hasattr(sample_data, 'keys') else []
+        else:
+            features = []
+        
+        # Build data statistics safely
+        data_stats = {
+            'total_samples': int(total_samples),  # Ensure it's an integer
+            'features': features,
+            'train_samples': int(len(dataset['train']) if 'train' in dataset else 0),
+            'test_samples': int(len(dataset['test']) if 'test' in dataset else 0),
+        }
+        
+        enhanced_logger.log_data_statistics(data_stats)
+        
+    except Exception as e:
+        enhanced_logger.logger.warning("Could not extract detailed dataset statistics: %s", str(e))
+        enhanced_logger.logger.info("Dataset loaded successfully from: %s", csv_file_path)
 
     # Conduct partitioning
     partitioner = instantiate_partitioner(
