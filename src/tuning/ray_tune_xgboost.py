@@ -101,9 +101,13 @@ class EnhancedXGBoostTrainer:
         self.max_concurrent_trials = max_concurrent_trials
         self.use_global_processor = use_global_processor
         
-        # Initialize data structures
+        # Initialize data structures - Store raw data instead of DMatrix
         self.train_data = None
         self.test_data = None
+        self.train_features = None
+        self.train_labels = None
+        self.test_features = None
+        self.test_labels = None
         self.global_processor = None
         self.best_params = None
         self.best_score = None
@@ -137,13 +141,19 @@ class EnhancedXGBoostTrainer:
         print(f"\nLoading training data from: {self.data_file}")
         dataset_dict = load_csv_data(self.data_file)
         
-        # Convert to DMatrix format
+        # Convert to DMatrix format for final model training
         train_dataset = dataset_dict["train"]
         self.train_data = transform_dataset_to_dmatrix(
             train_dataset, 
             processor=self.global_processor,
             is_training=True
         )
+        
+        # Extract raw features and labels for Ray Tune (these can be pickled)
+        # Convert Dataset to pandas DataFrame first
+        train_df = train_dataset.to_pandas()
+        self.train_features = train_df.drop(columns=['label']).values
+        self.train_labels = train_df['label'].values
         
         print(f"Training data: {self.train_data.num_row()} samples, {self.train_data.num_col()} features")
         
@@ -167,6 +177,12 @@ class EnhancedXGBoostTrainer:
                 is_training=False
             )
         
+        # Extract raw features and labels for Ray Tune
+        # Convert Dataset to pandas DataFrame first
+        test_df = test_dataset.to_pandas()
+        self.test_features = test_df.drop(columns=['label']).values
+        self.test_labels = test_df['label'].values
+        
         print(f"Test data: {self.test_data.num_row()} samples, {self.test_data.num_col()} features")
         
         # Verify data integrity
@@ -185,117 +201,22 @@ class EnhancedXGBoostTrainer:
         print(f"Training: {dict(zip(train_unique, train_counts))}")
         print(f"Test: {dict(zip(test_unique, test_counts))}")
 
-    def _train_with_data_wrapper(self, config: Dict[str, Any], train_data: xgb.DMatrix, test_data: xgb.DMatrix):
-        """
-        Wrapper function to train XGBoost with given hyperparameters.
-        This function is compatible with Ray Tune's training interface.
-        """
-        from src.core.dataset import load_csv_data
-        
-        try:
-            # Extract hyperparameters from config
-            params = {
-                'objective': 'multi:softprob',  # Multi-class classification
-                'eval_metric': 'mlogloss',      # Multi-class log loss
-                'eta': config['eta'],
-                'max_depth': int(config['max_depth']),
-                'min_child_weight': int(config['min_child_weight']),
-                'colsample_bytree': config['colsample_bytree'],
-                'colsample_bylevel': config.get('colsample_bylevel', 1.0),
-                'colsample_bynode': config.get('colsample_bynode', 1.0),
-                'reg_alpha': config.get('reg_alpha', 0),
-                'reg_lambda': config.get('reg_lambda', 1),
-                'gamma': config.get('gamma', 0),
-                'seed': 42,
-                'verbosity': 0  # Reduce XGBoost verbosity
-            }
-            
-            num_boost_round = int(config['num_boost_round'])
-            
-            # Determine number of classes for multi-class setup
-            train_labels = train_data.get_label()
-            num_classes = len(np.unique(train_labels))
-            params['num_class'] = num_classes
-            
-            # Early stopping configuration
-            early_stopping_rounds = max(10, num_boost_round // 10)
-            
-            # Create evaluation list for monitoring
-            evallist = [(train_data, 'train'), (test_data, 'eval')]
-            
-            # Train the model with early stopping
-            evals_result = {}
-            model = xgb.train(
-                params,
-                train_data,
-                num_boost_round=num_boost_round,
-                evals=evallist,
-                evals_result=evals_result,
-                early_stopping_rounds=early_stopping_rounds,
-                verbose_eval=False  # Disable verbose evaluation
-            )
-            
-            # Make predictions on test set
-            test_pred_proba = model.predict(test_data)
-            
-            # For multi-class, convert probabilities to class predictions
-            if len(test_pred_proba.shape) > 1:
-                test_pred = np.argmax(test_pred_proba, axis=1)
-            else:
-                test_pred = (test_pred_proba > 0.5).astype(int)
-            
-            # Get true labels
-            test_true = test_data.get_label().astype(int)
-            
-            # Calculate metrics
-            accuracy = accuracy_score(test_true, test_pred)
-            
-            # Calculate per-class metrics for multi-class
-            if num_classes > 2:
-                # Get weighted average F1 score for multi-class
-                from sklearn.metrics import f1_score
-                f1 = f1_score(test_true, test_pred, average='weighted')
-                
-                # Use F1 score as the main metric for multi-class problems
-                main_metric = f1
-                metric_name = 'f1_weighted'
-            else:
-                # For binary classification, use accuracy
-                main_metric = accuracy
-                metric_name = 'accuracy'
-            
-            # Get the final evaluation loss
-            final_train_loss = evals_result['train']['mlogloss'][-1]
-            final_eval_loss = evals_result['eval']['mlogloss'][-1]
-            
-            # Report metrics to Ray Tune
-            session.report(
-                accuracy=accuracy,
-                **{metric_name: main_metric},
-                train_loss=final_train_loss,
-                eval_loss=final_eval_loss,
-                num_boost_round_used=model.best_iteration + 1 if hasattr(model, 'best_iteration') else num_boost_round
-            )
-            
-        except Exception as e:
-            print(f"Training failed with error: {e}")
-            # Report poor performance for failed trials
-            session.report(accuracy=0.0, f1_weighted=0.0, train_loss=float('inf'), eval_loss=float('inf'))
-
     def tune_hyperparameters(self):
         """Run hyperparameter tuning using Ray Tune."""
         print("\n" + "="*60)
         print("HYPERPARAMETER TUNING")
         print("="*60)
         
-        if self.train_data is None:
+        if self.train_features is None:
             self.load_and_prepare_data()
         
-        # Create partial function with data
+        # Create partial function with raw data arrays (these can be pickled)
         train_func = partial(
-            self._train_with_data_wrapper,
-            train_data=self.train_data,
-            test_data=self.test_data
+            train_with_config,
+            train_features=self.train_features,
+            train_labels=self.train_labels,
+            test_features=self.test_features,
+            test_labels=self.test_labels
         )
         
         # Configure ASHA scheduler for early stopping
@@ -471,6 +392,105 @@ class EnhancedXGBoostTrainer:
         finally:
             # Shutdown Ray
             ray.shutdown()
+
+def train_with_config(config: Dict[str, Any], train_features: np.ndarray, train_labels: np.ndarray, 
+                     test_features: np.ndarray, test_labels: np.ndarray):
+    """
+    Standalone training function that can be pickled for Ray Tune.
+    This function recreates DMatrix objects inside each worker.
+    """
+    try:
+        # Create DMatrix objects inside the worker (avoiding pickling issues)
+        train_dmatrix = xgb.DMatrix(train_features, label=train_labels)
+        test_dmatrix = xgb.DMatrix(test_features, label=test_labels)
+        
+        # Extract hyperparameters from config
+        params = {
+            'objective': 'multi:softprob',  # Multi-class classification
+            'eval_metric': 'mlogloss',      # Multi-class log loss
+            'eta': config['eta'],
+            'max_depth': int(config['max_depth']),
+            'min_child_weight': int(config['min_child_weight']),
+            'colsample_bytree': config['colsample_bytree'],
+            'colsample_bylevel': config.get('colsample_bylevel', 1.0),
+            'colsample_bynode': config.get('colsample_bynode', 1.0),
+            'reg_alpha': config.get('reg_alpha', 0),
+            'reg_lambda': config.get('reg_lambda', 1),
+            'gamma': config.get('gamma', 0),
+            'seed': 42,
+            'verbosity': 0  # Reduce XGBoost verbosity
+        }
+        
+        num_boost_round = int(config['num_boost_round'])
+        
+        # Determine number of classes for multi-class setup
+        num_classes = len(np.unique(train_labels))
+        params['num_class'] = num_classes
+        
+        # Early stopping configuration
+        early_stopping_rounds = max(10, num_boost_round // 10)
+        
+        # Create evaluation list for monitoring
+        evallist = [(train_dmatrix, 'train'), (test_dmatrix, 'eval')]
+        
+        # Train the model with early stopping
+        evals_result = {}
+        model = xgb.train(
+            params,
+            train_dmatrix,
+            num_boost_round=num_boost_round,
+            evals=evallist,
+            evals_result=evals_result,
+            early_stopping_rounds=early_stopping_rounds,
+            verbose_eval=False  # Disable verbose evaluation
+        )
+        
+        # Make predictions on test set
+        test_pred_proba = model.predict(test_dmatrix)
+        
+        # For multi-class, convert probabilities to class predictions
+        if len(test_pred_proba.shape) > 1:
+            test_pred = np.argmax(test_pred_proba, axis=1)
+        else:
+            test_pred = (test_pred_proba > 0.5).astype(int)
+        
+        # Get true labels
+        test_true = test_labels.astype(int)
+        
+        # Calculate metrics
+        accuracy = accuracy_score(test_true, test_pred)
+        
+        # Calculate per-class metrics for multi-class
+        if num_classes > 2:
+            # Get weighted average F1 score for multi-class
+            from sklearn.metrics import f1_score
+            f1 = f1_score(test_true, test_pred, average='weighted')
+            
+            # Use F1 score as the main metric for multi-class problems
+            main_metric = f1
+            metric_name = 'f1_weighted'
+        else:
+            # For binary classification, use accuracy
+            main_metric = accuracy
+            metric_name = 'accuracy'
+        
+        # Get the final evaluation loss
+        final_train_loss = evals_result['train']['mlogloss'][-1]
+        final_eval_loss = evals_result['eval']['mlogloss'][-1]
+        
+        # Report metrics to Ray Tune
+        session.report(
+            accuracy=accuracy,
+            **{metric_name: main_metric},
+            train_loss=final_train_loss,
+            eval_loss=final_eval_loss,
+            num_boost_round_used=model.best_iteration + 1 if hasattr(model, 'best_iteration') else num_boost_round
+        )
+        
+    except Exception as e:
+        print(f"Training failed with error: {e}")
+        # Report poor performance for failed trials
+        session.report(accuracy=0.0, f1_weighted=0.0, train_loss=float('inf'), eval_loss=float('inf'))
 
 def main():
     """Main function to run hyperparameter tuning."""

@@ -189,8 +189,13 @@ jobs:
           # Create output directories to ensure they exist
           mkdir -p outputs results tune_results
           
-          # Run the federated learning with tuned parameters (updated path)
-          bash scripts/run_bagging.sh
+          # Run the federated learning with tuned parameters, but disable hyperparameter tuning
+          # since we already optimized the parameters in the previous step
+          echo "Using Ray Tune optimized parameters from previous step..."
+          echo "Disabling hyperparameter tuning in federated learning pipeline to avoid duplication..."
+          
+          # Override the tuning.enabled setting to false since we already have optimized parameters
+          python run.py +experiment=bagging tuning.enabled=false
           
           # List what was created for debugging
           echo "Contents of outputs directory:"
