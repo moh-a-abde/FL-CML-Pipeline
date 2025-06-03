@@ -79,6 +79,9 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
         'eta': config['eta'],
         'subsample': config['subsample'],
         'colsample_bytree': config['colsample_bytree'],
+        'colsample_bylevel': config.get('colsample_bylevel', 1.0),  # Added parameter
+        'gamma': config.get('gamma', 0.0),  # Added parameter
+        'scale_pos_weight': config.get('scale_pos_weight', 1.0),  # Added for class imbalance
         'reg_alpha': config['reg_alpha'],
         'reg_lambda': config['reg_lambda'],
         
@@ -174,16 +177,19 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
     logger.info("Training data size for final model: %d", len(final_train_features))
     logger.info("Validation data size for final model: %d", len(final_test_features))
     
-    # Define the search space using hyperopt's hp module
+    # Define the search space using hyperopt's hp module with enhanced variety
     search_space = {
-        "max_depth": hp.quniform("max_depth", 3, 10, 1),
-        "min_child_weight": hp.quniform("min_child_weight", 1, 20, 1),
-        "reg_alpha": hp.loguniform("reg_alpha", np.log(1e-3), np.log(10.0)),
-        "reg_lambda": hp.loguniform("reg_lambda", np.log(1e-3), np.log(10.0)),
-        "eta": hp.loguniform("eta", np.log(1e-3), np.log(0.3)),
-        "subsample": hp.uniform("subsample", 0.5, 1.0),
-        "colsample_bytree": hp.uniform("colsample_bytree", 0.5, 1.0),
-        "num_boost_round": hp.quniform("num_boost_round", 1, 10, 1)  # Modified range for FL compatibility
+        "max_depth": hp.quniform("max_depth", 2, 20, 1),  # Expanded range from (3, 10)
+        "min_child_weight": hp.quniform("min_child_weight", 1, 25, 1),  # Expanded range from (1, 20)
+        "reg_alpha": hp.loguniform("reg_alpha", np.log(1e-10), np.log(1000.0)),  # Expanded range
+        "reg_lambda": hp.loguniform("reg_lambda", np.log(1e-10), np.log(1000.0)),  # Expanded range
+        "eta": hp.loguniform("eta", np.log(1e-4), np.log(0.8)),  # Expanded range from (1e-3, 0.3)
+        "subsample": hp.uniform("subsample", 0.3, 1.0),  # Added subsample parameter
+        "colsample_bytree": hp.uniform("colsample_bytree", 0.3, 1.0),  # Expanded range from (0.5, 1.0)
+        "colsample_bylevel": hp.uniform("colsample_bylevel", 0.3, 1.0),  # Added parameter
+        "gamma": hp.loguniform("gamma", np.log(1e-10), np.log(10.0)),  # Expanded range
+        "scale_pos_weight": hp.loguniform("scale_pos_weight", np.log(0.1), np.log(10.0)),  # Added for imbalance
+        "num_boost_round": hp.quniform("num_boost_round", 10, 1000, 1)  # Expanded range from (10, 1000)
     }
     if gpu_fraction is not None and gpu_fraction > 0:
         # NOTE: Ray Tune handles GPU allocation via resources_per_trial typically
@@ -203,8 +209,8 @@ def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_p
         mode="min"
     )
     scheduler = ASHAScheduler(
-        max_t=200, # Corresponds roughly to num_boost_round max
-        grace_period=10,
+        max_t=1000, # Increased from 200 to match expanded num_boost_round range
+        grace_period=50,  # Increased grace period for more thorough evaluation
         reduction_factor=2,
         metric="mlogloss",
         mode="min"
@@ -298,6 +304,9 @@ def train_final_model(config: dict,
         'eta': config['eta'],
         'subsample': config['subsample'],
         'colsample_bytree': config['colsample_bytree'],
+        'colsample_bylevel': config.get('colsample_bylevel', 1.0),  # Added parameter
+        'gamma': config.get('gamma', 0.0),  # Added parameter
+        'scale_pos_weight': config.get('scale_pos_weight', 1.0),  # Added for class imbalance
         'reg_alpha': config['reg_alpha'],
         'reg_lambda': config['reg_lambda'],
         

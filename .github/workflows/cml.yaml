@@ -110,11 +110,11 @@ jobs:
           
           # Detect CI environment and adjust sample count accordingly
           if [ "$CI" = "true" ]; then
-            SAMPLES=15  # Increased from 5 for better optimization while avoiding timeout
-            echo "CI detected: Using $SAMPLES samples for validation (increased for better results)"
+            SAMPLES=100  # Increased from 15 to 100 for more comprehensive optimization
+            echo "CI detected: Using $SAMPLES samples for comprehensive optimization"
           else
-            SAMPLES=50
-            echo "Local run: Using $SAMPLES samples for thorough optimization"
+            SAMPLES=100  # Increased from 50 to 100 for thorough optimization
+            echo "Local run: Using $SAMPLES samples for comprehensive optimization"
           fi
           
           # Check if the final dataset exists

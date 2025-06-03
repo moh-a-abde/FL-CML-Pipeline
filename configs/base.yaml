@@ -63,7 +63,7 @@ federated:
 # Hyperparameter tuning configuration
 tuning:
   enabled: false
-  num_samples: 30
+  num_samples: 100
   cpus_per_trial: 2
   max_concurrent_trials: 4
   output_dir: "./tune_results"
@@ -71,7 +71,7 @@ tuning:
   # Ray Tune scheduler
   scheduler:
     type: "ASHA"
-    max_t: 200
+    max_t: 500
     grace_period: 50
     reduction_factor: 3
 

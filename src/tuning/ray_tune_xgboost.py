@@ -49,31 +49,46 @@ ray.init(
     local_mode=False  # Set to True for debugging
 )
 
-# Global constants for the enhanced hyperparameter search
+# Global constants for the enhanced hyperparameter search with wider variety
 ENHANCED_PARAM_SPACE = {
-    # Learning rate - expanded range for better exploration
-    'eta': tune.loguniform(0.01, 0.5),
+    # Learning rate - significantly expanded range for better exploration
+    'eta': tune.loguniform(0.001, 0.8),  # Expanded from (0.01, 0.5) to include very low and high learning rates
     
-    # Tree depth - wider range for complex patterns
-    'max_depth': tune.randint(3, 15),
+    # Tree depth - wider range for complex patterns  
+    'max_depth': tune.randint(2, 20),  # Expanded from (3, 15) to include shallow and very deep trees
     
-    # Minimum child weight - helps with overfitting
-    'min_child_weight': tune.randint(1, 15),
+    # Minimum child weight - helps with overfitting, expanded range
+    'min_child_weight': tune.randint(1, 25),  # Expanded from (1, 15) to include higher values
     
-    # Subsample ratios - prevent overfitting
-    'colsample_bytree': tune.uniform(0.5, 1.0),
-    'colsample_bylevel': tune.uniform(0.5, 1.0),
-    'colsample_bynode': tune.uniform(0.5, 1.0),
+    # Subsample ratio for training instances
+    'subsample': tune.uniform(0.3, 1.0),  # Added subsample parameter for better diversity
     
-    # Regularization - L1 and L2
-    'reg_alpha': tune.loguniform(1e-8, 100),  # L1 regularization
-    'reg_lambda': tune.loguniform(1e-8, 100),  # L2 regularization
+    # Column subsampling ratios - prevent overfitting with wider ranges
+    'colsample_bytree': tune.uniform(0.3, 1.0),  # Expanded from (0.5, 1.0) to allow more aggressive subsampling
+    'colsample_bylevel': tune.uniform(0.3, 1.0),  # Expanded from (0.5, 1.0)
+    'colsample_bynode': tune.uniform(0.3, 1.0),   # Expanded from (0.5, 1.0)
     
-    # Gamma - minimum loss reduction required to make split
-    'gamma': tune.loguniform(1e-8, 1.0),
+    # Regularization - L1 and L2 with much wider ranges
+    'reg_alpha': tune.loguniform(1e-10, 1000),  # Expanded from (1e-8, 100) for stronger regularization
+    'reg_lambda': tune.loguniform(1e-10, 1000), # Expanded from (1e-8, 100) for stronger regularization
     
-    # Number of boosting rounds
-    'num_boost_round': tune.randint(50, 500)
+    # Gamma - minimum loss reduction required to make split, expanded range
+    'gamma': tune.loguniform(1e-10, 10.0),  # Expanded from (1e-8, 1.0) to allow stronger pruning
+    
+    # Scale positive weight for imbalanced datasets
+    'scale_pos_weight': tune.loguniform(0.1, 10.0),  # New parameter for handling class imbalance
+    
+    # Maximum delta step - limits the max output of tree leaf
+    'max_delta_step': tune.choice([0, 1, 2, 5, 10]),  # New parameter for controlling leaf output
+    
+    # Number of boosting rounds with much wider range
+    'num_boost_round': tune.randint(10, 1000),  # Expanded from (50, 500) to include very few and many rounds
+    
+    # Tree growing policy
+    'grow_policy': tune.choice(['depthwise', 'lossguide']),  # New parameter for tree construction strategy
+    
+    # Maximum number of leaves for lossguide policy
+    'max_leaves': tune.randint(8, 4096),  # New parameter that works with lossguide policy
 }
 
 # Import FeatureProcessor for consistent preprocessing
@@ -411,15 +426,23 @@ def train_with_config(config: Dict[str, Any], train_features: np.ndarray, train_
             'eta': config['eta'],
             'max_depth': int(config['max_depth']),
             'min_child_weight': int(config['min_child_weight']),
+            'subsample': config.get('subsample', 1.0),  # Added subsample parameter
             'colsample_bytree': config['colsample_bytree'],
             'colsample_bylevel': config.get('colsample_bylevel', 1.0),
             'colsample_bynode': config.get('colsample_bynode', 1.0),
             'reg_alpha': config.get('reg_alpha', 0),
             'reg_lambda': config.get('reg_lambda', 1),
             'gamma': config.get('gamma', 0),
+            'scale_pos_weight': config.get('scale_pos_weight', 1.0),  # Added for class imbalance
+            'max_delta_step': config.get('max_delta_step', 0),  # Added for controlling leaf output
+            'grow_policy': config.get('grow_policy', 'depthwise'),  # Added tree growing policy
             'seed': 42,
             'verbosity': 0  # Reduce XGBoost verbosity
         }
+        
+        # Handle max_leaves parameter only for lossguide policy
+        if params['grow_policy'] == 'lossguide':
+            params['max_leaves'] = int(config.get('max_leaves', 256))
         
         num_boost_round = int(config['num_boost_round'])
         
@@ -508,7 +531,7 @@ def main():
                        help="Path to the training data CSV file")
     parser.add_argument("--test-data-file", type=str, default=None,
                        help="Path to separate test data CSV file (optional)")
-    parser.add_argument("--num-samples", type=int, default=50,
+    parser.add_argument("--num-samples", type=int, default=100,
                        help="Number of hyperparameter configurations to try")
     parser.add_argument("--cpus-per-trial", type=int, default=2,
                        help="Number of CPUs per trial")
