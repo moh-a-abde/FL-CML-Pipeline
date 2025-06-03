@@ -14,15 +14,11 @@ import sys
 import os
 import hydra
 from omegaconf import DictConfig
-from flwr.common.logger import log
-from logging import INFO
 from src.config.config_manager import get_config_manager
+from src.utils.enhanced_logging import setup_enhanced_logging
 
-def run_command(command, description):
-    """Run a command and handle errors."""
-    log(INFO, "Running: %s", description)
-    log(INFO, "Command: %s", " ".join(command))
-    
+def run_command(command, description, enhanced_logger):
+    """Run a command and handle errors with enhanced logging."""
     # Set up environment with PYTHONPATH to include project root
     env = os.environ.copy()
     project_root = os.path.dirname(os.path.abspath(__file__))
@@ -33,52 +29,56 @@ def run_command(command, description):
     
     try:
         result = subprocess.run(command, check=True, capture_output=True, text=True, env=env)
-        log(INFO, "✓ %s completed successfully", description)
-        if result.stdout:
-            log(INFO, "Output: %s", result.stdout.strip())
+        enhanced_logger.step_success(description, output=result.stdout)
         return True
     except subprocess.CalledProcessError as e:
-        log(INFO, "✗ %s failed with exit code %d", description, e.returncode)
-        if e.stdout:
-            log(INFO, "Stdout: %s", e.stdout.strip())
+        error_msg = f"Command failed with exit code {e.returncode}"
         if e.stderr:
-            log(INFO, "Stderr: %s", e.stderr.strip())
+            error_msg += f"\nStderr: {e.stderr.strip()}"
+        enhanced_logger.step_error(description, error_msg, e.returncode)
         return False
 
 @hydra.main(version_base=None, config_path="configs", config_name="base")
 def main(cfg: DictConfig) -> None:
     """Main execution pipeline."""
-    log(INFO, "Starting Federated Learning Pipeline with Consistent Preprocessing")
-    log(INFO, "=" * 80)
+    # Setup enhanced logging
+    enhanced_logger = setup_enhanced_logging()
     
     # Convert DictConfig to structured config using ConfigManager
     config_manager = get_config_manager()
     # Create structured config from the Hydra DictConfig
-    config = config_manager._convert_to_structured_config(cfg)
+    config = config_manager._convert_to_structured_config(cfg)  # pylint: disable=protected-access
     
-    log(INFO, "Configuration loaded successfully")
-    log(INFO, "Dataset: %s", config.data.path + "/" + config.data.filename)
-    log(INFO, "Training method: %s", config.federated.train_method)
-    log(INFO, "Number of rounds: %d", config.federated.num_rounds)
-    log(INFO, "Pool size: %d", config.federated.pool_size)
+    # Start pipeline with enhanced logging
+    enhanced_logger.pipeline_start(config)
     
     # Construct full data path
     data_file_path = config.data.path + "/" + config.data.filename
     
     # Step 1: Create global feature processor
-    log(INFO, "Step 1: Creating global feature processor for consistent preprocessing")
+    enhanced_logger.step_start(
+        "global_processor", 
+        "Creating global feature processor for consistent preprocessing",
+        f"python src/core/create_global_processor.py --data-file {data_file_path} --output-dir {config.outputs.base_dir} --force"
+    )
+    
     if not run_command([
         "python", "src/core/create_global_processor.py",
         "--data-file", data_file_path,
         "--output-dir", config.outputs.base_dir,
         "--force"
-    ], "Global feature processor creation"):
-        log(INFO, "Failed to create global feature processor. Exiting.")
+    ], "global_processor", enhanced_logger):
+        enhanced_logger.step_error("global_processor", "Failed to create global feature processor")
         sys.exit(1)
     
     # Step 2: Run hyperparameter tuning with consistent preprocessing (if enabled)
     if config.tuning.enabled:
-        log(INFO, "Step 2: Running hyperparameter tuning with consistent preprocessing")
+        enhanced_logger.step_start(
+            "hyperparameter_tuning",
+            "Running hyperparameter tuning with consistent preprocessing",
+            f"python src/tuning/ray_tune_xgboost.py --data-file {data_file_path} --num-samples {config.tuning.num_samples} --cpus-per-trial {config.tuning.cpus_per_trial} --output-dir {config.tuning.output_dir}"
+        )
+        
         tuning_command = [
             "python", "src/tuning/ray_tune_xgboost.py",
             "--data-file", data_file_path,
@@ -87,38 +87,42 @@ def main(cfg: DictConfig) -> None:
             "--output-dir", config.tuning.output_dir
         ]
         
-        if not run_command(tuning_command, "Ray Tune hyperparameter optimization"):
-            log(INFO, "Hyperparameter tuning failed. Continuing with default parameters.")
+        if not run_command(tuning_command, "hyperparameter_tuning", enhanced_logger):
+            enhanced_logger.step_error("hyperparameter_tuning", "Hyperparameter tuning failed. Continuing with default parameters.")
         
         # Step 3: Generate tuned parameters file
-        log(INFO, "Step 3: Generating tuned parameters file")
+        enhanced_logger.step_start(
+            "generate_tuned_params",
+            "Generating tuned parameters file",
+            "python src/models/use_tuned_params.py"
+        )
+        
         if not run_command([
             "python", "src/models/use_tuned_params.py"
-        ], "Tuned parameters generation"):
-            log(INFO, "Failed to generate tuned parameters. Using default parameters.")
+        ], "generate_tuned_params", enhanced_logger):
+            enhanced_logger.step_error("generate_tuned_params", "Failed to generate tuned parameters. Using default parameters.")
     else:
-        log(INFO, "Hyperparameter tuning disabled. Using default parameters.")
+        enhanced_logger.logger.info("🔧 Hyperparameter tuning disabled. Using default parameters.")
     
     # Step 4: Run federated learning simulation
-    log(INFO, "Step 4: Starting federated learning simulation")
+    enhanced_logger.step_start(
+        "federated_learning",
+        "Starting federated learning simulation",
+        "python src/federated/sim.py"
+    )
+    
     sim_command = [
         "python", "src/federated/sim.py"
     ]
     
     # Pass configuration through environment or config file
     # The sim.py will load configuration using ConfigManager
-    if not run_command(sim_command, "Federated learning simulation"):
-        log(INFO, "Federated learning simulation failed.")
+    if not run_command(sim_command, "federated_learning", enhanced_logger):
+        enhanced_logger.step_error("federated_learning", "Federated learning simulation failed.")
         sys.exit(1)
     
-    log(INFO, "=" * 80)
-    log(INFO, "Federated Learning Pipeline completed successfully!")
-    log(INFO, "Key improvements:")
-    log(INFO, "✓ Consistent preprocessing across all phases")
-    log(INFO, "✓ Temporal splitting to prevent data leakage")
-    log(INFO, "✓ Global feature processor for uniform data representation")
-    log(INFO, "✓ Tuned hyperparameters applied to federated learning")
-    log(INFO, "Results saved to: %s", config.outputs.base_dir)
+    # Pipeline completion
+    enhanced_logger.pipeline_complete(config.outputs.base_dir)
 
 if __name__ == "__main__":
     main()

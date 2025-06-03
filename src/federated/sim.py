@@ -28,6 +28,7 @@ from src.core.dataset import (
     load_global_feature_processor,
 )
 from src.config.config_manager import get_config_manager, load_config
+from src.utils.enhanced_logging import get_enhanced_logger
 
 # Try to import NUM_LOCAL_ROUND from tuned_params if available, otherwise from utils
 try:
@@ -93,24 +94,46 @@ def get_client_fn(
     return client_fn
 
 def main():
+    # Get enhanced logger instance
+    enhanced_logger = get_enhanced_logger()
+    
     # Load configuration using ConfigManager
-    log(INFO, "Loading configuration for federated simulation...")
+    enhanced_logger.logger.info("Loading configuration for federated simulation...")
     config = load_config()  # Load base configuration
     
-    log(INFO, "Configuration loaded successfully:")
-    log(INFO, "Training method: %s", config.federated.train_method)
-    log(INFO, "Pool size: %d", config.federated.pool_size)
-    log(INFO, "Number of rounds: %d", config.federated.num_rounds)
-    log(INFO, "Clients per round: %d", config.federated.num_clients_per_round)
-    log(INFO, "Centralized evaluation: %s", config.federated.centralised_eval)
-    log(INFO, "Partitioner type: %s", config.federated.partitioner_type)
+    enhanced_logger.logger.info("Configuration loaded successfully:")
+    enhanced_logger.logger.info("Training method: %s", config.federated.train_method)
+    enhanced_logger.logger.info("Pool size: %d", config.federated.pool_size)
+    enhanced_logger.logger.info("Number of rounds: %d", config.federated.num_rounds)
+    enhanced_logger.logger.info("Clients per round: %d", config.federated.num_clients_per_round)
+    enhanced_logger.logger.info("Centralized evaluation: %s", config.federated.centralised_eval)
+    enhanced_logger.logger.info("Partitioner type: %s", config.federated.partitioner_type)
     
     # Get data file path
     csv_file_path = os.path.join(config.data.path, config.data.filename)
-    log(INFO, "Loading dataset from: %s", csv_file_path)
+    enhanced_logger.logger.info("Loading dataset from: %s", csv_file_path)
     
     # Load CSV dataset
     dataset = load_csv_data(csv_file_path)
+
+    # Log dataset statistics
+    if hasattr(dataset, 'num_rows'):
+        total_samples = dataset.num_rows
+    else:
+        total_samples = len(dataset['train']) + len(dataset['test']) if 'test' in dataset else len(dataset['train'])
+    
+    # Extract features for logging
+    sample_data = dataset['train'][0] if 'train' in dataset else next(iter(dataset.values()))[0]
+    features = list(sample_data.keys()) if hasattr(sample_data, 'keys') else []
+    
+    data_stats = {
+        'total_samples': total_samples,
+        'features': features,
+        'train_samples': len(dataset['train']) if 'train' in dataset else 0,
+        'test_samples': len(dataset['test']) if 'test' in dataset else 0,
+    }
+    
+    enhanced_logger.log_data_statistics(data_stats)
 
     # Conduct partitioning
     partitioner = instantiate_partitioner(
@@ -121,14 +144,14 @@ def main():
 
     # Load centralised test set
     if config.federated.centralised_eval:
-        log(INFO, "Loading centralised test set...")
+        enhanced_logger.logger.info("Loading centralised test set...")
         test_data = fds["test"]
         test_data.set_format("numpy")
         num_test = test_data.shape[0]
         test_dmatrix = transform_dataset_to_dmatrix(test_data)
 
     # Load partitions and reformat data to DMatrix for xgboost
-    log(INFO, "Loading client local partitions...")
+    enhanced_logger.logger.info("Loading client local partitions...")
     train_data_list = []
     valid_data_list = []
 
@@ -206,9 +229,9 @@ def main():
     if config.federated.train_method == "bagging" and config.federated.scaled_lr:
         new_lr = params["eta"] / config.federated.pool_size
         params.update({"eta": new_lr})
-        log(INFO, "Scaled learning rate applied: %f", new_lr)
+        enhanced_logger.logger.info("Scaled learning rate applied: %f", new_lr)
 
-    log(INFO, "Starting simulation with %d rounds...", config.federated.num_rounds)
+    enhanced_logger.logger.info("🚀 Starting simulation with %d rounds...", config.federated.num_rounds)
     
     # Start simulation
     fl.simulation.start_simulation(
@@ -226,7 +249,7 @@ def main():
         client_manager=CyclicClientManager() if config.federated.train_method == "cyclic" else None,
     )
     
-    log(INFO, "Simulation completed successfully!")
+    enhanced_logger.logger.info("✅ Simulation completed successfully!")
 
 if __name__ == "__main__":
     main()
