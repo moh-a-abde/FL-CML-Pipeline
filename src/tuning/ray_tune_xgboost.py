@@ -478,19 +478,26 @@ def train_with_config(config: Dict[str, Any], train_features: np.ndarray, train_
         final_train_loss = evals_result['train']['mlogloss'][-1]
         final_eval_loss = evals_result['eval']['mlogloss'][-1]
         
-        # Report metrics to Ray Tune
-        session.report(
-            accuracy=accuracy,
-            **{metric_name: main_metric},
-            train_loss=final_train_loss,
-            eval_loss=final_eval_loss,
-            num_boost_round_used=model.best_iteration + 1 if hasattr(model, 'best_iteration') else num_boost_round
-        )
+        # Report metrics to Ray Tune using correct format (metrics dictionary)
+        metrics = {
+            'accuracy': accuracy,
+            metric_name: main_metric,
+            'train_loss': final_train_loss,
+            'eval_loss': final_eval_loss,
+            'num_boost_round_used': model.best_iteration + 1 if hasattr(model, 'best_iteration') else num_boost_round
+        }
+        session.report(metrics)
         
     except Exception as e:
         print(f"Training failed with error: {e}")
-        # Report poor performance for failed trials
-        session.report(accuracy=0.0, f1_weighted=0.0, train_loss=float('inf'), eval_loss=float('inf'))
+        # Report poor performance for failed trials using correct format
+        metrics = {
+            'accuracy': 0.0,
+            'f1_weighted': 0.0,
+            'train_loss': float('inf'),
+            'eval_loss': float('inf')
+        }
+        session.report(metrics)
 
 def main():
     """Main function to run hyperparameter tuning."""
