@@ -101,7 +101,7 @@ class EnhancedXGBoostTrainer:
     """Enhanced XGBoost trainer with improved hyperparameter optimization."""
     
     def __init__(self, data_file: str, test_data_file: str = None, 
-                 num_samples: int = 100, max_concurrent_trials: int = 4,
+                 num_samples: int = 5, max_concurrent_trials: int = 4,
                  use_global_processor: bool = True):
         """
         Initialize the enhanced XGBoost trainer.
@@ -228,13 +228,19 @@ class EnhancedXGBoostTrainer:
         if self.train_features is None:
             self.load_and_prepare_data()
         
-        # Create partial function with raw data arrays (these can be pickled)
+        # Use ray.put() to store large data arrays in Ray object store to avoid actor size warning
+        train_features_ref = ray.put(self.train_features)
+        train_labels_ref = ray.put(self.train_labels)
+        test_features_ref = ray.put(self.test_features)
+        test_labels_ref = ray.put(self.test_labels)
+        
+        # Create partial function with Ray object references instead of raw arrays
         train_func = partial(
             train_with_config,
-            train_features=self.train_features,
-            train_labels=self.train_labels,
-            test_features=self.test_features,
-            test_labels=self.test_labels
+            train_features=train_features_ref,
+            train_labels=train_labels_ref,
+            test_features=test_features_ref,
+            test_labels=test_labels_ref
         )
         
         # Configure ASHA scheduler for early stopping
@@ -413,24 +419,37 @@ class EnhancedXGBoostTrainer:
             # Shutdown Ray
             ray.shutdown()
 
-def train_with_config(config: Dict[str, Any], train_features: np.ndarray, train_labels: np.ndarray, 
-                     test_features: np.ndarray, test_labels: np.ndarray):
+def train_with_config(config: Dict[str, Any], train_features, train_labels, 
+                     test_features, test_labels):
     """
     Standalone training function using centralized utilities for DMatrix creation and parameter building.
     This function recreates DMatrix objects inside each worker using shared utilities.
+    Args can be either numpy arrays or Ray object references.
     """
     try:
+        # Get data from Ray object store if references, otherwise use directly
+        if hasattr(train_features, '__ray_object_ref__'):
+            train_features_data = ray.get(train_features)
+            train_labels_data = ray.get(train_labels)
+            test_features_data = ray.get(test_features)
+            test_labels_data = ray.get(test_labels)
+        else:
+            train_features_data = train_features
+            train_labels_data = train_labels
+            test_features_data = test_features
+            test_labels_data = test_labels
+        
         # Create DMatrix objects using centralized factory (Phase 3 migration)
         train_dmatrix = DMatrixFactory.create_dmatrix(
-            features=train_features,
-            labels=train_labels,
+            features=train_features_data,
+            labels=train_labels_data,
             handle_missing=True,
             validate=True,
             log_details=False  # Reduce verbosity in Ray Tune workers
         )
         test_dmatrix = DMatrixFactory.create_dmatrix(
-            features=test_features,
-            labels=test_labels,
+            features=test_features_data,
+            labels=test_labels_data,
             handle_missing=True,
             validate=True,
             log_details=False  # Reduce verbosity in Ray Tune workers
@@ -466,7 +485,7 @@ def train_with_config(config: Dict[str, Any], train_features: np.ndarray, train_
         num_boost_round = int(config['num_boost_round'])
         
         # Determine number of classes for multi-class setup
-        num_classes = len(np.unique(train_labels))
+        num_classes = len(np.unique(train_labels_data))
         params['num_class'] = num_classes
         
         # Early stopping configuration
@@ -497,7 +516,7 @@ def train_with_config(config: Dict[str, Any], train_features: np.ndarray, train_
             test_pred = (test_pred_proba > 0.5).astype(int)
         
         # Get true labels
-        test_true = test_labels.astype(int)
+        test_true = test_labels_data.astype(int)
         
         # Calculate metrics
         accuracy = accuracy_score(test_true, test_pred)
@@ -550,7 +569,7 @@ def main():
                        help="Path to the training data CSV file")
     parser.add_argument("--test-data-file", type=str, default=None,
                        help="Path to separate test data CSV file (optional)")
-    parser.add_argument("--num-samples", type=int, default=100,
+    parser.add_argument("--num-samples", type=int, default=5,
                        help="Number of hyperparameter configurations to try")
     parser.add_argument("--cpus-per-trial", type=int, default=2,
                        help="Number of CPUs per trial")
