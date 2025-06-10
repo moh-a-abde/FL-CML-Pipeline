@@ -188,14 +188,10 @@ class XgbClient(fl.client.Client):
             sample_weights = np.ones(len(y_train_int))
             
         # Create weighted DMatrix using centralized factory (Phase 3 migration)
-        dtrain_weighted = DMatrixFactory.create_dmatrix(
-            features=self.train_dmatrix.get_data(),
-            labels=y_train,
+        dtrain_weighted = DMatrixFactory.create_weighted_dmatrix(
+            base_dmatrix=self.train_dmatrix,
             weights=sample_weights,
-            feature_names=self.train_dmatrix.feature_names,
-            handle_missing=True,
-            validate=True,
-            log_details=False  # Reduce verbosity in client training
+            feature_names=self.train_dmatrix.feature_names
         )
         
         # Use xgb.train with early stopping for better performance
@@ -274,14 +270,10 @@ class XgbClient(fl.client.Client):
             sample_weights = np.ones(len(y_train_int))
             
         # Create a new DMatrix with weights using centralized factory (Phase 3 migration)
-        dtrain_weighted = DMatrixFactory.create_dmatrix(
-            features=self.train_dmatrix.get_data(),
-            labels=y_train,
+        dtrain_weighted = DMatrixFactory.create_weighted_dmatrix(
+            base_dmatrix=self.train_dmatrix,
             weights=sample_weights,
-            feature_names=self.train_dmatrix.feature_names,
-            handle_missing=True,
-            validate=True,
-            log_details=False  # Reduce verbosity in client training
+            feature_names=self.train_dmatrix.feature_names
         )
 
         global_round = int(ins.config["global_round"])

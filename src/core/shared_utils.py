@@ -185,23 +185,20 @@ class DMatrixFactory:
         """
         Create a weighted DMatrix from an existing DMatrix.
         
-        Common pattern in federated learning for class balancing.
+        Since XGBoost doesn't provide a direct way to extract the feature matrix
+        from a DMatrix, we'll set the weights on the existing DMatrix directly.
         
         Args:
-            base_dmatrix: Original DMatrix to extract data from
+            base_dmatrix: Original DMatrix to add weights to
             weights: Sample weights to apply
-            feature_names: Optional feature names
+            feature_names: Optional feature names (ignored, uses base_dmatrix names)
             
         Returns:
-            New DMatrix with applied weights
+            Original DMatrix with weights set
         """
-        return DMatrixFactory.create_dmatrix(
-            features=base_dmatrix.get_data(),
-            labels=base_dmatrix.get_label(),
-            weights=weights,
-            feature_names=feature_names or base_dmatrix.feature_names,
-            log_details=False  # Avoid duplicate logging
-        )
+        # Set weights directly on the existing DMatrix
+        base_dmatrix.set_weight(weights)
+        return base_dmatrix
 
 
 class MetricsCalculator:
