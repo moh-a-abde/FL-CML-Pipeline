@@ -36,51 +36,36 @@ from src.federated.utils import save_predictions_to_csv, get_class_names_list
 import importlib.util
 from sklearn.utils.class_weight import compute_sample_weight
 
+# Import shared utilities for Phase 3 deduplication
+from src.core.shared_utils import DMatrixFactory, XGBoostParamsBuilder
+
 
 def get_default_model_params():
     """
     Get default XGBoost parameters for UNSW_NB15 multi-class classification.
     
+    DEPRECATED: Use XGBoostParamsBuilder.build_params() instead.
+    Kept for backward compatibility during Phase 3 migration.
+    
     Returns:
         dict: Default XGBoost parameters
     """
-    return {
-        'objective': 'multi:softprob',  # Multi-class classification with probabilities
-        'num_class': 11,  # Classes: 0-10 (Normal, Reconnaissance, Backdoor, DoS, Exploits, Analysis, Fuzzers, Worms, Shellcode, Generic, plus class 10)
-        'eval_metric': 'mlogloss',  # Use single metric instead of list
-        'learning_rate': 0.05,
-        'max_depth': 6,
-        'min_child_weight': 1,
-        'subsample': 0.8,
-        'colsample_bytree': 0.8,
-        'scale_pos_weight': 1.0  # Removed class-specific weights as it's not compatible with multi-class with >3 classes
-    }
+    log(WARNING, "get_default_model_params() is deprecated. Use XGBoostParamsBuilder.build_params() instead.")
+    return XGBoostParamsBuilder.build_params()
 
 
 def load_tuned_params():
     """
     Try to load tuned parameters if available.
     
+    DEPRECATED: Use XGBoostParamsBuilder.build_params(use_tuned=True) instead.
+    Kept for backward compatibility during Phase 3 migration.
+    
     Returns:
         dict: Tuned parameters if available, else default parameters
     """
-    try:
-        # Check if tuned_params.py exists
-        tuned_params_path = os.path.join(os.path.dirname(__file__), "tuned_params.py")
-        if os.path.exists(tuned_params_path):
-            # Dynamically import the tuned parameters
-            spec = importlib.util.spec_from_file_location("tuned_params", tuned_params_path)
-            tuned_params_module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(tuned_params_module)
-            
-            # Use the tuned parameters
-            log(INFO, "Using tuned XGBoost parameters from Ray Tune optimization")
-            return tuned_params_module.TUNED_PARAMS
-        else:
-            return get_default_model_params()
-    except Exception as e:
-        log(INFO, f"Could not load tuned parameters: {str(e)}")
-        return get_default_model_params()
+    log(WARNING, "load_tuned_params() is deprecated. Use XGBoostParamsBuilder.build_params(use_tuned=True) instead.")
+    return XGBoostParamsBuilder.build_params(use_tuned=True)
 
 
 class XgbClient(fl.client.Client):
@@ -142,16 +127,17 @@ class XgbClient(fl.client.Client):
         self.num_local_round = num_local_round
         self.cid = cid
         
-        # Set model parameters based on priority: provided params > ConfigManager > tuned params > defaults
+        # Set model parameters using centralized builder (Phase 3 migration)
         if params is not None:
             self.params = params
-        elif config_manager is not None:
-            self.params = config_manager.get_model_params_dict()
-            log(INFO, "Using XGBoost parameters from ConfigManager")
-        elif use_tuned_params:
-            self.params = load_tuned_params()
+            log(INFO, "Using provided XGBoost parameters")
         else:
-            self.params = get_default_model_params()
+            # Use centralized parameter builder with proper priority handling
+            self.params = XGBoostParamsBuilder.build_params(
+                config_manager=config_manager,
+                use_tuned=use_tuned_params
+            )
+            log(INFO, "Using XGBoost parameters from centralized builder")
             
         self.train_method = train_method
         self.is_prediction_only = is_prediction_only
@@ -178,7 +164,7 @@ class XgbClient(fl.client.Client):
 
     def _local_boost(self, bst_input):
         """
-        Perform local boosting rounds on the input model.
+        Perform local boosting rounds on the input model using centralized DMatrixFactory.
 
         Args:
             bst_input: Input XGBoost model
@@ -201,12 +187,15 @@ class XgbClient(fl.client.Client):
             log(INFO, f"Error computing sample weights in _local_boost: {e}. Using uniform weights.")
             sample_weights = np.ones(len(y_train_int))
             
-        # Create weighted DMatrix for local training
-        dtrain_weighted = xgb.DMatrix(
-            self.train_dmatrix.get_data(), 
-            label=y_train, 
-            weight=sample_weights, 
-            feature_names=self.train_dmatrix.feature_names
+        # Create weighted DMatrix using centralized factory (Phase 3 migration)
+        dtrain_weighted = DMatrixFactory.create_dmatrix(
+            features=self.train_dmatrix.get_data(),
+            labels=y_train,
+            weights=sample_weights,
+            feature_names=self.train_dmatrix.feature_names,
+            handle_missing=True,
+            validate=True,
+            log_details=False  # Reduce verbosity in client training
         )
         
         # Use xgb.train with early stopping for better performance
@@ -233,7 +222,7 @@ class XgbClient(fl.client.Client):
 
     def fit(self, ins: FitIns) -> FitRes:
         """
-        Perform local model training.
+        Perform local model training using centralized utilities.
         """
         # --- PHASE 1: Aggressive Regularization (Overrides any loaded/tuned params) --- REMOVED
 
@@ -284,8 +273,16 @@ class XgbClient(fl.client.Client):
             log(INFO, "Falling back to uniform sample weights due to unexpected error.")
             sample_weights = np.ones(len(y_train_int))
             
-        # Create a new DMatrix with weights for training
-        dtrain_weighted = xgb.DMatrix(self.train_dmatrix.get_data(), label=y_train, weight=sample_weights, feature_names=self.train_dmatrix.feature_names)
+        # Create a new DMatrix with weights using centralized factory (Phase 3 migration)
+        dtrain_weighted = DMatrixFactory.create_dmatrix(
+            features=self.train_dmatrix.get_data(),
+            labels=y_train,
+            weights=sample_weights,
+            feature_names=self.train_dmatrix.feature_names,
+            handle_missing=True,
+            validate=True,
+            log_details=False  # Reduce verbosity in client training
+        )
 
         global_round = int(ins.config["global_round"])
         

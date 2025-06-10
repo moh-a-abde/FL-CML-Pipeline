@@ -33,6 +33,9 @@ from logging import INFO, WARNING, ERROR
 import pickle
 import os
 
+# Import shared utilities for Phase 3 deduplication
+from src.core.shared_utils import DMatrixFactory
+
 # Mapping between partitioning strategy names and their implementations
 CORRELATION_TO_PARTITIONER = {
     "uniform": IidPartitioner,
@@ -477,7 +480,7 @@ def instantiate_partitioner(partitioner_type: str, num_partitions: int):
 
 def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_training: bool = False):
     """
-    Transform dataset to DMatrix format.
+    Transform dataset to DMatrix format using centralized DMatrixFactory.
     
     Args:
         data: Input dataset (can be pandas DataFrame or Hugging Face Dataset)
@@ -494,22 +497,14 @@ def transform_dataset_to_dmatrix(data, processor: FeatureProcessor = None, is_tr
     # Now process the data using the pandas DataFrame
     x, y = preprocess_data(data, processor=processor, is_training=is_training)
     
-    # --- Logging before DMatrix creation ---
-    log(INFO, f"[transform_dataset_to_dmatrix] is_training={is_training}")
-    log(INFO, f"[transform_dataset_to_dmatrix] Features shape: {x.shape}")
-    if y is not None:
-        log(INFO, f"[transform_dataset_to_dmatrix] Labels shape: {y.shape}")
-        log(INFO, f"[transform_dataset_to_dmatrix] Labels dtype: {y.dtype}")
-        unique_labels, counts = np.unique(y, return_counts=True)
-        log(INFO, f"[transform_dataset_to_dmatrix] Unique labels: {unique_labels.tolist()}")
-        log(INFO, f"[transform_dataset_to_dmatrix] Label counts: {counts.tolist()}")
-    else:
-        log(INFO, "[transform_dataset_to_dmatrix] No labels provided (unlabeled data)")
-
-    # Create DMatrix
-    dmatrix = xgb.DMatrix(x, label=y)
-    
-    log(INFO, f"[transform_dataset_to_dmatrix] Created DMatrix with {dmatrix.num_row()} rows and {dmatrix.num_col()} features")
+    # Create DMatrix using centralized factory (Phase 3 migration)
+    dmatrix = DMatrixFactory.create_dmatrix(
+        features=x,
+        labels=y,
+        handle_missing=True,
+        validate=True,
+        log_details=True
+    )
     
     return dmatrix
 
@@ -559,9 +554,21 @@ def train_test_split(
             stratify=y
         )
         
-        # Create DMatrix objects
-        train_dmatrix = xgb.DMatrix(x_train, label=y_train)
-        test_dmatrix = xgb.DMatrix(x_test, label=y_test)
+        # Create DMatrix objects using centralized factory (Phase 3 migration)
+        train_dmatrix = DMatrixFactory.create_dmatrix(
+            features=x_train,
+            labels=y_train,
+            handle_missing=True,
+            validate=True,
+            log_details=True
+        )
+        test_dmatrix = DMatrixFactory.create_dmatrix(
+            features=x_test,
+            labels=y_test,
+            handle_missing=True,
+            validate=True,
+            log_details=True
+        )
         
         log(INFO, f"Split dataset: {train_dmatrix.num_row()} training samples, {test_dmatrix.num_row()} testing samples")
         log(INFO, f"Features: {train_dmatrix.num_col()}")
@@ -573,8 +580,21 @@ def train_test_split(
             x, test_size=test_fraction, random_state=random_state
         )
         
-        train_dmatrix = xgb.DMatrix(x_train)
-        test_dmatrix = xgb.DMatrix(x_test)
+        # Create DMatrix objects using centralized factory (Phase 3 migration)
+        train_dmatrix = DMatrixFactory.create_dmatrix(
+            features=x_train,
+            labels=None,
+            handle_missing=True,
+            validate=True,
+            log_details=True
+        )
+        test_dmatrix = DMatrixFactory.create_dmatrix(
+            features=x_test,
+            labels=None,
+            handle_missing=True,
+            validate=True,
+            log_details=True
+        )
         
         log(INFO, f"Split unlabeled dataset: {train_dmatrix.num_row()} training samples, {test_dmatrix.num_row()} testing samples")
         log(INFO, f"Features: {train_dmatrix.num_col()}")

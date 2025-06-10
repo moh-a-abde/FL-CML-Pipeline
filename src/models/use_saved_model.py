@@ -29,6 +29,9 @@ from sklearn.metrics import (
 from src.federated.utils import load_saved_model
 from src.core.dataset import transform_dataset_to_dmatrix, load_csv_data
 
+# Import shared utilities for Phase 3 deduplication
+from src.core.shared_utils import DMatrixFactory
+
 
 def parse_args():
     """Parse command line arguments."""
@@ -244,15 +247,21 @@ def evaluate_labeled_data(model, dataset, output_path):
 
 
 def predict_unlabeled_data(model, data_path, output_path):
-    """Handle prediction of unlabeled data."""
+    """Handle prediction of unlabeled data using centralized DMatrixFactory."""
     # Load unlabeled data
     data = pd.read_csv(data_path)
 
     # Clean data
     data = clean_data_for_xgboost(data)
 
-    # Convert to DMatrix
-    dmatrix = xgb.DMatrix(data)
+    # Convert to DMatrix using centralized factory (Phase 3 migration)
+    dmatrix = DMatrixFactory.create_dmatrix(
+        features=data,
+        labels=None,  # No labels for prediction-only data
+        handle_missing=True,
+        validate=True,
+        log_details=True
+    )
 
     # Make predictions
     raw_predictions = model.predict(dmatrix)
