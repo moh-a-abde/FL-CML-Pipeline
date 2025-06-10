@@ -523,8 +523,8 @@ class XGBoostParamsBuilder:
         """Load previously tuned parameters if available."""
         # Try to import and load tuned parameters
         try:
-            from src.models.use_tuned_params import load_tuned_params
-            return load_tuned_params()
+            from src.models.use_tuned_params import get_tuned_params
+            return get_tuned_params()
         except ImportError:
             log(WARNING, "[XGBoostParamsBuilder] Could not import tuned parameters module")
             return None

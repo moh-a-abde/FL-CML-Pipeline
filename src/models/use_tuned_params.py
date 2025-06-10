@@ -108,12 +108,16 @@ def create_xgboost_params(tuned_params):
     xgb_params.update({
         'max_depth': int(tuned_params.get('max_depth', 6)),
         'min_child_weight': int(tuned_params.get('min_child_weight', 1)),
-        'eta': tuned_params.get('eta', 0.1),
+        'eta': tuned_params.get('eta', 0.1),  # Use eta instead of learning_rate
         'subsample': tuned_params.get('subsample', 0.8),
         'colsample_bytree': tuned_params.get('colsample_bytree', 0.8),
         'reg_alpha': tuned_params.get('reg_alpha', 0.1),
         'reg_lambda': tuned_params.get('reg_lambda', 1.0)
     })
+    
+    # Remove learning_rate if eta is present to avoid conflicts
+    if 'eta' in xgb_params and 'learning_rate' in xgb_params:
+        del xgb_params['learning_rate']
     
     # Add new hyperparameters if they exist in tuned_params
     if 'gamma' in tuned_params:
@@ -227,6 +231,46 @@ def main():
     logger.info("Optimized parameters saved to %s", args.output_file)
     logger.info("Original parameters backed up to %s", backup_file)
     logger.info("These parameters will be automatically used by the XGBoost client")
+
+def get_tuned_params():
+    """
+    Load tuned parameters for use by other modules.
+    This function is called by XGBoostParamsBuilder.
+    
+    Returns:
+        dict: Tuned XGBoost parameters or None if not available
+    """
+    try:
+        # Try multiple locations for tuned parameters
+        possible_files = [
+            "./tune_results/best_params.json",
+            "tune_results/best_params.json",
+            "best_params.json"
+        ]
+        
+        params_file = None
+        for file_path in possible_files:
+            if os.path.exists(file_path):
+                params_file = file_path
+                break
+        
+        if params_file is None:
+            logger.warning("No tuned parameters file found in: %s", possible_files)
+            return None
+            
+        logger.info("Loading tuned parameters from: %s", params_file)
+        with open(params_file, 'r', encoding='utf-8') as f:
+            tuned_params = json.load(f)
+            
+        # Convert to XGBoost format
+        xgb_params = create_xgboost_params(tuned_params)
+        
+        logger.info("Successfully loaded tuned parameters with %d parameters", len(xgb_params))
+        return xgb_params
+        
+    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+        logger.warning("Error loading tuned parameters: %s", e)
+        return None
 
 if __name__ == "__main__":
     main() 
