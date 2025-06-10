@@ -153,6 +153,9 @@ def main():
         num_partitions=config.federated.pool_size
     )
     fds = dataset
+    
+    # Apply the partitioner to the train dataset (not the full DatasetDict)
+    partitioner.dataset = fds["train"]
 
     # Load centralised test set
     if config.federated.centralised_eval:
@@ -171,7 +174,7 @@ def main():
     # after the simulation begins since clients wont need to preprocess their partition.
     for partition_id in tqdm(range(config.federated.pool_size), desc="Extracting client partition"):
         # Extract partition for client with partition_id
-        partition = fds["train"]
+        partition = partitioner.load_partition(partition_id)
         partition.set_format("numpy")
 
         if config.federated.centralised_eval:

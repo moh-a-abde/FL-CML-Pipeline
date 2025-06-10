@@ -71,11 +71,11 @@ def load_data(client_id: int, config, global_processor_path: str = None) -> Tupl
         config.federated.num_partitions
     )
     
-    # Apply the partitioner to the dataset
-    partitioner.dataset = dataset
+    # Apply the partitioner to the train dataset (not the full DatasetDict)
+    partitioner.dataset = dataset["train"]
     
     # Get the partition for this client
-    client_dataset = partitioner.load_partition(client_id, "train")  # Use train split for partitioning
+    client_dataset = partitioner.load_partition(client_id)  # Load client's partition
     
     # Convert to DMatrix for training
     train_data = transform_dataset_to_dmatrix(client_dataset, processor=processor, is_training=True)
