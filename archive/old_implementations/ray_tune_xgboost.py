@@ -358,7 +358,7 @@ def main():
     parser = argparse.ArgumentParser(description="XGBoost Hyperparameter Tuning with Ray Tune")
     parser.add_argument("--train-file", type=str, required=True, help="Path to the training data CSV file.")
     parser.add_argument("--test-file", type=str, required=True, help="Path to the testing data CSV file.")
-    parser.add_argument("--num-samples", type=int, default=100, help="Number of hyperparameter samples to try.")
+    parser.add_argument("--num-samples", type=int, default=5, help="Number of hyperparameter samples to try.")
     parser.add_argument("--cpus-per-trial", type=int, default=1, help="Number of CPUs to allocate per trial.")
     parser.add_argument("--gpu-fraction", type=float, default=None, help="Fraction of GPU resources per trial (e.g., 0.5). Default is None (CPU only).")
     parser.add_argument("--output-dir", type=str, default="./tune_results", help="Directory to save Ray Tune results and best parameters.")

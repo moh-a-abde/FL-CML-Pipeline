@@ -531,7 +531,7 @@ def main():
                        help="Path to the training data CSV file")
     parser.add_argument("--test-data-file", type=str, default=None,
                        help="Path to separate test data CSV file (optional)")
-    parser.add_argument("--num-samples", type=int, default=100,
+    parser.add_argument("--num-samples", type=int, default=5,
                        help="Number of hyperparameter configurations to try")
     parser.add_argument("--cpus-per-trial", type=int, default=2,
                        help="Number of CPUs per trial")
