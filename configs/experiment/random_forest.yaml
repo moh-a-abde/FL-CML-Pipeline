@@ -5,6 +5,7 @@
 # Override model configuration for Random Forest
 model:
   type: "random_forest"
+  # Define complete Random Forest parameters (will override XGBoost params)
   params:
     # Core Random Forest parameters
     n_estimators: 100
@@ -30,12 +31,9 @@ model:
 federated:
   pool_size: 5
   num_rounds: 10
-  strategy: "bagging"  # Random Forest works well with bagging
+  train_method: "bagging"  # Random Forest works well with bagging
   fraction_fit: 0.8
-  fraction_eval: 0.5
-  min_fit_clients: 3
-  min_eval_clients: 2
-  min_available_clients: 3
+  fraction_evaluate: 0.5
 
 # Hyperparameter tuning for Random Forest
 tuning:
@@ -52,42 +50,18 @@ tuning:
     grace_period: 20
     reduction_factor: 3
 
-# Data configuration
+# Data configuration overrides for Random Forest
 data:
-  # Use smaller train/validation split for Random Forest experiments
-  train_split: 0.7
-  val_split: 0.2
-  test_split: 0.1
-  
-  # Random Forest can handle larger batch sizes
-  batch_size: 1000
-  
-  # Feature engineering
-  preprocessing:
-    normalize: false  # Random Forest doesn't require normalization
-    handle_missing: "median"
-    feature_selection: false
+  # Random Forest works well with the default data settings
+  # No specific overrides needed for data configuration
+  train_test_split: 0.8  # Keep standard split
 
-# Pipeline execution settings
-pipeline:
-  save_model: true
-  save_results: true
-  save_plots: true
-  early_stopping:
-    enabled: true
-    patience: 5
-    metric: "f1_weighted"
-    min_delta: 0.001
+# Pipeline execution settings (only override specific early stopping settings)
+early_stopping:
+  enabled: true
+  patience: 5
+  min_delta: 0.001
 
-# Experiment tracking
-experiment:
-  name: "random_forest_federated"
-  description: "Random Forest model in federated learning setup"
-  tags: ["random_forest", "federated_learning", "network_intrusion"]
-
-# Output configuration
-output:
-  base_dir: "./outputs"
-  save_predictions: true
-  save_feature_importance: true
-  save_model_info: true 
+# Output configuration (override experiment name)
+outputs:
+  experiment_name: "random_forest_federated" 

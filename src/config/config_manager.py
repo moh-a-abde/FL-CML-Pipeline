@@ -5,7 +5,7 @@ This module provides a centralized, type-safe configuration management system
 using Hydra for loading YAML configurations with experiment overrides.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Dict, Any, List, Optional, Union
 from pathlib import Path
 import logging
@@ -282,9 +282,15 @@ class ConfigManager:
             # Handle model parameters based on model type
             model_type = cfg.model.type.lower()
             if model_type == "xgboost":
-                model_params = XGBoostParamsConfig(**cfg.model.params)
+                # Filter for XGBoost parameters only
+                xgb_param_names = {f.name for f in fields(XGBoostParamsConfig)}
+                xgb_params = {k: v for k, v in cfg.model.params.items() if k in xgb_param_names}
+                model_params = XGBoostParamsConfig(**xgb_params)
             elif model_type == "random_forest":
-                model_params = RandomForestParamsConfig(**cfg.model.params)
+                # Filter for Random Forest parameters only
+                rf_param_names = {f.name for f in fields(RandomForestParamsConfig)}
+                rf_params = {k: v for k, v in cfg.model.params.items() if k in rf_param_names}
+                model_params = RandomForestParamsConfig(**rf_params)
             else:
                 raise ValueError(f"Unsupported model type: {model_type}")
             
