@@ -29,6 +29,8 @@ from src.core.dataset import (
 )
 from src.config.config_manager import get_config_manager, load_config
 from src.utils.enhanced_logging import get_enhanced_logger
+from src.federated.generic_client import GenericFederatedClient
+from src.federated.strategies.random_forest_strategy import RandomForestBagging, RandomForestFedAvg
 
 # Try to import NUM_LOCAL_ROUND from tuned_params if available, otherwise from utils
 try:
@@ -58,7 +60,7 @@ def get_latest_csv(directory: str) -> str:
     return os.path.join(directory, latest_file)
     
 def get_client_fn(
-    train_data_list, valid_data_list, train_method, params, num_local_round
+    train_data_list, valid_data_list, train_method, params, num_local_round, config_manager, model_type
 ):
     """Return a function to construct a client.
 
@@ -68,28 +70,60 @@ def get_client_fn(
 
     def client_fn(cid: str) -> fl.client.Client:
         """Construct a FlowerClient with its own dataset partition."""
-        x_train, y_train = train_data_list[int(cid)][0]
-        x_valid, y_valid = valid_data_list[int(cid)][0]
+        client_id = int(cid)
+        
+        if model_type == "xgboost":
+            # XGBoost client creation (legacy approach)
+            x_train, y_train = train_data_list[client_id][0]
+            x_valid, y_valid = valid_data_list[client_id][0]
 
-        # Reformat data to DMatrix
-        train_dmatrix = xgb.DMatrix(x_train, label=y_train)
-        valid_dmatrix = xgb.DMatrix(x_valid, label=y_valid)
+            # Reformat data to DMatrix
+            train_dmatrix = xgb.DMatrix(x_train, label=y_train)
+            valid_dmatrix = xgb.DMatrix(x_valid, label=y_valid)
 
-        # Fetch the number of examples
-        num_train = train_data_list[int(cid)][1]
-        num_val = valid_data_list[int(cid)][1]
+            # Fetch the number of examples
+            num_train = train_data_list[client_id][1]
+            num_val = valid_data_list[client_id][1]
 
-        # Create and return client
-        return XgbClient(
-            train_dmatrix,
-            valid_dmatrix,
-            num_train,
-            num_val,
-            num_local_round,
-            cid,
-            params,
-            train_method,
-        )
+            # Create and return XGBoost client
+            return XgbClient(
+                train_dmatrix,
+                valid_dmatrix,
+                num_train,
+                num_val,
+                num_local_round,
+                cid,
+                params,
+                train_method,
+            )
+        
+        elif model_type == "random_forest":
+            # Random Forest client creation using generic client
+            x_train, y_train = train_data_list[client_id][0]
+            x_valid, y_valid = valid_data_list[client_id][0]
+            
+            # Create generic client for Random Forest
+            generic_client = GenericFederatedClient(
+                client_id=client_id,
+                config_manager=config_manager,
+                global_processor_path="outputs/global_feature_processor.pkl"
+            )
+            
+            # Manually set the data for the generic client
+            generic_client.train_data = {
+                'X': x_train,
+                'y': y_train
+            }
+            generic_client.test_data = {
+                'X': x_valid,
+                'y': y_valid
+            }
+            
+            # Return the Flower client
+            return generic_client.get_flower_client()
+        
+        else:
+            raise ValueError(f"Unsupported model type: {model_type}")
 
     return client_fn
 
@@ -103,11 +137,15 @@ def main():
     
     enhanced_logger.logger.info("Configuration loaded successfully:")
     enhanced_logger.logger.info("Training method: %s", config.federated.train_method)
+    enhanced_logger.logger.info("Model type: %s", config.model.type)
     enhanced_logger.logger.info("Pool size: %d", config.federated.pool_size)
     enhanced_logger.logger.info("Number of rounds: %d", config.federated.num_rounds)
     enhanced_logger.logger.info("Clients per round: %d", config.federated.num_clients_per_round)
     enhanced_logger.logger.info("Centralized evaluation: %s", config.federated.centralised_eval)
     enhanced_logger.logger.info("Partitioner type: %s", config.federated.partitioner_type)
+    
+    # Get model type for strategy selection
+    model_type = config.model.type.lower()
     
     # Get data file path
     csv_file_path = os.path.join(config.data.path, config.data.filename)
@@ -157,15 +195,23 @@ def main():
     # Apply the partitioner to the train dataset (not the full DatasetDict)
     partitioner.dataset = fds["train"]
 
-    # Load centralised test set
+    # Load centralised test set based on model type
+    test_data_prepared = None
     if config.federated.centralised_eval:
         enhanced_logger.logger.info("Loading centralised test set...")
         test_data = fds["test"]
         test_data.set_format("numpy")
         num_test = test_data.shape[0]
-        test_dmatrix = transform_dataset_to_dmatrix(test_data)
+        
+        if model_type == "xgboost":
+            test_data_prepared = transform_dataset_to_dmatrix(test_data)
+        elif model_type == "random_forest":
+            # For Random Forest, keep as numpy arrays
+            test_data_prepared = test_data
+        else:
+            raise ValueError(f"Unsupported model type: {model_type}")
 
-    # Load partitions and reformat data to DMatrix for xgboost
+    # Load partitions and reformat data appropriately
     enhanced_logger.logger.info("Loading client local partitions...")
     train_data_list = []
     valid_data_list = []
@@ -194,36 +240,66 @@ def main():
         x_train, y_train = separate_xy(train_data)
         train_data_list.append(((x_train, y_train), num_train))
 
-    # Define strategy
-    if config.federated.train_method == "bagging":
-        # Bagging training
-        strategy = FedXgbBagging(
-            evaluate_function=(
-                get_evaluate_fn(test_dmatrix) if config.federated.centralised_eval else None
-            ),
-            fraction_fit=(float(config.federated.num_clients_per_round) / config.federated.pool_size),
-            min_fit_clients=config.federated.num_clients_per_round,
-            min_available_clients=config.federated.pool_size,
-            min_evaluate_clients=(
-                config.federated.num_evaluate_clients if not config.federated.centralised_eval else 0
-            ),
-            fraction_evaluate=1.0 if not config.federated.centralised_eval else 0.0,
-            on_evaluate_config_fn=eval_config,
-            on_fit_config_fn=fit_config,
-            evaluate_metrics_aggregation_fn=(
-                evaluate_metrics_aggregation if not config.federated.centralised_eval else None
-            ),
-        )
+    # Define strategy based on model type and training method
+    enhanced_logger.logger.info("Setting up strategy for model type: %s, training method: %s", model_type, config.federated.train_method)
+    
+    if model_type == "xgboost":
+        # XGBoost strategies
+        if config.federated.train_method == "bagging":
+            strategy = FedXgbBagging(
+                evaluate_function=(
+                    get_evaluate_fn(test_data_prepared) if config.federated.centralised_eval else None
+                ),
+                fraction_fit=(float(config.federated.num_clients_per_round) / config.federated.pool_size),
+                min_fit_clients=config.federated.num_clients_per_round,
+                min_available_clients=config.federated.pool_size,
+                min_evaluate_clients=(
+                    config.federated.num_evaluate_clients if not config.federated.centralised_eval else 0
+                ),
+                fraction_evaluate=1.0 if not config.federated.centralised_eval else 0.0,
+                on_evaluate_config_fn=eval_config,
+                on_fit_config_fn=fit_config,
+                evaluate_metrics_aggregation_fn=(
+                    evaluate_metrics_aggregation if not config.federated.centralised_eval else None
+                ),
+            )
+        else:
+            # Cyclic training
+            strategy = FedXgbCyclic(
+                fraction_fit=1.0,
+                min_available_clients=config.federated.pool_size,
+                fraction_evaluate=1.0,
+                evaluate_metrics_aggregation_fn=evaluate_metrics_aggregation,
+                on_evaluate_config_fn=eval_config,
+                on_fit_config_fn=fit_config,
+            )
+    
+    elif model_type == "random_forest":
+        # Random Forest strategies
+        if config.federated.train_method == "bagging":
+            strategy = RandomForestBagging(
+                fraction_fit=(float(config.federated.num_clients_per_round) / config.federated.pool_size),
+                min_fit_clients=config.federated.num_clients_per_round,
+                min_available_clients=config.federated.pool_size,
+                min_evaluate_clients=(
+                    config.federated.num_evaluate_clients if not config.federated.centralised_eval else 0
+                ),
+                fraction_evaluate=1.0 if not config.federated.centralised_eval else 0.0,
+            )
+        else:
+            # FedAvg for Random Forest
+            strategy = RandomForestFedAvg(
+                fraction_fit=(float(config.federated.num_clients_per_round) / config.federated.pool_size),
+                min_fit_clients=config.federated.num_clients_per_round,
+                min_available_clients=config.federated.pool_size,
+                min_evaluate_clients=(
+                    config.federated.num_evaluate_clients if not config.federated.centralised_eval else 0
+                ),
+                fraction_evaluate=1.0 if not config.federated.centralised_eval else 0.0,
+            )
+    
     else:
-        # Cyclic training
-        strategy = FedXgbCyclic(
-            fraction_fit=1.0,
-            min_available_clients=config.federated.pool_size,
-            fraction_evaluate=1.0,
-            evaluate_metrics_aggregation_fn=evaluate_metrics_aggregation,
-            on_evaluate_config_fn=eval_config,
-            on_fit_config_fn=fit_config,
-        )
+        raise ValueError(f"Unsupported model type: {model_type}")
 
     # Resources to be assigned to each virtual client
     # In this example we use CPU by default
@@ -232,7 +308,7 @@ def main():
         "num_gpus": 0.0,
     }
 
-    # Hyper-parameters for xgboost training
+    # Hyper-parameters for training
     num_local_round = config.model.num_local_rounds
     
     # Get model parameters from ConfigManager
@@ -240,8 +316,8 @@ def main():
     config_manager._config = config  # Set the config in manager
     params = config_manager.get_model_params_dict()
 
-    # Setup learning rate
-    if config.federated.train_method == "bagging" and config.federated.scaled_lr:
+    # Setup learning rate scaling only for XGBoost
+    if model_type == "xgboost" and config.federated.train_method == "bagging" and config.federated.scaled_lr:
         new_lr = params["eta"] / config.federated.pool_size
         params.update({"eta": new_lr})
         enhanced_logger.logger.info("Scaled learning rate applied: %f", new_lr)
@@ -256,6 +332,8 @@ def main():
             config.federated.train_method,
             params,
             num_local_round,
+            config_manager,
+            model_type
         ),
         num_clients=config.federated.pool_size,
         client_resources=client_resources,

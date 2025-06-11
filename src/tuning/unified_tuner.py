@@ -194,6 +194,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Unified hyperparameter tuning")
     parser.add_argument("--config", default="base", help="Configuration file name")
     parser.add_argument("--experiment", help="Experiment configuration")
+    parser.add_argument("--model-type", help="Model type override (xgboost or random_forest)")
     parser.add_argument("--data-file", help="Override data file path")
     parser.add_argument("--test-file", help="Test file path")
     parser.add_argument("--num-samples", type=int, help="Number of tuning samples")
@@ -210,6 +211,11 @@ if __name__ == "__main__":
         overrides.append(f"tuning.num_samples={args.num_samples}")
     if args.output_dir:
         overrides.append(f"tuning.output_dir={args.output_dir}")
+    
+    # Override model type if provided
+    if args.model_type:
+        overrides.append(f"model.type={args.model_type}")
+        logger.info("Model type overridden to: %s", args.model_type)
     
     # Enable tuning
     overrides.append("tuning.enabled=true")

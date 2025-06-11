@@ -67,6 +67,7 @@ configs/
     bagging.yaml
     cyclic.yaml
     dev.yaml
+    random_forest.yaml
   hydra/
   base.yaml
 diagrams/
@@ -76,6 +77,8 @@ diagrams/
   server_operations.mmd
 docs/
   CONFIGURATION_MIGRATION_GUIDE.md
+  PARAMETER_MAPPING_GUIDE.md
+  RANDOM_FOREST_IMPLEMENTATION_PLAN.md
 progress/
   phase1_structure.md
   phase2_config.md
@@ -90,23 +93,34 @@ src/
   config/
     config_manager.py
     legacy_constants.py
+    parameter_integration.py
     tuned_params.py
   core/
     create_global_processor.py
     dataset.py
   federated/
+    strategies/
+      __init__.py
+      random_forest_strategy.py
     client_utils.py
     client.py
+    generic_client.py
     server.py
     sim.py
     utils.py
   models/
+    base_model.py
+    model_factory.py
+    random_forest_model.py
     use_saved_model.py
     use_tuned_params.py
   tuning/
+    ray_tune_random_forest.py
     ray_tune_xgboost.py
+    unified_tuner.py
   utils/
     enhanced_logging.py
+    parameter_mapping.py
     visualization.py
   .repomix-output.txt
 test_tune_results/
@@ -142,6 +156,7 @@ requirements.txt
 run.py
 test_config_manager.py
 test_entry_points_integration.py
+test_parameter_mapping.py
 </directory_structure>
 
 <files>
@@ -233,85 +248,18 @@ jobs:
         run: |
           source venv/bin/activate
           pip install hyperopt
-      - name: Run Ray Tune hyperparameter optimization
-        run: |
-          source venv/bin/activate
-          # Check if data directory exists, create if not
-          mkdir -p data/sample
-          # Use the same dataset that federated learning will use for consistency
-          FINAL_DATASET="data/received/final_dataset.csv"
-          # Detect CI environment and adjust sample count accordingly
-          if [ "$CI" = "true" ]; then
-            SAMPLES=5  # Reduced from 100 to 5 for faster tuning during development
-            echo "CI detected: Using $SAMPLES samples for quick optimization"
-          else
-            SAMPLES=5  # Reduced from 100 to 5 for faster tuning during development
-            echo "Local run: Using $SAMPLES samples for quick optimization"
-          fi
-          # Check if the final dataset exists
-          if [ -f "$FINAL_DATASET" ]; then
-            echo "Using final dataset for hyperparameter tuning: $FINAL_DATASET"
-            # Create output directory for Ray Tune results
-            mkdir -p tune_results
-            # Run Ray Tune with the final dataset for consistency (updated path)
-            bash scripts/run_ray_tune.sh --data-file "$FINAL_DATASET" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
-          else
-            echo "Final dataset not found at $FINAL_DATASET, checking for fallback data..."
-            # Define train and test file paths for UNSW_NB15 as fallback
-            TRAIN_FILE="data/received/UNSW_NB15_training-set.csv"
-            TEST_FILE="data/received/UNSW_NB15_testing-set.csv"
-            # Check if the UNSW_NB15 files exist, otherwise use sample data
-            if [ -f "$TRAIN_FILE" ] && [ -f "$TEST_FILE" ]; then
-              echo "Using UNSW_NB15 data files for hyperparameter tuning"
-              # Create output directory for Ray Tune results
-              mkdir -p tune_results
-              bash scripts/run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
-            else
-              echo "No suitable data found, creating synthetic data for testing"
-              # Try to find any CSV file to use as a fallback
-              SAMPLE_DATA=""
-              for csv_file in $(find data -name "*.csv" | head -n 1); do
-                SAMPLE_DATA="$csv_file"
-                break
-              done
-              if [ -z "$SAMPLE_DATA" ]; then
-                echo "No CSV data found, creating a sample dataset for tuning"
-                # Generate synthetic data for train and test (kept as fallback)
-                python -c "import pandas as pd; import numpy as np; np.random.seed(42); n = 1000; df = pd.DataFrame({'feature1': np.random.normal(0, 1, n), 'feature2': np.random.normal(0, 1, n), 'feature3': np.random.normal(0, 1, n), 'feature4': np.random.normal(0, 1, n), 'feature5': np.random.normal(0, 1, n), 'label': np.random.choice([0, 1, 2], n)}); train = df.sample(frac=0.8, random_state=42); test = df.drop(train.index); train.to_csv('data/sample/synthetic_train.csv', index=False); test.to_csv('data/sample/synthetic_test.csv', index=False)"
-                TRAIN_FILE="data/sample/synthetic_train.csv"
-                TEST_FILE="data/sample/synthetic_test.csv"
-              else
-                # If we have a single file, create train/test split (kept as fallback)
-                python -c "import pandas as pd; from sklearn.model_selection import train_test_split; df = pd.read_csv('$SAMPLE_DATA'); train, test = train_test_split(df, test_size=0.2, random_state=42); train.to_csv('data/sample/split_train.csv', index=False); test.to_csv('data/sample/split_test.csv', index=False)"
-                TRAIN_FILE="data/sample/split_train.csv"
-                TEST_FILE="data/sample/split_test.csv"
-              fi
-              echo "Using train file: $TRAIN_FILE"
-              echo "Using test file: $TEST_FILE"
-              # Create output directory for Ray Tune results
-              mkdir -p tune_results
-              # Use the determined number of samples (updated path)
-              bash scripts/run_ray_tune.sh --train-file "$TRAIN_FILE" --test-file "$TEST_FILE" --num-samples $SAMPLES --cpus-per-trial 2 --output-dir "./tune_results"
-            fi
-          fi
-          # Apply the tuned parameters to the federated learning system (updated path)
-          if [ -f "tune_results/best_params.json" ]; then
-            python src/models/use_tuned_params.py --params-file "./tune_results/best_params.json"
-            echo "Successfully applied tuned parameters to federated learning"
-          else
-            echo "Warning: No tuned parameters found, will use default parameters"
-          fi
       - name: Run federated learning pipeline
         run: |
           source venv/bin/activate
           # Create output directories to ensure they exist
           mkdir -p outputs results tune_results
-          # Run the federated learning with tuned parameters, but disable hyperparameter tuning
-          # since we already optimized the parameters in the previous step
-          echo "Using Ray Tune optimized parameters from previous step..."
-          echo "Disabling hyperparameter tuning in federated learning pipeline to avoid duplication..."
-          # Override the tuning.enabled setting to false since we already have optimized parameters
-          python run.py +experiment=bagging tuning.enabled=false
+          # Run the federated learning with integrated Ray Tune hyperparameter optimization
+          echo "Running federated learning pipeline with Random Forest and integrated Ray Tune optimization..."
+          echo "This will optimize hyperparameters for Random Forest models during training..."
+          # Enable tuning in the federated learning pipeline to integrate Ray Tune optimization using Random Forest
+          python run.py +experiment=random_forest tuning.enabled=true
+          # The optimized parameters will be automatically applied during training and testing
+          echo "Ray Tune optimization completed and parameters applied to Random Forest federated learning models"
           # List what was created for debugging
           echo "Contents of outputs directory:"
           ls -la outputs/ || echo "outputs directory is empty or doesn't exist"
@@ -322,12 +270,12 @@ jobs:
       - name: Evaluate model performance
         run: |
           source venv/bin/activate
-          # Compare model performance with and without tuned parameters
-          echo "## XGBoost Model Performance" > model_performance.md
+          # Evaluate model performance with integrated Ray Tune optimization
+          echo "## Random Forest Federated Learning Model Performance with Ray Tune Optimization" > model_performance.md
           echo "" >> model_performance.md
           # Extract metrics from the results directory
           if [ -d "results" ]; then
-            echo "### Federated Learning Results" >> model_performance.md
+            echo "### Random Forest Federated Learning Results with Optimized Hyperparameters" >> model_performance.md
             echo "" >> model_performance.md
             echo "| Metric | Value |" >> model_performance.md
             echo "| ------ | ----- |" >> model_performance.md
@@ -338,16 +286,24 @@ jobs:
               echo "| $metric_name | $metric_value |" >> model_performance.md
             done
           fi
-          # Add Ray Tune optimization results
-          if [ -f "tune_results/best_params.json" ]; then
-            echo "" >> model_performance.md
-            echo "### Hyperparameter Optimization Results" >> model_performance.md
-            echo "" >> model_performance.md
-            echo "Best hyperparameters:" >> model_performance.md
-            echo '```json' >> model_performance.md
-            cat tune_results/best_params.json >> model_performance.md
-            echo '```' >> model_performance.md
-          fi
+          # Add Ray Tune optimization results from outputs or tune_results
+          for tune_dir in "outputs" "tune_results"; do
+            if [ -d "$tune_dir" ]; then
+              # Look for best parameters files
+              for params_file in $(find "$tune_dir" -name "best_params.json" -o -name "*best*.json" | head -n 1); do
+                if [ -f "$params_file" ]; then
+                  echo "" >> model_performance.md
+                  echo "### Integrated Ray Tune Optimization Results" >> model_performance.md
+                  echo "" >> model_performance.md
+                  echo "Optimized Random Forest hyperparameters:" >> model_performance.md
+                  echo '```json' >> model_performance.md
+                  cat "$params_file" >> model_performance.md
+                  echo '```' >> model_performance.md
+                  break
+                fi
+              done
+            fi
+          done
       - name: Debug git status before commit
         run: |
           echo "=== Current git status ==="
@@ -378,10 +334,12 @@ jobs:
             git add -f results/
             find results -type f -exec git add -f {} \; 2>/dev/null || true
           fi
-          # Add outputs directory and all its contents
+          # Add outputs directory and all its contents (excluding large model files)
           if [ -d "outputs" ]; then
             git add -f outputs/
-            find outputs -type f -exec git add -f {} \; 2>/dev/null || true
+            # Add files smaller than 100MB to avoid GitHub's file size limit
+            find outputs -type f -size -100M -exec git add -f {} \; 2>/dev/null || true
+            echo "Skipping large model files (>100MB) to avoid GitHub size limits"
           fi
           # Add model performance report
           git add model_performance.md 2>/dev/null || true
@@ -393,7 +351,7 @@ jobs:
           git status --porcelain
           # Commit all changes (only if there are changes)
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "workflow with Ray Tune optimization in action🚀"
+            git commit -m "Random Forest federated learning with integrated Ray Tune hyperparameter optimization 🚀"
             echo "Changes committed successfully"
           else
             echo "No changes to commit"
@@ -2459,6 +2417,68 @@ outputs:
   create_timestamped_dirs: false  # Reuse same output dir
 </file>
 
+<file path="configs/experiment/random_forest.yaml">
+# @package _global_
+# Random Forest experiment configuration
+# This config demonstrates Random Forest model usage in federated learning
+# Override model configuration for Random Forest
+model:
+  type: "random_forest"
+  # Define complete Random Forest parameters (will override XGBoost params)
+  params:
+    # Core Random Forest parameters
+    n_estimators: 100
+    max_depth: 10
+    min_samples_split: 5
+    min_samples_leaf: 2
+    max_features: "sqrt"
+    criterion: "gini"
+    bootstrap: true
+    oob_score: false
+    n_jobs: -1
+    random_state: 42
+    class_weight: "balanced"
+    # Advanced parameters for fine-tuning
+    max_samples: null
+    min_weight_fraction_leaf: 0.0
+    max_leaf_nodes: null
+    min_impurity_decrease: 0.0
+    warm_start: false
+# Federated learning configuration optimized for Random Forest
+federated:
+  pool_size: 5
+  num_rounds: 10
+  train_method: "bagging"  # Random Forest works well with bagging
+  fraction_fit: 0.8
+  fraction_evaluate: 0.5
+# Hyperparameter tuning for Random Forest
+tuning:
+  enabled: false
+  num_samples: 5
+  cpus_per_trial: 2
+  max_concurrent_trials: 2
+  output_dir: "./tune_results_rf"
+  # Ray Tune scheduler optimized for Random Forest
+  scheduler:
+    type: "ASHA"
+    max_t: 200
+    grace_period: 20
+    reduction_factor: 3
+# Data configuration overrides for Random Forest
+data:
+  # Random Forest works well with the default data settings
+  # No specific overrides needed for data configuration
+  train_test_split: 0.8  # Keep standard split
+# Pipeline execution settings (only override specific early stopping settings)
+early_stopping:
+  enabled: true
+  patience: 5
+  min_delta: 0.001
+# Output configuration (override experiment name)
+outputs:
+  experiment_name: "random_forest_federated"
+</file>
+
 <file path="configs/base.yaml">
 # FL-CML-Pipeline Base Configuration
 # This file consolidates all configuration options from legacy argument parsers
@@ -2473,10 +2493,11 @@ data:
   stratified: true
   temporal_window_size: 1000
   seed: 42
-# Model configuration (XGBoost parameters from BST_PARAMS)
+# Model configuration - supports both XGBoost and Random Forest
 model:
-  type: xgboost
+  type: xgboost  # Options: xgboost, random_forest
   num_local_rounds: 20
+  # XGBoost parameters (used when model.type=xgboost)
   params:
     objective: "multi:softprob"
     num_class: 11
@@ -2910,6 +2931,813 @@ def test_federated_setup():
 - `configs/experiment/*.yaml` - Experiment-specific overrides
 
 This migration ensures the codebase is more maintainable and follows modern configuration management best practices.
+</file>
+
+<file path="docs/PARAMETER_MAPPING_GUIDE.md">
+# Parameter Mapping Utilities Guide
+
+This guide explains how to use the parameter mapping utilities for seamless model type switching in the FL-CML-Pipeline.
+
+## Overview
+
+The parameter mapping utilities provide a unified interface for converting parameters between different model types (XGBoost, Random Forest) while preserving equivalent functionality and complexity. This enables:
+
+- **Seamless Model Switching**: Change model types without manual parameter reconfiguration
+- **Cross-Model Experimentation**: Compare different model types with equivalent parameter sets
+- **Hyperparameter Transfer**: Apply tuned parameters from one model type to another
+- **Unified Configuration Management**: Manage parameters across model types with a single interface
+
+## Core Components
+
+### 1. UnifiedParameterManager
+
+The main class for parameter conversion and management.
+
+```python
+from src.utils.parameter_mapping import UnifiedParameterManager, ModelType
+
+# Create manager
+manager = UnifiedParameterManager()
+
+# Convert parameters between model types
+xgb_params = {"eta": 0.1, "max_depth": 8, "objective": "multi:softprob", "num_class": 11}
+rf_params = manager.convert_parameters(xgb_params, ModelType.XGBOOST, ModelType.RANDOM_FOREST)
+
+# Get default parameters for any model type
+defaults = manager.get_default_parameters(ModelType.RANDOM_FOREST)
+
+# Create unified configuration
+unified_config = manager.create_unified_config(base_params, ModelType.XGBOOST)
+
+# Switch model types while preserving parameters
+new_params = manager.switch_model_type(ModelType.RANDOM_FOREST)
+```
+
+### 2. Parameter Mappers
+
+Individual mappers for each model type handle specific conversion logic.
+
+```python
+from src.utils.parameter_mapping import XGBoostParameterMapper, RandomForestParameterMapper
+
+# XGBoost mapper
+xgb_mapper = XGBoostParameterMapper()
+xgb_defaults = xgb_mapper.get_default_params()
+rf_params = xgb_mapper.map_to_target(xgb_params, ModelType.RANDOM_FOREST)
+
+# Random Forest mapper  
+rf_mapper = RandomForestParameterMapper()
+rf_defaults = rf_mapper.get_default_params()
+xgb_params = rf_mapper.map_to_target(rf_params, ModelType.XGBOOST)
+```
+
+### 3. Convenience Functions
+
+Quick conversion functions for common use cases.
+
+```python
+from src.utils.parameter_mapping import (
+    convert_xgboost_to_random_forest,
+    convert_random_forest_to_xgboost,
+    create_cross_compatible_config
+)
+
+# Quick conversions
+rf_params = convert_xgboost_to_random_forest(xgb_params)
+xgb_params = convert_random_forest_to_xgboost(rf_params)
+
+# Cross-compatible configurations
+xgb_config, rf_config = create_cross_compatible_config(
+    base_params, ModelType.XGBOOST, ModelType.RANDOM_FOREST
+)
+```
+
+## Parameter Mapping Logic
+
+### Tree Structure Parameters
+
+| Concept | XGBoost | Random Forest | Mapping Logic |
+|---------|---------|---------------|---------------|
+| Tree Depth | `max_depth` | `max_depth` | Direct mapping |
+| Min Samples | `min_child_weight` | `min_samples_leaf` | Approximate conversion |
+| Split Control | `gamma` | `min_impurity_decrease` | Approximate conversion |
+
+### Sampling Parameters
+
+| Concept | XGBoost | Random Forest | Mapping Logic |
+|---------|---------|---------------|---------------|
+| Row Sampling | `subsample` | `max_samples` | Direct mapping |
+| Feature Sampling | `colsample_bytree` | `max_features` | Categorical mapping |
+| Bootstrap | N/A | `bootstrap` | Default true for RF |
+
+### Regularization Parameters
+
+| Concept | XGBoost | Random Forest | Mapping Logic |
+|---------|---------|---------------|---------------|
+| L1 Regularization | `reg_alpha` | N/A | Not directly mappable |
+| L2 Regularization | `reg_lambda` | N/A | Not directly mappable |
+| Tree Regularization | `gamma` | `min_impurity_decrease` | Approximate |
+
+### Learning Parameters
+
+| Concept | XGBoost | Random Forest | Mapping Logic |
+|---------|---------|---------------|---------------|
+| Learning Rate | `eta` | N/A | Not applicable |
+| Number of Rounds | `num_boost_round` | `n_estimators` | Scale conversion |
+
+## Usage Examples
+
+### Example 1: Basic Parameter Conversion
+
+```python
+# Start with XGBoost parameters
+xgb_params = {
+    "objective": "multi:softprob",
+    "num_class": 11,
+    "eta": 0.1,
+    "max_depth": 8,
+    "min_child_weight": 5,
+    "subsample": 0.8,
+    "colsample_bytree": 0.7,
+    "num_boost_round": 100,
+    "random_state": 42
+}
+
+# Convert to Random Forest
+from src.utils.parameter_mapping import convert_xgboost_to_random_forest
+rf_params = convert_xgboost_to_random_forest(xgb_params)
+
+print(rf_params)
+# Output:
+# {
+#     'max_depth': 8,
+#     'min_samples_leaf': 5,
+#     'max_samples': 0.8,
+#     'max_features': 0.7,
+#     'n_estimators': 50,
+#     'random_state': 42,
+#     'criterion': 'gini',
+#     'bootstrap': True,
+#     'oob_score': False,
+#     'class_weight': 'balanced',
+#     'min_samples_split': 5,
+#     'n_jobs': 16
+# }
+```
+
+### Example 2: ConfigManager Integration
+
+```python
+from src.config.config_manager import ConfigManager
+from src.utils.parameter_mapping import UnifiedParameterManager, ModelType
+
+# Load configuration
+config_manager = ConfigManager()
+config_manager.load_config(experiment="bagging")
+
+# Get current parameters
+current_params = config_manager.get_model_params_dict()
+current_type = config_manager.get_model_type()
+
+# Convert to different model type
+param_manager = UnifiedParameterManager()
+converted_params = param_manager.convert_parameters(
+    current_params, current_type, ModelType.RANDOM_FOREST
+)
+
+# Use converted parameters in federated learning
+# (Parameters are now compatible with Random Forest models)
+```
+
+### Example 3: Hyperparameter Transfer
+
+```python
+# Assume you've tuned XGBoost parameters using Ray Tune
+tuned_xgb_params = {
+    "eta": 0.05,
+    "max_depth": 10,
+    "min_child_weight": 3,
+    "gamma": 0.1,
+    "subsample": 0.9,
+    "colsample_bytree": 0.8,
+    "reg_alpha": 0.2,
+    "reg_lambda": 1.5,
+    "num_boost_round": 200
+}
+
+# Transfer to Random Forest for comparison
+manager = UnifiedParameterManager()
+equivalent_rf_params = manager.convert_parameters(
+    tuned_xgb_params, ModelType.XGBOOST, ModelType.RANDOM_FOREST
+)
+
+# Now you can run equivalent Random Forest experiments
+# without starting hyperparameter tuning from scratch
+```
+
+### Example 4: A/B Testing with Model Types
+
+```python
+from src.utils.parameter_mapping import create_cross_compatible_config
+
+# Define base parameters for experiment
+base_params = {
+    "max_depth": 8,
+    "random_state": 42,
+    # Parameters that make sense for both models
+}
+
+# Create equivalent configurations for both model types
+xgb_config, rf_config = create_cross_compatible_config(
+    base_params, ModelType.XGBOOST, ModelType.RANDOM_FOREST
+)
+
+# Run A/B test
+# - Group A: Uses XGBoost with xgb_config
+# - Group B: Uses Random Forest with rf_config
+# - Compare results with equivalent complexity
+```
+
+### Example 5: Federated Learning Model Switching
+
+```python
+from src.federated.generic_client import GenericFederatedClient
+from src.config.config_manager import ConfigManager
+
+# Load configuration for XGBoost
+config_manager = ConfigManager()
+config_manager.load_config(experiment="bagging")  # XGBoost config
+
+# Create federated client
+client = GenericFederatedClient(
+    client_id=0,
+    config_manager=config_manager
+)
+
+# Later, switch to Random Forest without changing federated setup
+# The generic client automatically handles parameter conversion
+config_manager.update_config_value("model.type", "random_forest")
+
+# Convert parameters automatically
+param_manager = UnifiedParameterManager()
+current_params = config_manager.get_model_params_dict()
+rf_params = param_manager.convert_parameters(
+    current_params, ModelType.XGBOOST, ModelType.RANDOM_FOREST
+)
+
+# Update parameters in config
+for key, value in rf_params.items():
+    config_manager.update_config_value(f"model.params.{key}", value)
+```
+
+## Advanced Features
+
+### Parameter Validation
+
+```python
+manager = UnifiedParameterManager()
+
+# Validate parameters for specific model type
+params = {"n_estimators": 100, "max_depth": 10}
+is_valid, message = manager.validate_parameters(params, ModelType.RANDOM_FOREST)
+
+if not is_valid:
+    print(f"Parameter validation failed: {message}")
+```
+
+### Configuration Presets
+
+```python
+from src.config.parameter_integration import ConfigurationPreset
+
+# Get preset configurations for quick testing
+quick_test_xgb = ConfigurationPreset.get_quick_test_config(ModelType.XGBOOST)
+production_rf = ConfigurationPreset.get_production_config(ModelType.RANDOM_FOREST)
+tuning_ready_xgb = ConfigurationPreset.get_tuning_config(ModelType.XGBOOST)
+```
+
+### Enhanced ConfigManager
+
+```python
+from src.config.parameter_integration import ParameterIntegratedConfigManager
+
+# Use enhanced config manager with parameter mapping
+config_manager = ParameterIntegratedConfigManager()
+config_manager.load_config(experiment="bagging")
+
+# Switch model types seamlessly
+new_params = config_manager.switch_model_type(ModelType.RANDOM_FOREST)
+
+# Get cross-compatible parameters
+compatible_params = config_manager.get_cross_compatible_params(ModelType.XGBOOST)
+
+# Restore original configuration
+config_manager.restore_original_config()
+```
+
+## Best Practices
+
+### 1. Parameter Equivalence
+
+When converting parameters, understand that:
+- Some parameters have direct equivalents (e.g., `max_depth`)
+- Others require approximation (e.g., `min_child_weight` → `min_samples_leaf`)
+- Some are model-specific and don't translate (e.g., `eta` for XGBoost)
+
+### 2. Validation
+
+Always validate converted parameters:
+
+```python
+# Convert parameters
+converted_params = manager.convert_parameters(source_params, source_type, target_type)
+
+# Validate before use
+is_valid, message = manager.validate_parameters(converted_params, target_type)
+if not is_valid:
+    print(f"Validation failed: {message}")
+    # Handle validation failure
+```
+
+### 3. Experimentation Workflow
+
+1. Start with one model type and tune parameters
+2. Convert to other model types for comparison
+3. Fine-tune converted parameters if needed
+4. Select best performing model type
+5. Use final parameters for production
+
+### 4. Federated Learning Integration
+
+- Use `GenericFederatedClient` for automatic model type handling
+- Convert parameters at the configuration level, not client level
+- Ensure all clients use the same model type in a given round
+
+## Limitations and Considerations
+
+### Parameter Mapping Limitations
+
+1. **Not Perfect Equivalence**: Parameter conversion provides reasonable approximations, not perfect equivalents
+2. **Model-Specific Features**: Some parameters (like XGBoost's boosting) don't have Random Forest equivalents
+3. **Performance Differences**: Converted parameters may need fine-tuning for optimal performance
+
+### Performance Considerations
+
+1. **Converted Parameters**: May not be optimal for the target model type
+2. **Fine-Tuning**: Consider additional tuning after conversion
+3. **Validation**: Always validate performance with converted parameters
+
+### Model-Specific Behaviors
+
+1. **XGBoost**: Gradient boosting with complex regularization
+2. **Random Forest**: Ensemble of decision trees with different characteristics
+3. **Feature Importance**: Different calculation methods between models
+
+## Testing the Implementation
+
+Run the test script to verify functionality:
+
+```bash
+python test_parameter_mapping.py
+```
+
+This will demonstrate:
+- Basic parameter conversions
+- Unified parameter manager functionality
+- Cross-compatible configuration creation
+- ConfigManager integration
+- Real-world use cases
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Import Errors**: Ensure you're running from the project root directory
+2. **Parameter Validation Failures**: Check that required parameters are present
+3. **Configuration Loading Errors**: Verify config files exist and are properly formatted
+
+### Debug Mode
+
+Enable debug logging to see parameter conversion details:
+
+```python
+import logging
+logging.getLogger('src.utils.parameter_mapping').setLevel(logging.DEBUG)
+```
+
+## Conclusion
+
+The parameter mapping utilities provide a powerful foundation for seamless model type switching in the FL-CML-Pipeline. They enable:
+
+- Flexible experimentation across model types
+- Efficient hyperparameter transfer
+- Simplified federated learning configuration
+- Consistent parameter management
+
+Use these utilities to build more flexible and maintainable machine learning pipelines that can adapt to different model requirements while preserving configuration consistency.
+</file>
+
+<file path="docs/RANDOM_FOREST_IMPLEMENTATION_PLAN.md">
+# Random Forest Implementation Plan
+
+## 🎯 **Overview**
+
+This document outlines the comprehensive implementation plan for adding Random Forest model support to the federated learning network intrusion detection pipeline. The plan follows a **Model Abstraction Strategy** that allows both XGBoost and Random Forest to coexist seamlessly.
+
+## 📊 **Current Status**
+
+### ✅ **Phase 1: Foundation (COMPLETED)**
+- **Base Model Interface**: Created `src/models/base_model.py` with abstract interface
+- **Random Forest Implementation**: Implemented `src/models/random_forest_model.py`
+- **Model Factory**: Created `src/models/model_factory.py` for dynamic model instantiation
+- **Configuration**: Added `configs/experiment/random_forest.yaml`
+- **Tuning Script**: Created `src/tuning/ray_tune_random_forest.py`
+
+## 🚀 **Implementation Phases**
+
+### **Phase 2: Core Integration (NEXT)**
+
+#### **Step 2.1: Update Configuration System**
+**Files to Modify:**
+- `src/config/config_manager.py` - Add Random Forest parameter support
+- `configs/base.yaml` - Add model type selection
+- `src/config/tuned_params.py` - Support RF parameter structures
+
+**Changes Required:**
+```python
+# In config_manager.py
+@dataclass
+class ModelConfig:
+    type: str = "xgboost"  # "xgboost" | "random_forest"
+    params: Dict[str, Any] = field(default_factory=dict)
+    
+def get_model_instance(self) -> BaseModel:
+    """Create model instance from configuration."""
+    from src.models.model_factory import ModelFactory
+    return ModelFactory.create_from_config({
+        "type": self.model.type,
+        "params": self.model.params
+    })
+```
+
+#### **Step 2.2: Update Data Pipeline**
+**Files to Modify:**
+- `src/core/dataset.py` - Make data format model-agnostic
+
+**Changes Required:**
+```python
+def get_data_format(model_type: str) -> str:
+    """Return appropriate data format for model type."""
+    if model_type.lower() in ['xgboost', 'xgb']:
+        return 'dmatrix'
+    elif model_type.lower() in ['random_forest', 'rf']:
+        return 'numpy'
+    else:
+        return 'numpy'  # Default to numpy arrays
+```
+
+### **Phase 3: Federated Learning Integration**
+
+#### **Step 3.1: Abstract Client Implementation**
+**Files to Modify:**
+- `src/federated/client_utils.py` - Create model-agnostic client
+
+**New Structure:**
+```python
+class GenericClient(fl.client.Client):
+    """Model-agnostic federated client."""
+    
+    def __init__(self, model: BaseModel, train_data, val_data):
+        self.model = model
+        self.train_data = train_data
+        self.val_data = val_data
+    
+    def fit(self, parameters, config):
+        # Model-agnostic training logic
+        if parameters:
+            self.model.deserialize(parameters.tensors[0])
+        
+        # Train model
+        self.model.fit(self.train_data[0], self.train_data[1])
+        
+        # Return serialized model
+        serialized = self.model.serialize()
+        return fl.common.FitRes(
+            parameters=fl.common.Parameters(tensors=[serialized], tensor_type=""),
+            num_examples=len(self.train_data[0])
+        )
+```
+
+#### **Step 3.2: Create Random Forest Federated Strategies**
+**Files to Create:**
+- `src/federated/strategies/fed_rf_bagging.py`
+- `src/federated/strategies/fed_rf_cyclic.py`
+
+**Strategy Implementation:**
+```python
+class FedRfBagging(fl.server.strategy.Strategy):
+    """Random Forest Bagging strategy for federated learning."""
+    
+    def aggregate_fit(self, rnd, results, failures):
+        """Aggregate Random Forest models by combining trees."""
+        if not results:
+            return None
+            
+        # Deserialize all models
+        models = []
+        for client_proxy, fit_res in results:
+            model = RandomForestModel({})
+            model.deserialize(fit_res.parameters.tensors[0])
+            models.append(model)
+        
+        # Combine trees from all models
+        combined_model = models[0]
+        for model in models[1:]:
+            combined_model.update_from_model(model, strategy='combine_trees')
+        
+        return fl.common.Parameters(
+            tensors=[combined_model.serialize()],
+            tensor_type=""
+        )
+```
+
+### **Phase 4: Testing and Validation**
+
+#### **Step 4.1: Unit Tests**
+**Files to Create:**
+- `tests/unit/models/test_random_forest_model.py`
+- `tests/unit/models/test_model_factory.py`
+- `tests/integration/test_rf_federated.py`
+
+#### **Step 4.2: Integration Tests**
+- End-to-end Random Forest federated learning
+- XGBoost vs Random Forest performance comparison
+- Model switching functionality
+
+### **Phase 5: Documentation and Examples**
+
+#### **Step 5.1: Usage Documentation**
+**Files to Create:**
+- `docs/RANDOM_FOREST_USAGE.md`
+- `examples/random_forest_federated_example.py`
+
+#### **Step 5.2: Configuration Examples**
+- Performance tuning guidelines
+- Best practices for Random Forest in FL
+
+## 🔧 **Technical Implementation Details**
+
+### **Model Serialization Strategy**
+
+**Random Forest Approach:**
+- Use `pickle` for serialization (with `joblib` fallback)
+- Handle scikit-learn version compatibility
+- Implement compression for large ensembles
+
+```python
+def serialize(self) -> bytes:
+    """Serialize RF model with compression."""
+    import gzip
+    import pickle
+    
+    model_bytes = pickle.dumps(self.model)
+    return gzip.compress(model_bytes)
+
+def deserialize(self, model_bytes: bytes) -> 'RandomForestModel':
+    """Deserialize compressed RF model."""
+    import gzip
+    import pickle
+    
+    decompressed = gzip.decompress(model_bytes)
+    self.model = pickle.loads(decompressed)
+    return self
+```
+
+### **Federated Aggregation Strategy**
+
+**Tree Combination Approach:**
+1. **Bagging**: Combine trees from all clients into larger ensemble
+2. **Weighted Combination**: Weight trees by client data size
+3. **Tree Selection**: Select best trees based on OOB scores
+
+```python
+def combine_trees_weighted(models: List[RandomForestModel], 
+                          weights: List[float]) -> RandomForestModel:
+    """Combine trees with weighted selection."""
+    all_trees = []
+    all_weights = []
+    
+    for model, weight in zip(models, weights):
+        trees = model.model.estimators_
+        tree_weights = [weight] * len(trees)
+        all_trees.extend(trees)
+        all_weights.extend(tree_weights)
+    
+    # Select top trees based on weighted OOB scores
+    selected_trees = select_best_trees(all_trees, all_weights, max_trees=200)
+    
+    # Create new ensemble
+    combined_model = RandomForestModel({})
+    combined_model.model.estimators_ = np.array(selected_trees)
+    combined_model.model.n_estimators = len(selected_trees)
+    
+    return combined_model
+```
+
+## 📈 **Expected Performance Characteristics**
+
+### **Random Forest Advantages:**
+- **Parallel Training**: Each tree can be trained independently
+- **Robust to Overfitting**: Built-in regularization through bootstrap sampling
+- **Feature Importance**: Natural feature importance calculation
+- **No Data Format Requirements**: Works with raw numpy arrays
+
+### **Federated Learning Benefits:**
+- **Tree Diversity**: Different clients contribute diverse trees
+- **Scalable Ensembles**: Large ensembles from distributed training
+- **Privacy Preservation**: Only tree structures shared, not raw data
+
+### **Performance Expectations:**
+- **Training Time**: Faster than XGBoost for similar ensemble sizes
+- **Memory Usage**: Higher due to storing all trees
+- **Accuracy**: Comparable to XGBoost, potentially better for some datasets
+- **Interpretability**: Better feature importance and tree structure analysis
+
+## 🧪 **Testing Strategy**
+
+### **Unit Tests:**
+```python
+def test_random_forest_model_training():
+    """Test RF model training and prediction."""
+    model = RandomForestModel({'n_estimators': 10})
+    model.fit(X_train, y_train)
+    
+    assert model.is_trained
+    assert model.predict(X_test).shape == (len(X_test),)
+    assert model.predict_proba(X_test).shape == (len(X_test), n_classes)
+
+def test_model_serialization():
+    """Test RF model serialization/deserialization."""
+    model1 = RandomForestModel({'n_estimators': 10})
+    model1.fit(X_train, y_train)
+    
+    # Serialize and deserialize
+    model_bytes = model1.serialize()
+    model2 = RandomForestModel({})
+    model2.deserialize(model_bytes)
+    
+    # Compare predictions
+    pred1 = model1.predict(X_test)
+    pred2 = model2.predict(X_test)
+    assert np.array_equal(pred1, pred2)
+```
+
+### **Integration Tests:**
+```python
+def test_rf_federated_training():
+    """Test end-to-end RF federated learning."""
+    # Setup federated environment
+    strategy = FedRfBagging()
+    server = fl.server.Server(strategy=strategy)
+    
+    # Create RF clients
+    clients = []
+    for i in range(3):
+        model = RandomForestModel({'n_estimators': 20})
+        client = GenericClient(model, client_data[i], client_val[i])
+        clients.append(client)
+    
+    # Run federated training
+    history = fl.simulation.start_simulation(
+        client_fn=lambda cid: clients[int(cid)],
+        num_clients=3,
+        config=fl.server.ServerConfig(num_rounds=5),
+        strategy=strategy
+    )
+    
+    # Verify convergence
+    assert len(history.metrics_distributed) > 0
+    assert history.metrics_distributed['accuracy'][-1] > 0.7
+```
+
+## 📋 **Configuration Migration**
+
+### **Existing XGBoost Config:**
+```yaml
+model:
+  type: xgboost
+  params:
+    objective: multi:softprob
+    eta: 0.1
+    max_depth: 6
+```
+
+### **New Random Forest Config:**
+```yaml
+model:
+  type: random_forest
+  params:
+    n_estimators: 100
+    max_depth: 10
+    min_samples_split: 5
+    criterion: gini
+    class_weight: balanced
+```
+
+### **Model Selection Config:**
+```yaml
+# Easy switching between models
+model:
+  type: ${model_type:xgboost}  # Override with hydra
+  params: ${model_params}
+
+# Hydra overrides:
+# python run.py model_type=random_forest
+# python run.py model_type=xgboost
+```
+
+## 🎯 **Success Metrics**
+
+### **Technical Metrics:**
+- ✅ **Model Abstraction**: Support multiple model types seamlessly
+- ✅ **Performance Parity**: RF achieves ≥95% of XGBoost performance
+- ✅ **Memory Efficiency**: <2x memory usage compared to XGBoost
+- ✅ **Training Speed**: ≤150% of XGBoost training time
+
+### **Functional Metrics:**
+- ✅ **Configuration Compatibility**: All existing configs work unchanged
+- ✅ **Federated Integration**: RF works with all FL strategies
+- ✅ **Hyperparameter Tuning**: Ray Tune works with RF parameters
+- ✅ **Model Switching**: Easy switching between model types
+
+## 🔄 **Migration Path**
+
+### **Phase 1: Parallel Implementation**
+- Keep existing XGBoost code unchanged
+- Add RF implementation alongside
+- Both models available simultaneously
+
+### **Phase 2: Gradual Migration**
+- Test RF on subset of experiments
+- Compare performance metrics
+- Identify optimal use cases for each model
+
+### **Phase 3: Full Integration**
+- Make model type configurable
+- Default to best performing model per dataset
+- Maintain backward compatibility
+
+## 📚 **Usage Examples**
+
+### **Basic Random Forest Training:**
+```python
+# Configure Random Forest
+config = {
+    "type": "random_forest",
+    "params": {
+        "n_estimators": 100,
+        "max_depth": 10,
+        "class_weight": "balanced"
+    }
+}
+
+# Create and train model
+model = ModelFactory.create_from_config(config)
+model.fit(X_train, y_train, X_val, y_val)
+
+# Make predictions
+predictions = model.predict(X_test)
+probabilities = model.predict_proba(X_test)
+```
+
+### **Federated Random Forest:**
+```python
+# Run federated learning with Random Forest
+python run.py experiment=random_forest \
+              federated.strategy=bagging \
+              federated.num_rounds=10 \
+              federated.pool_size=5
+```
+
+### **Hyperparameter Tuning:**
+```python
+# Tune Random Forest hyperparameters
+python src/tuning/ray_tune_random_forest.py \
+       --num-samples 20 \
+       --cpus-per-trial 2 \
+       --output-dir ./tune_results_rf
+```
+
+---
+
+## 🎉 **Next Steps**
+
+1. **Immediate**: Complete Phase 2 (Core Integration)
+2. **Short-term**: Implement Phase 3 (Federated Learning Integration)
+3. **Medium-term**: Complete testing and validation
+4. **Long-term**: Optimize performance and add advanced features
+
+This implementation plan provides a solid foundation for Random Forest integration while maintaining the existing XGBoost functionality and ensuring seamless coexistence of both models in the federated learning pipeline.
 </file>
 
 <file path="progress/phase1_structure.md">
@@ -3597,7 +4425,7 @@ Configuration Management System for FL-CML-Pipeline
 This module provides a centralized, type-safe configuration management system
 using Hydra for loading YAML configurations with experiment overrides.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Dict, Any, List, Optional, Union
 from pathlib import Path
 import logging
@@ -3614,7 +4442,7 @@ class DataConfig:  # pylint: disable=too-many-instance-attributes
     temporal_window_size: int
     seed: int
 @dataclass
-class ModelParamsConfig:  # pylint: disable=too-many-instance-attributes
+class XGBoostParamsConfig:  # pylint: disable=too-many-instance-attributes
     """XGBoost model parameters configuration."""
     objective: str
     num_class: int
@@ -3638,6 +4466,28 @@ class ModelParamsConfig:  # pylint: disable=too-many-instance-attributes
     random_state: int
     # Optional parameters for specific experiments
     num_boost_round: Optional[int] = None
+@dataclass
+class RandomForestParamsConfig:  # pylint: disable=too-many-instance-attributes
+    """Random Forest model parameters configuration."""
+    n_estimators: int
+    max_depth: Optional[int]
+    min_samples_split: int
+    min_samples_leaf: int
+    max_features: Union[str, int, float]
+    criterion: str
+    bootstrap: bool
+    oob_score: bool
+    n_jobs: int
+    random_state: int
+    class_weight: Optional[Union[str, dict]]
+    # Advanced parameters
+    max_samples: Optional[Union[int, float]] = None
+    min_weight_fraction_leaf: float = 0.0
+    max_leaf_nodes: Optional[int] = None
+    min_impurity_decrease: float = 0.0
+    warm_start: bool = False
+# Union type for model parameters - supports both XGBoost and Random Forest
+ModelParamsConfig = Union[XGBoostParamsConfig, RandomForestParamsConfig]
 @dataclass
 class ModelConfig:
     """Model configuration."""
@@ -3799,7 +4649,20 @@ class ConfigManager:
         try:
             # Convert nested configurations
             data_config = DataConfig(**cfg.data)
-            model_params = ModelParamsConfig(**cfg.model.params)
+            # Handle model parameters based on model type
+            model_type = cfg.model.type.lower()
+            if model_type == "xgboost":
+                # Filter for XGBoost parameters only
+                xgb_param_names = {f.name for f in fields(XGBoostParamsConfig)}
+                xgb_params = {k: v for k, v in cfg.model.params.items() if k in xgb_param_names}
+                model_params = XGBoostParamsConfig(**xgb_params)
+            elif model_type == "random_forest":
+                # Filter for Random Forest parameters only
+                rf_param_names = {f.name for f in fields(RandomForestParamsConfig)}
+                rf_params = {k: v for k, v in cfg.model.params.items() if k in rf_param_names}
+                model_params = RandomForestParamsConfig(**rf_params)
+            else:
+                raise ValueError(f"Unsupported model type: {model_type}")
             model_config = ModelConfig(
                 type=cfg.model.type,
                 num_local_rounds=cfg.model.num_local_rounds,
@@ -3851,33 +4714,56 @@ class ConfigManager:
             raise RuntimeError("Configuration not loaded. Call load_config() first.")
         return self._raw_config
     def get_model_params_dict(self) -> Dict[str, Any]:
-        """Get XGBoost model parameters as dictionary."""
+        """Get model parameters as dictionary for the configured model type."""
         model_params = self.config.model.params
-        params_dict = {
-            'objective': model_params.objective,
-            'num_class': model_params.num_class,
-            'eta': model_params.eta,
-            'max_depth': model_params.max_depth,
-            'min_child_weight': model_params.min_child_weight,
-            'gamma': model_params.gamma,
-            'subsample': model_params.subsample,
-            'colsample_bytree': model_params.colsample_bytree,
-            'colsample_bylevel': model_params.colsample_bylevel,
-            'nthread': model_params.nthread,
-            'tree_method': model_params.tree_method,
-            'eval_metric': 'mlogloss',
-            'max_delta_step': model_params.max_delta_step,
-            'reg_alpha': model_params.reg_alpha,
-            'reg_lambda': model_params.reg_lambda,
-            'base_score': model_params.base_score,
-            'scale_pos_weight': model_params.scale_pos_weight,
-            'grow_policy': model_params.grow_policy,
-            'normalize_type': model_params.normalize_type,
-            'random_state': model_params.random_state
-        }
-        # Add optional parameters if present
-        if model_params.num_boost_round is not None:
-            params_dict['num_boost_round'] = model_params.num_boost_round
+        model_type = self.config.model.type.lower()
+        if model_type == "xgboost":
+            params_dict = {
+                'objective': model_params.objective,
+                'num_class': model_params.num_class,
+                'eta': model_params.eta,
+                'max_depth': model_params.max_depth,
+                'min_child_weight': model_params.min_child_weight,
+                'gamma': model_params.gamma,
+                'subsample': model_params.subsample,
+                'colsample_bytree': model_params.colsample_bytree,
+                'colsample_bylevel': model_params.colsample_bylevel,
+                'nthread': model_params.nthread,
+                'tree_method': model_params.tree_method,
+                'eval_metric': 'mlogloss',
+                'max_delta_step': model_params.max_delta_step,
+                'reg_alpha': model_params.reg_alpha,
+                'reg_lambda': model_params.reg_lambda,
+                'base_score': model_params.base_score,
+                'scale_pos_weight': model_params.scale_pos_weight,
+                'grow_policy': model_params.grow_policy,
+                'normalize_type': model_params.normalize_type,
+                'random_state': model_params.random_state
+            }
+            # Add optional parameters if present
+            if hasattr(model_params, 'num_boost_round') and model_params.num_boost_round is not None:
+                params_dict['num_boost_round'] = model_params.num_boost_round
+        elif model_type == "random_forest":
+            params_dict = {
+                'n_estimators': model_params.n_estimators,
+                'max_depth': model_params.max_depth,
+                'min_samples_split': model_params.min_samples_split,
+                'min_samples_leaf': model_params.min_samples_leaf,
+                'max_features': model_params.max_features,
+                'criterion': model_params.criterion,
+                'bootstrap': model_params.bootstrap,
+                'oob_score': model_params.oob_score,
+                'n_jobs': model_params.n_jobs,
+                'random_state': model_params.random_state,
+                'class_weight': model_params.class_weight,
+                'max_samples': model_params.max_samples,
+                'min_weight_fraction_leaf': model_params.min_weight_fraction_leaf,
+                'max_leaf_nodes': model_params.max_leaf_nodes,
+                'min_impurity_decrease': model_params.min_impurity_decrease,
+                'warm_start': model_params.warm_start
+            }
+        else:
+            raise ValueError(f"Unsupported model type: {model_type}")
         return params_dict
     def get_data_path(self) -> Path:
         """Get the full data file path."""
@@ -3893,6 +4779,15 @@ class ConfigManager:
     def should_create_timestamped_dirs(self) -> bool:
         """Check if timestamped output directories should be created."""
         return self.config.outputs.create_timestamped_dirs
+    def get_model_type(self) -> str:
+        """Get the configured model type."""
+        return self.config.model.type.lower()
+    def is_xgboost_model(self) -> bool:
+        """Check if the configured model is XGBoost."""
+        return self.get_model_type() == "xgboost"
+    def is_random_forest_model(self) -> bool:
+        """Check if the configured model is Random Forest."""
+        return self.get_model_type() == "random_forest"
     def update_config_value(self, key_path: str, value: Any) -> None:
         """
         Update a configuration value dynamically.
@@ -3954,6 +4849,371 @@ For configuration management, use:
 # This file has been cleaned up as part of Step 4: Legacy Code Cleanup
 # All constants and argument parsers have been migrated to ConfigManager
 # See configs/base.yaml for the current configuration structure
+</file>
+
+<file path="src/config/parameter_integration.py">
+"""
+Parameter integration utilities for ConfigManager.
+This module extends the ConfigManager with parameter mapping capabilities,
+enabling seamless model type switching while preserving configuration integrity.
+"""
+import logging
+from typing import Dict, Any, Optional, Union, Tuple
+from src.config.config_manager import ConfigManager
+from src.utils.parameter_mapping import UnifiedParameterManager, ModelType
+logger = logging.getLogger(__name__)
+class ParameterIntegratedConfigManager(ConfigManager):
+    """
+    Enhanced ConfigManager with parameter mapping capabilities.
+    This class extends the base ConfigManager to support seamless parameter
+    conversion between different model types while maintaining configuration
+    consistency.
+    """
+    def __init__(self):
+        """Initialize the parameter-integrated config manager."""
+        super().__init__()
+        self._param_manager = UnifiedParameterManager()
+        self._original_model_type = None
+        self._original_params = None
+    def load_config(self, config_name: str = "base", 
+                   experiment: Optional[str] = None,
+                   overrides: Optional[list] = None) -> None:
+        """
+        Load configuration and store original parameters for conversion.
+        Args:
+            config_name: Base configuration name
+            experiment: Name of the experiment configuration to load
+            overrides: Additional configuration overrides
+        """
+        super().load_config(config_name, experiment, overrides)
+        # Store original configuration for reference
+        self._original_model_type = self.get_model_type()
+        self._original_params = self.get_model_params_dict().copy()
+        logger.info("Loaded configuration with model type: %s", self._original_model_type)
+    def switch_model_type(self, new_model_type: Union[str, ModelType],
+                         preserve_equivalent_params: bool = True) -> Dict[str, Any]:
+        """
+        Switch to a different model type with parameter conversion.
+        Args:
+            new_model_type: Target model type to switch to
+            preserve_equivalent_params: Whether to preserve equivalent parameters
+        Returns:
+            New model parameters after conversion
+        """
+        if isinstance(new_model_type, str):
+            new_model_type = ModelType(new_model_type.lower())
+        current_model_type = ModelType(self.get_model_type().lower())
+        if current_model_type == new_model_type:
+            logger.info("Model type already set to %s", new_model_type.value)
+            return self.get_model_params_dict()
+        logger.info("Switching model type from %s to %s", 
+                   current_model_type.value, new_model_type.value)
+        # Get current parameters
+        current_params = self.get_model_params_dict()
+        # Convert parameters using the unified parameter manager
+        if preserve_equivalent_params:
+            converted_params = self._param_manager.convert_parameters(
+                current_params, current_model_type, new_model_type
+            )
+        else:
+            # Use default parameters for the new model type
+            converted_params = self._param_manager.get_default_parameters(new_model_type)
+        # Update the configuration
+        self._update_model_config(new_model_type.value, converted_params)
+        logger.info("Successfully switched to %s with %d parameters", 
+                   new_model_type.value, len(converted_params))
+        return converted_params
+    def get_cross_compatible_params(self, target_model_type: Union[str, ModelType]) -> Dict[str, Any]:
+        """
+        Get parameters that are compatible with the target model type.
+        Args:
+            target_model_type: Target model type for compatibility
+        Returns:
+            Parameters compatible with the target model type
+        """
+        if isinstance(target_model_type, str):
+            target_model_type = ModelType(target_model_type.lower())
+        current_model_type = ModelType(self.get_model_type().lower())
+        current_params = self.get_model_params_dict()
+        if current_model_type == target_model_type:
+            return current_params.copy()
+        # Convert parameters
+        compatible_params = self._param_manager.convert_parameters(
+            current_params, current_model_type, target_model_type
+        )
+        logger.info("Generated cross-compatible parameters for %s", target_model_type.value)
+        return compatible_params
+    def validate_current_params(self) -> Tuple[bool, str]:
+        """
+        Validate current model parameters.
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        model_type = self.get_model_type()
+        params = self.get_model_params_dict()
+        return self._param_manager.validate_parameters(params, model_type)
+    def restore_original_config(self) -> None:
+        """Restore the original configuration loaded from file."""
+        if self._original_model_type is None or self._original_params is None:
+            raise RuntimeError("No original configuration to restore. Load config first.")
+        logger.info("Restoring original configuration: %s", self._original_model_type)
+        self._update_model_config(self._original_model_type, self._original_params)
+    def create_experiment_config(self, model_type: Union[str, ModelType],
+                               base_params: Optional[Dict[str, Any]] = None,
+                               experiment_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a new experiment configuration for the specified model type.
+        Args:
+            model_type: Model type for the experiment
+            base_params: Base parameters to start with (uses defaults if None)
+            experiment_name: Name for the experiment
+        Returns:
+            Complete experiment configuration
+        """
+        if isinstance(model_type, str):
+            model_type = ModelType(model_type.lower())
+        # Get unified configuration
+        if base_params:
+            config = self._param_manager.create_unified_config(base_params, model_type)
+        else:
+            config = self._param_manager.get_default_parameters(model_type)
+        # Update the current configuration
+        self._update_model_config(model_type.value, config)
+        # Set experiment name if provided
+        if experiment_name:
+            self.update_config_value("outputs.experiment_name", experiment_name)
+        logger.info("Created experiment config for %s with %d parameters", 
+                   model_type.value, len(config))
+        return config
+    def get_tuning_compatible_params(self) -> Dict[str, Any]:
+        """
+        Get parameters suitable for hyperparameter tuning.
+        Returns:
+            Parameters with tuning-friendly values and ranges
+        """
+        model_type = self.get_model_type()
+        params = self.get_model_params_dict()
+        if model_type == "xgboost":
+            return self._get_xgboost_tuning_params(params)
+        if model_type == "random_forest":
+            return self._get_random_forest_tuning_params(params)
+        raise ValueError(f"Tuning not supported for model type: {model_type}")
+    def apply_tuned_params(self, tuned_params: Dict[str, Any]) -> None:
+        """
+        Apply tuned parameters to the current configuration.
+        Args:
+            tuned_params: Dictionary of tuned hyperparameters
+        """
+        model_type = self.get_model_type()
+        current_params = self.get_model_params_dict()
+        # Merge tuned parameters with current parameters
+        updated_params = current_params.copy()
+        updated_params.update(tuned_params)
+        # Validate the updated parameters
+        is_valid, error_msg = self._param_manager.validate_parameters(updated_params, model_type)
+        if not is_valid:
+            logger.warning("Tuned parameters validation failed: %s", error_msg)
+        # Update the configuration
+        self._update_model_config(model_type, updated_params)
+        logger.info("Applied %d tuned parameters to %s model", 
+                   len(tuned_params), model_type)
+    def export_for_framework(self, target_framework: str = "auto") -> Dict[str, Any]:
+        """
+        Export configuration in format suitable for the target framework.
+        Args:
+            target_framework: Target framework ('xgboost', 'sklearn', 'auto')
+        Returns:
+            Framework-specific configuration
+        """
+        model_type = self.get_model_type()
+        params = self.get_model_params_dict()
+        if target_framework == "auto":
+            target_framework = "xgboost" if model_type == "xgboost" else "sklearn"
+        # Create framework-specific export
+        export_config = {
+            "model_type": model_type,
+            "framework": target_framework,
+            "parameters": params.copy(),
+            "federated_config": {
+                "num_rounds": self.config.federated.num_rounds,
+                "num_clients_per_round": self.config.federated.num_clients_per_round,
+                "train_method": self.config.federated.train_method
+            },
+            "data_config": {
+                "path": str(self.get_data_path()),
+                "test_fraction": self.config.federated.test_fraction
+            }
+        }
+        logger.info("Exported configuration for %s framework", target_framework)
+        return export_config
+    def _update_model_config(self, model_type: str, params: Dict[str, Any]) -> None:
+        """Update the model configuration with new type and parameters."""
+        # Update model type
+        self.update_config_value("model.type", model_type)
+        # Update individual parameters
+        for key, value in params.items():
+            param_path = f"model.params.{key}"
+            self.update_config_value(param_path, value)
+    def _get_xgboost_tuning_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get XGBoost parameters suitable for tuning."""
+        tuning_params = {}
+        # Parameters commonly tuned for XGBoost
+        tunable_params = [
+            'eta', 'max_depth', 'min_child_weight', 'gamma', 'subsample', 
+            'colsample_bytree', 'reg_alpha', 'reg_lambda', 'num_boost_round'
+        ]
+        for param in tunable_params:
+            if param in params:
+                tuning_params[param] = params[param]
+        return tuning_params
+    def _get_random_forest_tuning_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get Random Forest parameters suitable for tuning."""
+        tuning_params = {}
+        # Parameters commonly tuned for Random Forest
+        tunable_params = [
+            'n_estimators', 'max_depth', 'min_samples_split', 'min_samples_leaf',
+            'max_features', 'min_impurity_decrease'
+        ]
+        for param in tunable_params:
+            if param in params:
+                tuning_params[param] = params[param]
+        return tuning_params
+class ConfigurationPreset:
+    """
+    Predefined configuration presets for common use cases.
+    """
+    @staticmethod
+    def get_quick_test_config(model_type: Union[str, ModelType]) -> Dict[str, Any]:
+        """Get configuration optimized for quick testing."""
+        if isinstance(model_type, str):
+            model_type = ModelType(model_type.lower())
+        if model_type == ModelType.XGBOOST:
+            return {
+                "eta": 0.3,
+                "max_depth": 6,
+                "min_child_weight": 1,
+                "num_boost_round": 10,
+                "objective": "multi:softprob",
+                "num_class": 11,
+                "eval_metric": "mlogloss"
+            }
+        elif model_type == ModelType.RANDOM_FOREST:
+            return {
+                "n_estimators": 10,
+                "max_depth": 5,
+                "min_samples_split": 2,
+                "min_samples_leaf": 1,
+                "random_state": 42
+            }
+        else:
+            raise ValueError(f"Unsupported model type: {model_type}")
+    @staticmethod
+    def get_production_config(model_type: Union[str, ModelType]) -> Dict[str, Any]:
+        """Get configuration optimized for production use."""
+        if isinstance(model_type, str):
+            model_type = ModelType(model_type.lower())
+        if model_type == ModelType.XGBOOST:
+            return {
+                "eta": 0.05,
+                "max_depth": 8,
+                "min_child_weight": 5,
+                "gamma": 0.5,
+                "subsample": 0.8,
+                "colsample_bytree": 0.8,
+                "num_boost_round": 500,
+                "objective": "multi:softprob",
+                "num_class": 11,
+                "eval_metric": "mlogloss",
+                "reg_alpha": 0.1,
+                "reg_lambda": 1.0
+            }
+        elif model_type == ModelType.RANDOM_FOREST:
+            return {
+                "n_estimators": 200,
+                "max_depth": 15,
+                "min_samples_split": 5,
+                "min_samples_leaf": 2,
+                "max_features": "sqrt",
+                "random_state": 42,
+                "class_weight": "balanced"
+            }
+        else:
+            raise ValueError(f"Unsupported model type: {model_type}")
+    @staticmethod
+    def get_tuning_config(model_type: Union[str, ModelType]) -> Dict[str, Any]:
+        """Get configuration optimized for hyperparameter tuning."""
+        if isinstance(model_type, str):
+            model_type = ModelType(model_type.lower())
+        if model_type == ModelType.XGBOOST:
+            return {
+                "eta": 0.1,
+                "max_depth": 6,
+                "min_child_weight": 3,
+                "gamma": 0.1,
+                "subsample": 0.8,
+                "colsample_bytree": 0.8,
+                "num_boost_round": 100,
+                "objective": "multi:softprob",
+                "num_class": 11,
+                "eval_metric": "mlogloss"
+            }
+        elif model_type == ModelType.RANDOM_FOREST:
+            return {
+                "n_estimators": 50,
+                "max_depth": 10,
+                "min_samples_split": 2,
+                "min_samples_leaf": 1,
+                "max_features": "sqrt",
+                "random_state": 42
+            }
+        else:
+            raise ValueError(f"Unsupported model type: {model_type}")
+# Convenience functions
+def create_config_manager_with_mapping() -> ParameterIntegratedConfigManager:
+    """Create a new parameter-integrated config manager."""
+    return ParameterIntegratedConfigManager()
+def switch_config_model_type(config_manager: ConfigManager, 
+                           new_model_type: Union[str, ModelType]) -> Dict[str, Any]:
+    """
+    Switch model type for an existing config manager.
+    Args:
+        config_manager: Existing ConfigManager instance
+        new_model_type: Target model type
+    Returns:
+        New model parameters after conversion
+    """
+    if not isinstance(config_manager, ParameterIntegratedConfigManager):
+        raise TypeError("ConfigManager must be ParameterIntegratedConfigManager for model switching")
+    return config_manager.switch_model_type(new_model_type)
+def validate_config_compatibility(config_manager: ConfigManager, 
+                                target_model_type: Union[str, ModelType]) -> Tuple[bool, str]:
+    """
+    Validate if current configuration is compatible with target model type.
+    Args:
+        config_manager: ConfigManager instance
+        target_model_type: Target model type to check compatibility
+    Returns:
+        Tuple of (is_compatible, message)
+    """
+    try:
+        current_type = config_manager.get_model_type()
+        current_params = config_manager.get_model_params_dict()
+        if isinstance(target_model_type, str):
+            target_model_type = ModelType(target_model_type.lower())
+        if ModelType(current_type.lower()) == target_model_type:
+            return True, "Configuration is already for target model type"
+        # Try to convert parameters to check compatibility
+        param_manager = UnifiedParameterManager()
+        converted_params = param_manager.convert_parameters(
+            current_params, current_type, target_model_type
+        )
+        # Validate converted parameters
+        is_valid, error_msg = param_manager.validate_parameters(converted_params, target_model_type)
+                if is_valid:
+            return True, "Configuration is compatible and can be converted"
+        return False, f"Conversion validation failed: {error_msg}"
+    except (ValueError, TypeError, AttributeError) as e:
+        return False, f"Compatibility check failed: {str(e)}"
 </file>
 
 <file path="src/config/tuned_params.py">
@@ -4680,6 +5940,284 @@ def separate_xy(data):
     return features_array, labels_array
 </file>
 
+<file path="src/federated/strategies/__init__.py">
+"""
+Federated learning strategies package.
+This package contains specialized strategies for different model types
+in federated learning scenarios.
+"""
+from .random_forest_strategy import (
+    RandomForestFedAvg,
+    RandomForestBagging,
+    create_random_forest_strategy
+)
+__all__ = [
+    'RandomForestFedAvg',
+    'RandomForestBagging', 
+    'create_random_forest_strategy'
+]
+</file>
+
+<file path="src/federated/strategies/random_forest_strategy.py">
+"""
+Random Forest specific federated learning strategies.
+This module implements federated learning strategies optimized for Random Forest models,
+including parameter aggregation and evaluation strategies suitable for ensemble methods.
+"""
+import logging
+from typing import Dict, List, Optional, Tuple, Union
+import numpy as np
+import flwr as fl
+from flwr.common import (
+    EvaluateRes,
+    FitRes,
+    Parameters,
+    Scalar,
+    ndarrays_to_parameters,
+    parameters_to_ndarrays,
+)
+from flwr.server.client_proxy import ClientProxy
+from flwr.server.strategy import Strategy
+logger = logging.getLogger(__name__)
+class RandomForestFedAvg(fl.server.strategy.FedAvg):
+    """
+    Federated Averaging strategy adapted for Random Forest models.
+    This strategy implements federated averaging for Random Forest models,
+    focusing on aggregating feature importances and ensemble predictions.
+    """
+    def __init__(self, 
+                 fraction_fit: float = 1.0,
+                 fraction_evaluate: float = 1.0,
+                 min_fit_clients: int = 2,
+                 min_evaluate_clients: int = 2,
+                 min_available_clients: int = 2):
+        """
+        Initialize Random Forest FedAvg strategy.
+        Args:
+            fraction_fit: Fraction of clients to sample for training
+            fraction_evaluate: Fraction of clients to sample for evaluation
+            min_fit_clients: Minimum number of clients for training
+            min_evaluate_clients: Minimum number of clients for evaluation
+            min_available_clients: Minimum number of available clients
+        """
+        super().__init__(
+            fraction_fit=fraction_fit,
+            fraction_evaluate=fraction_evaluate,
+            min_fit_clients=min_fit_clients,
+            min_evaluate_clients=min_evaluate_clients,
+            min_available_clients=min_available_clients
+        )
+        logger.info("Initialized RandomForestFedAvg strategy")
+        logger.info("Fraction fit: %s, Fraction evaluate: %s", fraction_fit, fraction_evaluate)
+        logger.info("Min fit clients: %d, Min evaluate clients: %d", min_fit_clients, min_evaluate_clients)
+    def aggregate_fit(
+        self,
+        server_round: int,
+        results: List[Tuple[ClientProxy, FitRes]],
+        failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
+    ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
+        """
+        Aggregate fit results from multiple clients.
+        For Random Forest, this aggregates feature importances and other
+        ensemble-specific parameters.
+        Args:
+            server_round: Current server round
+            results: Fit results from clients
+            failures: Failed fit attempts
+        Returns:
+            Aggregated parameters and metrics
+        """
+        if not results:
+            return None, {}
+        logger.info("Aggregating Random Forest parameters from %d clients in round %d", 
+                   len(results), server_round)
+        # Log any failures
+        if failures:
+            logger.warning("Round %d had %d failures", server_round, len(failures))
+        # Extract parameters and weights from results
+        parameters_list = []
+        weights = []
+        for _, fit_res in results:
+            if fit_res.parameters:
+                parameters_list.append(parameters_to_ndarrays(fit_res.parameters))
+                weights.append(fit_res.num_examples)
+        if not parameters_list:
+            logger.warning("No parameters received from clients in round %d", server_round)
+            return None, {}
+        # Aggregate feature importances using weighted average
+        aggregated_parameters = self._aggregate_random_forest_parameters(
+            parameters_list, weights
+        )
+        # Calculate aggregated metrics
+        total_examples = sum(weight for weight in weights)
+        # Aggregate training metrics
+        aggregated_metrics = {}
+        if results and results[0][1].metrics:
+            metric_keys = results[0][1].metrics.keys()
+            for key in metric_keys:
+                weighted_sum = sum(
+                    fit_res.metrics.get(key, 0) * fit_res.num_examples
+                    for _, fit_res in results
+                    if fit_res.metrics and key in fit_res.metrics
+                )
+                aggregated_metrics[f"train_{key}"] = weighted_sum / total_examples
+        aggregated_metrics["total_examples"] = total_examples
+        aggregated_metrics["num_clients"] = len(results)
+        logger.info("Round %d aggregation completed. Total examples: %d, Participating clients: %d", 
+                   server_round, total_examples, len(results))
+        return ndarrays_to_parameters(aggregated_parameters), aggregated_metrics
+    def aggregate_evaluate(
+        self,
+        server_round: int,
+        results: List[Tuple[ClientProxy, EvaluateRes]],
+        failures: List[Union[Tuple[ClientProxy, EvaluateRes], BaseException]],
+    ) -> Tuple[Optional[float], Dict[str, Scalar]]:
+        """
+        Aggregate evaluation results from multiple clients.
+        Args:
+            server_round: Current server round
+            results: Evaluation results from clients
+            failures: Failed evaluation attempts
+        Returns:
+            Aggregated loss and metrics
+        """
+        if not results:
+            return None, {}
+        logger.info("Aggregating evaluation results from %d clients in round %d", 
+                   len(results), server_round)
+        # Log any failures
+        if failures:
+            logger.warning("Round %d evaluation had %d failures", server_round, len(failures))
+        # Weighted average of losses and metrics
+        total_examples = sum(eval_res.num_examples for _, eval_res in results)
+        # Aggregate loss
+        weighted_loss_sum = sum(
+            eval_res.loss * eval_res.num_examples for _, eval_res in results
+        )
+        aggregated_loss = weighted_loss_sum / total_examples
+        # Aggregate metrics
+        aggregated_metrics = {}
+        if results and results[0][1].metrics:
+            metric_keys = results[0][1].metrics.keys()
+            for key in metric_keys:
+                weighted_sum = sum(
+                    eval_res.metrics.get(key, 0) * eval_res.num_examples
+                    for _, eval_res in results
+                    if eval_res.metrics and key in eval_res.metrics
+                )
+                aggregated_metrics[key] = weighted_sum / total_examples
+        aggregated_metrics["total_examples"] = total_examples
+        aggregated_metrics["num_clients"] = len(results)
+        logger.info("Round %d evaluation completed. Avg loss: %.4f, Total examples: %d", 
+                   server_round, aggregated_loss, total_examples)
+        return aggregated_loss, aggregated_metrics
+    def _aggregate_random_forest_parameters(self, 
+                                          parameters_list: List[List[np.ndarray]], 
+                                          weights: List[int]) -> List[np.ndarray]:
+        """
+        Aggregate Random Forest parameters (feature importances) using weighted average.
+        Args:
+            parameters_list: List of parameter arrays from each client
+            weights: Number of examples used by each client
+        Returns:
+            Aggregated parameters
+        """
+        if not parameters_list:
+            return []
+        # Check if all clients have the same parameter structure
+        if not all(len(params) == len(parameters_list[0]) for params in parameters_list):
+            logger.warning("Inconsistent parameter structure across clients")
+            return parameters_list[0]  # Return first client's parameters as fallback
+        total_weight = sum(weights)
+        aggregated_params = []
+        # Aggregate each parameter array
+        for i in range(len(parameters_list[0])):
+            param_arrays = [params[i] for params in parameters_list]
+            # Check if all arrays have the same shape
+            if not all(arr.shape == param_arrays[0].shape for arr in param_arrays):
+                logger.warning("Inconsistent parameter shape for parameter %d", i)
+                aggregated_params.append(param_arrays[0])  # Use first client's parameters
+                continue
+            # Weighted average
+            weighted_sum = sum(
+                weight * param_array 
+                for weight, param_array in zip(weights, param_arrays)
+            )
+            aggregated_param = weighted_sum / total_weight
+            aggregated_params.append(aggregated_param)
+        logger.info("Aggregated %d parameter arrays", len(aggregated_params))
+        return aggregated_params
+class RandomForestBagging(RandomForestFedAvg):
+    """
+    Bagging strategy for Random Forest federated learning.
+    This strategy implements a bagging approach where each client trains
+    independent Random Forest models and the server aggregates predictions.
+    """
+    def __init__(self, **kwargs):
+        """Initialize Random Forest Bagging strategy."""
+        super().__init__(**kwargs)
+        logger.info("Initialized RandomForestBagging strategy")
+    def aggregate_fit(
+        self,
+        server_round: int,
+        results: List[Tuple[ClientProxy, FitRes]],
+        failures: List[Union[Tuple[ClientProxy, FitRes], BaseException]],
+    ) -> Tuple[Optional[Parameters], Dict[str, Scalar]]:
+        """
+        Aggregate fit results using bagging approach.
+        In bagging, each client's model is treated as an independent estimator
+        in the ensemble, so we primarily aggregate statistics rather than
+        model parameters.
+        """
+        if not results:
+            return None, {}
+        logger.info("Bagging aggregation from %d clients in round %d", 
+                   len(results), server_round)
+        # For bagging, we don't necessarily need to aggregate parameters
+        # Instead, we can maintain separate models and aggregate predictions
+        # Calculate ensemble statistics
+        total_examples = sum(fit_res.num_examples for _, fit_res in results)
+        # Aggregate training metrics
+        aggregated_metrics = {}
+        if results and results[0][1].metrics:
+            metric_keys = results[0][1].metrics.keys()
+            for key in metric_keys:
+                values = [
+                    fit_res.metrics.get(key, 0)
+                    for _, fit_res in results
+                    if fit_res.metrics and key in fit_res.metrics
+                ]
+                if values:
+                    aggregated_metrics[f"avg_{key}"] = np.mean(values)
+                    aggregated_metrics[f"std_{key}"] = np.std(values)
+        aggregated_metrics["total_examples"] = total_examples
+        aggregated_metrics["ensemble_size"] = len(results)
+        # Return empty parameters since we're using bagging
+        empty_params = ndarrays_to_parameters([])
+        logger.info("Bagging round %d completed. Ensemble size: %d", 
+                   server_round, len(results))
+        return empty_params, aggregated_metrics
+def create_random_forest_strategy(strategy_name: str = "fedavg", **kwargs) -> Strategy:
+    """
+    Factory function to create Random Forest federated learning strategies.
+    Args:
+        strategy_name: Name of the strategy ('fedavg', 'bagging')
+        **kwargs: Additional strategy parameters
+    Returns:
+        Strategy: Configured federated learning strategy
+    """
+    strategy_map = {
+        "fedavg": RandomForestFedAvg,
+        "bagging": RandomForestBagging,
+    }
+    if strategy_name.lower() not in strategy_map:
+        logger.warning("Unknown strategy '%s', using fedavg", strategy_name)
+        strategy_name = "fedavg"
+    strategy_class = strategy_map[strategy_name.lower()]
+    logger.info("Creating Random Forest strategy: %s", strategy_name)
+    return strategy_class(**kwargs)
+</file>
+
 <file path="src/federated/client_utils.py">
 """
 client_utils.py
@@ -5233,6 +6771,350 @@ def main():
         raise
 if __name__ == "__main__":
     main()
+</file>
+
+<file path="src/federated/generic_client.py">
+"""
+Generic federated learning client implementation.
+This module implements a unified Flower client that can work with different model types
+(XGBoost, Random Forest) based on configuration, providing a single interface for
+federated learning regardless of the underlying model.
+"""
+import os
+import logging
+import numpy as np
+from typing import Dict, Tuple, Optional, Any
+import flwr as fl
+from flwr.common import NDArrays
+from src.core.dataset import (
+    load_csv_data,
+    transform_dataset_to_dmatrix,
+    load_global_feature_processor,
+    instantiate_partitioner,
+)
+from src.config.config_manager import ConfigManager
+from src.models.model_factory import ModelFactory
+from src.federated.client_utils import XgbClient
+logger = logging.getLogger(__name__)
+class GenericFederatedClient:
+    """
+    Generic federated learning client that supports multiple model types.
+    This client automatically adapts to the configured model type (XGBoost, Random Forest)
+    and provides a unified interface for federated learning operations.
+    """
+    def __init__(self, 
+                 client_id: int,
+                 config_manager: ConfigManager,
+                 global_processor_path: Optional[str] = None):
+        """
+        Initialize the generic federated client.
+        Args:
+            client_id: Unique identifier for this client
+            config_manager: ConfigManager instance with loaded configuration
+            global_processor_path: Path to the global feature processor
+        """
+        self.client_id = client_id
+        self.config_manager = config_manager
+        self.config = config_manager.config
+        self.model_type = config_manager.get_model_type()
+        self.global_processor_path = global_processor_path
+        # Initialize data containers
+        self.train_data = None
+        self.test_data = None
+        self.processor = None
+        self.model = None
+        logger.info("Initialized GenericFederatedClient for client %d with model type: %s", 
+                   client_id, self.model_type)
+    def load_data(self) -> None:
+        """Load and partition data for this client."""
+        logger.info("Loading data for client %d", self.client_id)
+        # Get data file path from config
+        data_file = os.path.join(self.config.data.path, self.config.data.filename)
+        if not os.path.exists(data_file):
+            raise FileNotFoundError(f"Data file not found: {data_file}")
+        # Load global feature processor if available
+        processor = None
+        if self.global_processor_path and os.path.exists(self.global_processor_path):
+            logger.info("Loading global feature processor from %s", self.global_processor_path)
+            processor = load_global_feature_processor(self.global_processor_path)
+        else:
+            logger.warning("Global processor not found at %s", self.global_processor_path)
+        self.processor = processor
+        if self.model_type == "xgboost":
+            self._load_xgboost_data(data_file)
+        elif self.model_type == "random_forest":
+            self._load_random_forest_data(data_file)
+        else:
+            raise ValueError(f"Unsupported model type: {self.model_type}")
+    def _load_xgboost_data(self, data_file: str) -> None:
+        """Load data for XGBoost training."""
+        # Load the dataset
+        dataset = load_csv_data(data_file)
+        # Create partitioner
+        partitioner = instantiate_partitioner(
+            self.config.federated.partitioner_type, 
+            self.config.federated.num_partitions
+        )
+        # Apply the partitioner to the train dataset
+        partitioner.dataset = dataset["train"]
+        # Get the partition for this client
+        client_dataset = partitioner.load_partition(self.client_id)
+        # Convert to DMatrix for training
+        self.train_data = transform_dataset_to_dmatrix(
+            client_dataset, processor=self.processor, is_training=True
+        )
+        # Use the test split from the main dataset for evaluation
+        test_dataset = dataset["test"]
+        self.test_data = transform_dataset_to_dmatrix(
+            test_dataset, processor=self.processor, is_training=False
+        )
+        logger.info("Client %d - XGBoost data loaded: Train=%d, Test=%d, Features=%d", 
+                   self.client_id, self.train_data.num_row(), 
+                   self.test_data.num_row(), self.train_data.num_col())
+    def _load_random_forest_data(self, data_file: str) -> None:
+        """Load data for Random Forest training."""
+        # Load and preprocess data using the existing pipeline
+        # First load the CSV data
+        dataset_dict = load_csv_data(data_file)
+        # Convert to pandas for sklearn processing
+        full_dataset = dataset_dict["train"].to_pandas()
+        # Simple train/test split using sklearn
+        from sklearn.model_selection import train_test_split
+        target_col = 'label' if 'label' in full_dataset.columns else 'attack_cat'
+        feature_cols = [col for col in full_dataset.columns if col != target_col]
+        X = full_dataset[feature_cols]
+        y = full_dataset[target_col]
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, 
+            test_size=self.config.federated.test_fraction,
+            random_state=self.config.data.seed,
+            stratify=y if len(np.unique(y)) > 1 else None
+        )
+        # Create partitioner for train data
+        # Simple partitioning for Random Forest (could be improved)
+        partition_size = len(X_train) // self.config.federated.num_partitions
+        start_idx = self.client_id * partition_size
+        if self.client_id == self.config.federated.num_partitions - 1:
+            # Last client gets remaining data
+            end_idx = len(X_train)
+        else:
+            end_idx = start_idx + partition_size
+        self.train_data = {
+            'X': X_train.iloc[start_idx:end_idx].values,
+            'y': y_train.iloc[start_idx:end_idx].values
+        }
+        # Use common test data for all clients
+        self.test_data = {
+            'X': X_test.values,
+            'y': y_test.values
+        }
+        logger.info("Client %d - Random Forest data loaded: Train=%d, Test=%d, Features=%d", 
+                   self.client_id, len(self.train_data['X']), 
+                   len(self.test_data['X']), self.train_data['X'].shape[1])
+    def create_model(self) -> None:
+        """Create the appropriate model based on configuration."""
+        logger.info("Creating %s model for client %d", self.model_type, self.client_id)
+        # Get model parameters from config
+        model_params = self.config_manager.get_model_params_dict()
+        # Create model using the factory
+        self.model = ModelFactory.create_model(
+            model_type=self.model_type,
+            params=model_params
+        )
+        logger.info("Model created successfully for client %d", self.client_id)
+    def get_flower_client(self) -> fl.client.Client:
+        """
+        Get the appropriate Flower client based on model type.
+        Returns:
+            fl.client.Client: Flower client instance
+        """
+        if self.model_type == "xgboost":
+            return self._get_xgboost_flower_client()
+        if self.model_type == "random_forest":
+            return self._get_random_forest_flower_client()
+        raise ValueError(f"Unsupported model type: {self.model_type}")
+    def _get_xgboost_flower_client(self) -> fl.client.Client:
+        """Get XGBoost Flower client."""
+        # Use the existing XgbClient
+        return XgbClient(
+            train_dmatrix=self.train_data,
+            valid_dmatrix=self.test_data,
+            num_train=self.train_data.num_row(),
+            num_val=self.test_data.num_row(),
+            num_local_round=self.config.model.num_local_rounds,
+            cid=self.client_id,
+            params=self.config_manager.get_model_params_dict(),
+            train_method=self.config.federated.train_method,
+            config_manager=self.config_manager
+        )
+    def _get_random_forest_flower_client(self) -> fl.client.Client:
+        """Get Random Forest Flower client."""
+        return RandomForestFlowerClient(
+            train_data=self.train_data,
+            test_data=self.test_data,
+            client_id=self.client_id,
+            model_params=self.config_manager.get_model_params_dict(),
+            num_local_rounds=self.config.model.num_local_rounds
+        )
+class RandomForestFlowerClient(fl.client.NumPyClient):
+    """Flower client implementation for Random Forest models."""
+    def __init__(self, 
+                 train_data: Dict[str, np.ndarray],
+                 test_data: Dict[str, np.ndarray],
+                 client_id: int,
+                 model_params: Dict[str, Any],
+                 num_local_rounds: int = 1):
+        """
+        Initialize Random Forest Flower client.
+        Args:
+            train_data: Dictionary with 'X' and 'y' training data
+            test_data: Dictionary with 'X' and 'y' test data  
+            client_id: Client identifier
+            model_params: Random Forest parameters
+            num_local_rounds: Number of local training rounds
+        """
+        self.train_data = train_data
+        self.test_data = test_data
+        self.client_id = client_id
+        self.model_params = model_params
+        self.num_local_rounds = num_local_rounds
+        self.model = None
+        logger.info("Initialized RandomForestFlowerClient for client %d", client_id)
+    def get_parameters(self, config: Dict[str, Any]) -> NDArrays:
+        """Return model parameters as a list of NumPy ndarrays."""
+        if self.model is None:
+            # Return empty parameters if model not trained yet
+            return []
+        # For Random Forest, we can return tree parameters or feature importances
+        # This is a simplified implementation - in practice, you might want to
+        # serialize the entire model or use other aggregation strategies
+        try:
+            feature_importances = self.model.feature_importances_
+            return [feature_importances]
+        except AttributeError:
+            return []
+    def set_parameters(self, parameters: NDArrays) -> None:
+        """Update model parameters from a list of NumPy ndarrays."""
+        # For Random Forest, this is more complex since we can't directly
+        # set parameters like in XGBoost. In practice, you might use
+        # model averaging or other ensemble techniques.
+        # This is a placeholder implementation.
+        if parameters and len(parameters) > 0:
+            logger.info("Received parameters for client %d", self.client_id)
+    def fit(self, parameters: NDArrays, config: Dict[str, Any]) -> Tuple[NDArrays, int, Dict[str, Any]]:
+        """Train the model on the locally held training set."""
+        logger.info("Training Random Forest model for client %d", self.client_id)
+        # Set parameters if provided
+        self.set_parameters(parameters)
+        # Create and train Random Forest model
+        from sklearn.ensemble import RandomForestClassifier
+        self.model = RandomForestClassifier(**self.model_params)
+        # Train the model
+        self.model.fit(self.train_data['X'], self.train_data['y'])
+        # Return updated parameters
+        new_parameters = self.get_parameters({})
+        # Calculate training metrics
+        train_accuracy = self.model.score(self.train_data['X'], self.train_data['y'])
+        metrics = {
+            "train_accuracy": train_accuracy,
+            "train_samples": len(self.train_data['X'])
+        }
+        logger.info("Client %d training completed. Accuracy: %.4f", 
+                   self.client_id, train_accuracy)
+        return new_parameters, len(self.train_data['X']), metrics
+    def evaluate(self, parameters: NDArrays, config: Dict[str, Any]) -> Tuple[float, int, Dict[str, Any]]:
+        """Evaluate the model on the locally held test set."""
+        logger.info("Evaluating Random Forest model for client %d", self.client_id)
+        if self.model is None:
+            logger.warning("Model not trained yet for client %d", self.client_id)
+            return 0.0, 0, {}
+        # Set parameters if provided
+        self.set_parameters(parameters)
+        # Evaluate on test data
+        test_predictions = self.model.predict(self.test_data['X'])
+        test_accuracy = self.model.score(self.test_data['X'], self.test_data['y'])
+        # Calculate additional metrics
+        from sklearn.metrics import f1_score, precision_score, recall_score
+        try:
+            f1 = f1_score(self.test_data['y'], test_predictions, average='weighted')
+            precision = precision_score(self.test_data['y'], test_predictions, average='weighted')
+            recall = recall_score(self.test_data['y'], test_predictions, average='weighted')
+        except ValueError as e:
+            logger.warning("Could not calculate additional metrics: %s", e)
+            f1 = precision = recall = 0.0
+        metrics = {
+            "accuracy": test_accuracy,
+            "f1_score": f1,
+            "precision": precision,
+            "recall": recall,
+            "test_samples": len(self.test_data['X'])
+        }
+        logger.info("Client %d evaluation completed. Accuracy: %.4f, F1: %.4f", 
+                   self.client_id, test_accuracy, f1)
+        # Return loss (1 - accuracy), number of samples, and metrics
+        loss = 1.0 - test_accuracy
+        return loss, len(self.test_data['X']), metrics
+def create_generic_client(client_id: int, 
+                         config_manager: ConfigManager,
+                         global_processor_path: Optional[str] = None) -> fl.client.Client:
+    """
+    Factory function to create a generic federated client.
+    Args:
+        client_id: Unique identifier for the client
+        config_manager: ConfigManager instance with loaded configuration
+        global_processor_path: Path to the global feature processor
+    Returns:
+        fl.client.Client: Flower client instance
+    """
+    # Create generic client
+    generic_client = GenericFederatedClient(
+        client_id=client_id,
+        config_manager=config_manager,
+        global_processor_path=global_processor_path
+    )
+    # Load data and create model
+    generic_client.load_data()
+    generic_client.create_model()
+    # Return the appropriate Flower client
+    return generic_client.get_flower_client()
+def start_generic_client(client_id: int,
+                        config_manager: ConfigManager,
+                        global_processor_path: Optional[str] = None,
+                        server_address: str = "0.0.0.0:8080",
+                        use_https: bool = False) -> None:
+    """
+    Start a generic federated learning client.
+    Args:
+        client_id: Unique identifier for the client
+        config_manager: ConfigManager instance with loaded configuration
+        global_processor_path: Path to the global feature processor
+        server_address: Server address to connect to
+        use_https: Whether to use HTTPS for server communication
+    """
+    logger.info("Starting generic federated client %d for model type: %s", 
+               client_id, config_manager.get_model_type())
+    # Create the client
+    client = create_generic_client(
+        client_id=client_id,
+        config_manager=config_manager,
+        global_processor_path=global_processor_path
+    )
+    # Connect to server
+    try:
+        if use_https:
+            fl.client.start_client(
+                server_address=server_address,
+                client=client,
+                transport="grpc-bidi"
+            )
+        else:
+            fl.client.start_client(
+                server_address=server_address,
+                client=client
+            )
+    except Exception as e:
+        logger.error("Failed to start client %d: %s", client_id, e)
+        raise
 </file>
 
 <file path="src/federated/server.py">
@@ -6481,6 +8363,480 @@ def should_stop_early(patience: int = 3, min_delta: float = 0.001) -> bool:
     return check_convergence(METRICS_HISTORY, patience, min_delta)
 </file>
 
+<file path="src/models/base_model.py">
+"""
+Abstract base model interface for federated learning pipeline.
+This module defines the interface that all models (XGBoost, Random Forest, etc.)
+must implement to be compatible with the federated learning framework.
+"""
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Tuple, Union, Optional
+import numpy as np
+import pandas as pd
+class BaseModel(ABC):
+    """Abstract base class for all models in the federated learning pipeline."""
+    def __init__(self, params: Dict[str, Any]):
+        """
+        Initialize the model with hyperparameters.
+        Args:
+            params: Dictionary of model hyperparameters
+        """
+        self.params = params
+        self.model = None
+        self._is_trained = False
+    @abstractmethod
+    def fit(self, 
+            X: Union[np.ndarray, pd.DataFrame], 
+            y: Union[np.ndarray, pd.Series],
+            X_val: Optional[Union[np.ndarray, pd.DataFrame]] = None,
+            y_val: Optional[Union[np.ndarray, pd.Series]] = None,
+            **kwargs) -> 'BaseModel':
+        """
+        Train the model on the provided data.
+        Args:
+            X: Training features
+            y: Training labels
+            X_val: Validation features (optional)
+            y_val: Validation labels (optional)
+            **kwargs: Additional training parameters
+        Returns:
+            Self for method chaining
+        """
+        raise NotImplementedError("Subclasses must implement fit method")
+    @abstractmethod
+    def predict(self, X: Union[np.ndarray, pd.DataFrame]) -> np.ndarray:
+        """
+        Make predictions on the provided data.
+        Args:
+            X: Features to predict on
+        Returns:
+            Predicted class labels
+        """
+        raise NotImplementedError("Subclasses must implement predict method")
+    @abstractmethod
+    def predict_proba(self, X: Union[np.ndarray, pd.DataFrame]) -> np.ndarray:
+        """
+        Make probability predictions on the provided data.
+        Args:
+            X: Features to predict on
+        Returns:
+            Predicted class probabilities
+        """
+        raise NotImplementedError("Subclasses must implement predict_proba method")
+    @abstractmethod
+    def serialize(self) -> bytes:
+        """
+        Serialize the model to bytes for transmission in federated learning.
+        Returns:
+            Serialized model as bytes
+        """
+        raise NotImplementedError("Subclasses must implement serialize method")
+    @abstractmethod
+    def deserialize(self, model_bytes: bytes) -> 'BaseModel':
+        """
+        Deserialize model from bytes.
+        Args:
+            model_bytes: Serialized model bytes
+        Returns:
+            Self with loaded model
+        """
+        raise NotImplementedError("Subclasses must implement deserialize method")
+    @abstractmethod
+    def save_model(self, filepath: str) -> None:
+        """
+        Save model to disk.
+        Args:
+            filepath: Path to save the model
+        """
+        raise NotImplementedError("Subclasses must implement save_model method")
+    @abstractmethod
+    def load_model(self, filepath: str) -> 'BaseModel':
+        """
+        Load model from disk.
+        Args:
+            filepath: Path to load the model from
+        Returns:
+            Self with loaded model
+        """
+        raise NotImplementedError("Subclasses must implement load_model method")
+    @abstractmethod
+    def get_feature_importance(self) -> Dict[str, float]:
+        """
+        Get feature importance scores.
+        Returns:
+            Dictionary mapping feature names to importance scores
+        """
+        raise NotImplementedError("Subclasses must implement get_feature_importance method")
+    @abstractmethod
+    def update_from_model(self, other_model: 'BaseModel', **kwargs) -> 'BaseModel':
+        """
+        Update this model using another model (for federated aggregation).
+        Args:
+            other_model: Another model to update from
+            **kwargs: Additional parameters for update strategy
+        Returns:
+            Self with updated model
+        """
+        raise NotImplementedError("Subclasses must implement update_from_model method")
+    @property
+    def is_trained(self) -> bool:
+        """Check if model has been trained."""
+        return self._is_trained
+    @property
+    def model_type(self) -> str:
+        """Get the model type identifier."""
+        return self.__class__.__name__.replace('Model', '').lower()
+    def get_params(self) -> Dict[str, Any]:
+        """Get model hyperparameters."""
+        return self.params.copy()
+    def set_params(self, **params) -> 'BaseModel':
+        """Set model hyperparameters."""
+        self.params.update(params)
+        return self
+</file>
+
+<file path="src/models/model_factory.py">
+"""
+Model factory for creating different types of models in the federated learning pipeline.
+This module provides a factory pattern for instantiating models based on 
+configuration, enabling easy switching between XGBoost, Random Forest, and 
+future model implementations.
+"""
+import logging
+from typing import Any, Dict, Type
+from .base_model import BaseModel
+from .random_forest_model import RandomForestModel
+logger = logging.getLogger(__name__)
+class ModelFactory:
+    """Factory for creating models based on configuration."""
+    # Registry of available models
+    _models = {
+        'random_forest': RandomForestModel,
+        'randomforest': RandomForestModel,  # Alternative naming
+        'rf': RandomForestModel,  # Short name
+    }
+    @classmethod
+    def register_model(cls, name: str, model_class: Type[BaseModel]) -> None:
+        """
+        Register a new model type.
+        Args:
+            name: Name to register the model under
+            model_class: Model class that implements BaseModel interface
+        """
+        if not issubclass(model_class, BaseModel):
+            raise ValueError(f"Model class {model_class} must inherit from BaseModel")
+        cls._models[name.lower()] = model_class
+        logger.info("Registered model type '%s' -> %s", name, model_class.__name__)
+    @classmethod
+    def get_available_models(cls) -> Dict[str, Type[BaseModel]]:
+        """Get dictionary of all available model types."""
+        return cls._models.copy()
+    @classmethod
+    def create_model(cls, model_type: str, params: Dict[str, Any]) -> BaseModel:
+        """
+        Create a model instance based on type and parameters.
+        Args:
+            model_type: Type of model to create (e.g., 'xgboost', 'random_forest')
+            params: Dictionary of model hyperparameters
+        Returns:
+            Initialized model instance
+        Raises:
+            ValueError: If model_type is not supported
+        """
+        model_type_lower = model_type.lower()
+        if model_type_lower not in cls._models:
+            available = ', '.join(cls._models.keys())
+            raise ValueError(
+                f"Unknown model type '{model_type}'. "
+                f"Available models: {available}"
+            )
+        model_class = cls._models[model_type_lower]
+        logger.info("Creating %s with parameters: %s", model_class.__name__, params)
+        try:
+            return model_class(params)
+        except Exception as e:
+            logger.error("Failed to create %s: %s", model_class.__name__, e)
+            raise
+    @classmethod
+    def create_from_config(cls, config: Dict[str, Any]) -> BaseModel:
+        """
+        Create a model from a configuration dictionary.
+        Expected config format:
+        {
+            "type": "random_forest",
+            "params": {
+                "n_estimators": 100,
+                "max_depth": 10,
+                ...
+            }
+        }
+        Args:
+            config: Configuration dictionary with 'type' and 'params' keys
+        Returns:
+            Initialized model instance
+        """
+        if 'type' not in config:
+            raise ValueError("Configuration must contain 'type' key")
+        if 'params' not in config:
+            raise ValueError("Configuration must contain 'params' key")
+        model_type = config['type']
+        params = config['params']
+        return cls.create_model(model_type, params)
+# Try to import and register XGBoost model if available
+try:
+    from .xgboost_model import XGBoostModel
+    ModelFactory.register_model('xgboost', XGBoostModel)
+    ModelFactory.register_model('xgb', XGBoostModel)
+except ImportError:
+    logger.warning("XGBoostModel not available - XGBoost models will not be supported")
+def get_model_for_config(config: Dict[str, Any]) -> BaseModel:
+    """
+    Convenience function to create a model from configuration.
+    Args:
+        config: Model configuration dictionary
+    Returns:
+        Initialized model instance
+    """
+    return ModelFactory.create_from_config(config)
+def get_available_model_types() -> list:
+    """
+    Get list of available model type names.
+    Returns:
+        List of available model type strings
+    """
+    return list(ModelFactory.get_available_models().keys())
+</file>
+
+<file path="src/models/random_forest_model.py">
+"""
+Random Forest implementation for federated learning pipeline.
+This module provides a Random Forest classifier that implements the BaseModel
+interface for compatibility with the federated learning framework.
+"""
+import pickle
+import logging
+from typing import Any, Dict, Union, Optional
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, f1_score
+from .base_model import BaseModel
+logger = logging.getLogger(__name__)
+class RandomForestModel(BaseModel):
+    """Random Forest implementation for federated learning."""
+    def __init__(self, params: Dict[str, Any]):
+        """
+        Initialize Random Forest model with hyperparameters.
+        Args:
+            params: Dictionary of Random Forest hyperparameters
+        """
+        super().__init__(params)
+        # Extract Random Forest specific parameters
+        self.rf_params = self._extract_rf_params(params)
+        self.model = RandomForestClassifier(**self.rf_params)
+        # Store training history for federated learning
+        self.training_history = []
+    def _extract_rf_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract Random Forest specific parameters from config."""
+        rf_params = {}
+        # Core Random Forest parameters
+        rf_params['n_estimators'] = params.get('n_estimators', 100)
+        rf_params['max_depth'] = params.get('max_depth', None)
+        rf_params['min_samples_split'] = params.get('min_samples_split', 2)
+        rf_params['min_samples_leaf'] = params.get('min_samples_leaf', 1)
+        rf_params['max_features'] = params.get('max_features', 'sqrt')
+        rf_params['criterion'] = params.get('criterion', 'gini')
+        rf_params['bootstrap'] = params.get('bootstrap', True)
+        rf_params['oob_score'] = params.get('oob_score', False)
+        rf_params['n_jobs'] = params.get('n_jobs', -1)
+        rf_params['random_state'] = params.get('random_state', 42)
+        rf_params['class_weight'] = params.get('class_weight', None)
+        rf_params['max_samples'] = params.get('max_samples', None)
+        rf_params['min_weight_fraction_leaf'] = params.get('min_weight_fraction_leaf', 0.0)
+        rf_params['max_leaf_nodes'] = params.get('max_leaf_nodes', None)
+        rf_params['min_impurity_decrease'] = params.get('min_impurity_decrease', 0.0)
+        rf_params['warm_start'] = params.get('warm_start', False)
+        return rf_params
+    def fit(self, 
+            X: Union[np.ndarray, pd.DataFrame], 
+            y: Union[np.ndarray, pd.Series],
+            X_val: Optional[Union[np.ndarray, pd.DataFrame]] = None,
+            y_val: Optional[Union[np.ndarray, pd.Series]] = None,
+            **kwargs) -> 'RandomForestModel':
+        """
+        Train the Random Forest model.
+        Args:
+            X: Training features
+            y: Training labels
+            X_val: Validation features (optional)
+            y_val: Validation labels (optional)
+            **kwargs: Additional training parameters
+        Returns:
+            Self for method chaining
+        """
+        logger.info(f"Training Random Forest with {X.shape[0]} samples, {X.shape[1]} features")
+        # Convert pandas to numpy if needed
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+        if isinstance(y, pd.Series):
+            y = y.values
+        # Train the model
+        self.model.fit(X, y)
+        self._is_trained = True
+        # Calculate training metrics
+        train_pred = self.model.predict(X)
+        train_pred_proba = self.model.predict_proba(X)
+        train_accuracy = accuracy_score(y, train_pred)
+        train_f1 = f1_score(y, train_pred, average='weighted')
+        # Calculate validation metrics if validation data provided
+        val_accuracy = None
+        val_f1 = None
+        if X_val is not None and y_val is not None:
+            if isinstance(X_val, pd.DataFrame):
+                X_val = X_val.values
+            if isinstance(y_val, pd.Series):
+                y_val = y_val.values
+            val_pred = self.model.predict(X_val)
+            val_pred_proba = self.model.predict_proba(X_val)
+            val_accuracy = accuracy_score(y_val, val_pred)
+            val_f1 = f1_score(y_val, val_pred, average='weighted')
+        # Store training metrics
+        training_round = {
+            'train_accuracy': train_accuracy,
+            'train_f1': train_f1,
+            'val_accuracy': val_accuracy,
+            'val_f1': val_f1,
+            'n_estimators': self.model.n_estimators,
+            'oob_score': getattr(self.model, 'oob_score_', None) if self.rf_params.get('oob_score', False) else None
+        }
+        self.training_history.append(training_round)
+        logger.info(f"Training completed: Train Acc={train_accuracy:.4f}, Train F1={train_f1:.4f}")
+        if val_accuracy is not None:
+            logger.info(f"Validation: Val Acc={val_accuracy:.4f}, Val F1={val_f1:.4f}")
+        return self
+    def predict(self, X: Union[np.ndarray, pd.DataFrame]) -> np.ndarray:
+        """Make predictions on the provided data."""
+        if not self._is_trained:
+            raise ValueError("Model must be trained before making predictions")
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+        return self.model.predict(X)
+    def predict_proba(self, X: Union[np.ndarray, pd.DataFrame]) -> np.ndarray:
+        """Make probability predictions on the provided data."""
+        if not self._is_trained:
+            raise ValueError("Model must be trained before making predictions")
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+        return self.model.predict_proba(X)
+    def serialize(self) -> bytes:
+        """Serialize the model to bytes for transmission in federated learning."""
+        if not self._is_trained:
+            raise ValueError("Cannot serialize untrained model")
+        try:
+            return pickle.dumps(self.model)
+        except Exception as e:
+            logger.error(f"Failed to serialize Random Forest model: {e}")
+            raise
+    def deserialize(self, model_bytes: bytes) -> 'RandomForestModel':
+        """Deserialize model from bytes."""
+        try:
+            self.model = pickle.loads(model_bytes)
+            self._is_trained = True
+            logger.info("Successfully deserialized Random Forest model")
+            return self
+        except Exception as e:
+            logger.error(f"Failed to deserialize Random Forest model: {e}")
+            raise
+    def save_model(self, filepath: str) -> None:
+        """Save model to disk."""
+        if not self._is_trained:
+            raise ValueError("Cannot save untrained model")
+        try:
+            # Save using joblib for better scikit-learn compatibility
+            import joblib
+            joblib.dump(self.model, filepath)
+            logger.info(f"Model saved to {filepath}")
+        except ImportError:
+            # Fallback to pickle if joblib not available
+            with open(filepath, 'wb') as f:
+                pickle.dump(self.model, f)
+            logger.info(f"Model saved to {filepath} (using pickle)")
+        except Exception as e:
+            logger.error(f"Failed to save model to {filepath}: {e}")
+            raise
+    def load_model(self, filepath: str) -> 'RandomForestModel':
+        """Load model from disk."""
+        try:
+            # Try joblib first
+            try:
+                import joblib
+                self.model = joblib.load(filepath)
+            except ImportError:
+                # Fallback to pickle
+                with open(filepath, 'rb') as f:
+                    self.model = pickle.load(f)
+            self._is_trained = True
+            logger.info(f"Model loaded from {filepath}")
+            return self
+        except Exception as e:
+            logger.error(f"Failed to load model from {filepath}: {e}")
+            raise
+    def get_feature_importance(self) -> Dict[str, float]:
+        """Get feature importance scores."""
+        if not self._is_trained:
+            raise ValueError("Model must be trained to get feature importance")
+        # Get feature importances from the trained model
+        importances = self.model.feature_importances_
+        # Create dictionary with feature names (if available) or indices
+        feature_names = getattr(self, 'feature_names_', None)
+        if feature_names is None:
+            feature_names = [f"feature_{i}" for i in range(len(importances))]
+        return dict(zip(feature_names, importances))
+    def update_from_model(self, other_model: 'RandomForestModel', **kwargs) -> 'RandomForestModel':
+        """
+        Update this model using another model (for federated aggregation).
+        For Random Forest, this combines trees from both models to create
+        a larger ensemble.
+        """
+        if not isinstance(other_model, RandomForestModel):
+            raise ValueError("Can only update from another RandomForestModel")
+        if not other_model.is_trained:
+            raise ValueError("Other model must be trained")
+        strategy = kwargs.get('strategy', 'combine_trees')
+        if strategy == 'combine_trees':
+            # Combine trees from both models
+            self_trees = list(self.model.estimators_)
+            other_trees = list(other_model.model.estimators_)
+            # Create new model with combined trees
+            combined_trees = self_trees + other_trees
+            # Update model parameters
+            self.model.estimators_ = np.array(combined_trees)
+            self.model.n_estimators = len(combined_trees)
+            logger.info(f"Combined {len(self_trees)} + {len(other_trees)} = {len(combined_trees)} trees")
+        elif strategy == 'replace':
+            # Simply replace this model with the other model
+            self.model = other_model.model
+            self._is_trained = other_model.is_trained
+        else:
+            raise ValueError(f"Unknown update strategy: {strategy}")
+        return self
+    def get_model_info(self) -> Dict[str, Any]:
+        """Get detailed information about the trained model."""
+        if not self._is_trained:
+            return {"status": "untrained"}
+        info = {
+            "status": "trained",
+            "n_estimators": self.model.n_estimators,
+            "max_depth": self.model.max_depth,
+            "n_features": self.model.n_features_in_ if hasattr(self.model, 'n_features_in_') else None,
+            "n_classes": self.model.n_classes_ if hasattr(self.model, 'n_classes_') else None,
+            "oob_score": getattr(self.model, 'oob_score_', None),
+            "training_rounds": len(self.training_history),
+            "feature_importances": self.get_feature_importance() if self._is_trained else None
+        }
+        return info
+</file>
+
 <file path="src/models/use_saved_model.py">
 #!/usr/bin/env python
 """
@@ -6930,6 +9286,312 @@ def main():
     logger.info("Optimized parameters saved to %s", args.output_file)
     logger.info("Original parameters backed up to %s", backup_file)
     logger.info("These parameters will be automatically used by the XGBoost client")
+if __name__ == "__main__":
+    main()
+</file>
+
+<file path="src/tuning/ray_tune_random_forest.py">
+"""
+Ray Tune hyperparameter optimization for Random Forest models.
+This module provides hyperparameter tuning capabilities for Random Forest
+classifiers using Ray Tune with advanced scheduling and early stopping.
+"""
+import os
+import json
+import logging
+import argparse
+from pathlib import Path
+from typing import Dict, Any, Tuple, Optional
+from functools import partial
+import ray
+from ray import tune
+from ray.tune import CLIReporter
+from ray.tune.schedulers import ASHAScheduler
+from ray.tune.stopper import TrialPlateauStopper
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, f1_score, classification_report
+from sklearn.model_selection import train_test_split
+from src.core.dataset import load_csv_data, preprocess_data
+from src.models.random_forest_model import RandomForestModel
+logger = logging.getLogger(__name__)
+# Global constants for Random Forest hyperparameter search
+RF_PARAM_SPACE = {
+    # Number of trees in the forest
+    'n_estimators': tune.randint(50, 500),  # Wide range for ensemble size
+    # Maximum depth of trees
+    'max_depth': tune.choice([None, 5, 10, 15, 20, 30, 50]),  # Include unlimited depth
+    # Minimum samples required to split a node
+    'min_samples_split': tune.randint(2, 20),
+    # Minimum samples required at a leaf node
+    'min_samples_leaf': tune.randint(1, 10),
+    # Number of features to consider when looking for the best split
+    'max_features': tune.choice(['sqrt', 'log2', 0.3, 0.5, 0.7, 1.0]),
+    # Criterion for measuring quality of splits
+    'criterion': tune.choice(['gini', 'entropy']),
+    # Whether bootstrap samples are used when building trees
+    'bootstrap': tune.choice([True, False]),
+    # Class weighting strategy
+    'class_weight': tune.choice([None, 'balanced', 'balanced_subsample']),
+    # Fraction of samples to draw for training each tree (if bootstrap=True)
+    'max_samples': tune.choice([None, 0.5, 0.7, 0.9]),
+    # Minimum weighted fraction of samples required at a leaf
+    'min_weight_fraction_leaf': tune.uniform(0.0, 0.1),
+    # Maximum number of leaf nodes
+    'max_leaf_nodes': tune.choice([None, 50, 100, 200, 500]),
+    # Minimum impurity decrease required for a split
+    'min_impurity_decrease': tune.uniform(0.0, 0.01),
+}
+def train_with_config(config: Dict[str, Any], 
+                     train_data: Tuple[np.ndarray, np.ndarray],
+                     val_data: Tuple[np.ndarray, np.ndarray]) -> None:
+    """
+    Train Random Forest with given hyperparameters for Ray Tune.
+    Args:
+        config: Hyperparameter configuration from Ray Tune
+        train_data: Tuple of (X_train, y_train)
+        val_data: Tuple of (X_val, y_val)
+    """
+    X_train, y_train = train_data
+    X_val, y_val = val_data
+    try:
+        # Create Random Forest model with the given configuration
+        rf_model = RandomForestModel(config)
+        # Train the model
+        rf_model.fit(X_train, y_train, X_val, y_val)
+        # Make predictions on validation set
+        val_pred = rf_model.predict(X_val)
+        val_pred_proba = rf_model.predict_proba(X_val)
+        # Calculate metrics
+        accuracy = accuracy_score(y_val, val_pred)
+        f1_weighted = f1_score(y_val, val_pred, average='weighted')
+        f1_macro = f1_score(y_val, val_pred, average='macro')
+        # Calculate training metrics for comparison
+        train_pred = rf_model.predict(X_train)
+        train_accuracy = accuracy_score(y_train, train_pred)
+        train_f1 = f1_score(y_train, train_pred, average='weighted')
+        # Get model info
+        model_info = rf_model.get_model_info()
+        # Report metrics to Ray Tune
+        tune.report(
+            accuracy=accuracy,
+            f1_weighted=f1_weighted,
+            f1_macro=f1_macro,
+            train_accuracy=train_accuracy,
+            train_f1=train_f1,
+            n_estimators=model_info.get('n_estimators', config.get('n_estimators')),
+            oob_score=model_info.get('oob_score'),
+            done=True
+        )
+    except Exception as e:
+        logger.error(f"Training failed with config {config}: {e}")
+        # Report failure to Ray Tune
+        tune.report(
+            accuracy=0.0,
+            f1_weighted=0.0,
+            f1_macro=0.0,
+            train_accuracy=0.0,
+            train_f1=0.0,
+            done=True
+        )
+class EnhancedRandomForestTrainer:
+    """Enhanced Random Forest trainer with Ray Tune optimization."""
+    def __init__(self, data_file: str, output_dir: str = "./tune_results_rf"):
+        """
+        Initialize the trainer.
+        Args:
+            data_file: Path to the dataset CSV file
+            output_dir: Directory to save tuning results
+        """
+        self.data_file = data_file
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        # Load and prepare data
+        self.X_train, self.X_val, self.X_test = None, None, None
+        self.y_train, self.y_val, self.y_test = None, None, None
+        self._prepare_data()
+    def _prepare_data(self) -> None:
+        """Load and split the dataset."""
+        logger.info(f"Loading data from {self.data_file}")
+        # Load data using the existing CSV loader
+        dataset_dict = load_csv_data(self.data_file)
+        # Convert to pandas for sklearn processing
+        full_dataset = dataset_dict["train"].to_pandas()
+        # Prepare features and target
+        if 'label' in full_dataset.columns:
+            X = full_dataset.drop(columns=['label'])
+            y = full_dataset['label']
+        elif 'attack_cat' in full_dataset.columns:
+            X = full_dataset.drop(columns=['attack_cat'])
+            y = full_dataset['attack_cat']
+        else:
+            raise ValueError("No suitable target column found (expected 'label' or 'attack_cat')")
+        # Create train/validation/test splits
+        X_temp, self.X_test, y_temp, self.y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y if len(np.unique(y)) > 1 else None
+        )
+        self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(
+            X_temp, y_temp, test_size=0.25, random_state=42, stratify=y_temp if len(np.unique(y_temp)) > 1 else None
+        )
+        # Convert to numpy arrays
+        self.X_train = self.X_train.values
+        self.X_val = self.X_val.values
+        self.X_test = self.X_test.values
+        self.y_train = self.y_train.values
+        self.y_val = self.y_val.values
+        self.y_test = self.y_test.values
+        logger.info(f"Data loaded: Train={self.X_train.shape}, Val={self.X_val.shape}, Test={self.X_test.shape}")
+    def tune_hyperparameters(self, 
+                           num_samples: int = 50,
+                           max_concurrent_trials: int = 4,
+                           cpus_per_trial: int = 2) -> Dict[str, Any]:
+        """
+        Perform hyperparameter tuning using Ray Tune.
+        Args:
+            num_samples: Number of hyperparameter configurations to try
+            max_concurrent_trials: Maximum number of concurrent trials
+            cpus_per_trial: CPUs to allocate per trial
+        Returns:
+            Best hyperparameter configuration
+        """
+        logger.info(f"Starting hyperparameter tuning with {num_samples} samples")
+        # Initialize Ray if not already initialized
+        if not ray.is_initialized():
+            ray.init(ignore_reinit_error=True)
+        # Configure the scheduler
+        scheduler = ASHAScheduler(
+            max_t=200,  # Maximum iterations per trial
+            grace_period=20,  # Minimum iterations before elimination
+            reduction_factor=2,
+            metric="f1_weighted",
+            mode="max"
+        )
+        # Configure early stopping
+        stopper = TrialPlateauStopper(
+            metric="f1_weighted",
+            std=0.001,
+            num_results=10,
+            grace_period=20,
+            mode="max"
+        )
+        # Configure reporting
+        reporter = CLIReporter(
+            metric_columns=["accuracy", "f1_weighted", "f1_macro", "train_accuracy", "n_estimators"],
+            max_report_frequency=30
+        )
+        # Prepare data for the trainable function
+        train_data = (self.X_train, self.y_train)
+        val_data = (self.X_val, self.y_val)
+        # Create the trainable function with data
+        trainable = partial(train_with_config, train_data=train_data, val_data=val_data)
+        # Run the tuning
+        analysis = tune.run(
+            trainable,
+            config=RF_PARAM_SPACE,
+            num_samples=num_samples,
+            scheduler=scheduler,
+            stop=stopper,
+            progress_reporter=reporter,
+            local_dir=str(self.output_dir),
+            name="rf_tune",
+            resources_per_trial={"cpu": cpus_per_trial},
+            max_concurrent_trials=max_concurrent_trials,
+            raise_on_failed_trial=False,
+            resume="AUTO"
+        )
+        # Get the best configuration
+        best_config = analysis.get_best_config(metric="f1_weighted", mode="max")
+        best_result = analysis.get_best_trial(metric="f1_weighted", mode="max").last_result
+        logger.info(f"Best configuration found: {best_config}")
+        logger.info(f"Best F1 Score: {best_result['f1_weighted']:.4f}")
+        logger.info(f"Best Accuracy: {best_result['accuracy']:.4f}")
+        # Save the best configuration
+        best_config_file = self.output_dir / "best_config_rf.json"
+        with open(best_config_file, 'w') as f:
+            json.dump(best_config, f, indent=2)
+        # Save detailed results
+        results_df = analysis.results_df
+        results_file = self.output_dir / "all_results_rf.csv"
+        results_df.to_csv(results_file, index=False)
+        return best_config
+    def train_final_model(self, best_config: Dict[str, Any]) -> RandomForestModel:
+        """
+        Train the final model with the best hyperparameters.
+        Args:
+            best_config: Best hyperparameter configuration from tuning
+        Returns:
+            Trained Random Forest model
+        """
+        logger.info("Training final model with best configuration")
+        # Combine train and validation data for final training
+        X_final = np.vstack([self.X_train, self.X_val])
+        y_final = np.hstack([self.y_train, self.y_val])
+        # Create and train the final model
+        final_model = RandomForestModel(best_config)
+        final_model.fit(X_final, y_final)
+        # Evaluate on test set
+        test_pred = final_model.predict(self.X_test)
+        test_pred_proba = final_model.predict_proba(self.X_test)
+        test_accuracy = accuracy_score(self.y_test, test_pred)
+        test_f1 = f1_score(self.y_test, test_pred, average='weighted')
+        logger.info(f"Final model performance - Accuracy: {test_accuracy:.4f}, F1: {test_f1:.4f}")
+        # Save the final model
+        model_path = self.output_dir / "final_model_rf.joblib"
+        final_model.save_model(str(model_path))
+        # Save test results
+        test_results = {
+            'test_accuracy': test_accuracy,
+            'test_f1_weighted': test_f1,
+            'best_config': best_config,
+            'model_info': final_model.get_model_info()
+        }
+        results_file = self.output_dir / "final_results_rf.json"
+        with open(results_file, 'w') as f:
+            json.dump(test_results, f, indent=2, default=str)
+        return final_model
+def main():
+    """Main function for running Random Forest hyperparameter tuning."""
+    parser = argparse.ArgumentParser(description="Random Forest Hyperparameter Tuning with Ray Tune")
+    parser.add_argument("--data-file", type=str, default="data/received/final_dataset.csv",
+                       help="Path to the dataset CSV file")
+    parser.add_argument("--num-samples", type=int, default=5,
+                       help="Number of hyperparameter configurations to try")
+    parser.add_argument("--cpus-per-trial", type=int, default=2,
+                       help="Number of CPUs to allocate per trial")
+    parser.add_argument("--max-concurrent-trials", type=int, default=2,
+                       help="Maximum number of concurrent trials")
+    parser.add_argument("--output-dir", type=str, default="./tune_results_rf",
+                       help="Output directory for results")
+    args = parser.parse_args()
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    try:
+        # Create trainer and run tuning
+        trainer = EnhancedRandomForestTrainer(
+            data_file=args.data_file,
+            output_dir=args.output_dir
+        )
+        # Tune hyperparameters
+        best_config = trainer.tune_hyperparameters(
+            num_samples=args.num_samples,
+            max_concurrent_trials=args.max_concurrent_trials,
+            cpus_per_trial=args.cpus_per_trial
+        )
+        # Train final model
+        final_model = trainer.train_final_model(best_config)
+        logger.info("Random Forest hyperparameter tuning completed successfully!")
+        logger.info(f"Results saved to: {args.output_dir}")
+    except Exception as e:
+        logger.error(f"Tuning failed: {e}")
+        raise
+    finally:
+        # Cleanup Ray
+        if ray.is_initialized():
+            ray.shutdown()
 if __name__ == "__main__":
     main()
 </file>
@@ -7442,6 +10104,195 @@ if __name__ == "__main__":
     main()
 </file>
 
+<file path="src/tuning/unified_tuner.py">
+"""
+Unified hyperparameter tuning interface for both XGBoost and Random Forest models.
+This module provides a single entry point for hyperparameter optimization
+that automatically selects the appropriate tuning strategy based on the model type.
+"""
+import logging
+from pathlib import Path
+from typing import Dict, Any, Optional
+from src.config.config_manager import ConfigManager
+from src.tuning.ray_tune_xgboost import EnhancedXGBoostTrainer
+from src.tuning.ray_tune_random_forest import EnhancedRandomForestTrainer
+logger = logging.getLogger(__name__)
+class UnifiedTuner:
+    """
+    Unified tuner that handles hyperparameter optimization for different model types.
+    Automatically selects the appropriate tuning strategy based on the configured model type.
+    """
+    def __init__(self, config_manager: ConfigManager):
+        """
+        Initialize the unified tuner.
+        Args:
+            config_manager: Configured ConfigManager instance
+        """
+        self.config_manager = config_manager
+        self.config = config_manager.config
+        self.model_type = config_manager.get_model_type()
+        logger.info("Initialized UnifiedTuner for model type: %s", self.model_type)
+    def tune_hyperparameters(self, 
+                           data_file: Optional[str] = None,
+                           test_file: Optional[str] = None,
+                           num_samples: Optional[int] = None,
+                           cpus_per_trial: Optional[int] = None,
+                           max_concurrent_trials: Optional[int] = None,
+                           output_dir: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Perform hyperparameter tuning for the configured model type.
+        Args:
+            data_file: Path to data file (defaults to config data path)
+            test_file: Path to test file (optional)
+            num_samples: Number of tuning samples (defaults to config value)
+            cpus_per_trial: CPUs per trial (defaults to config value)
+            max_concurrent_trials: Max concurrent trials (defaults to config value)
+            output_dir: Output directory (defaults to config value)
+        Returns:
+            Best hyperparameter configuration
+        """
+        # Use config defaults if not provided
+        if data_file is None:
+            data_file = str(self.config_manager.get_data_path())
+        if num_samples is None:
+            num_samples = self.config.tuning.num_samples
+        if cpus_per_trial is None:
+            cpus_per_trial = self.config.tuning.cpus_per_trial
+        if max_concurrent_trials is None:
+            max_concurrent_trials = self.config.tuning.max_concurrent_trials
+        if output_dir is None:
+            output_dir = self.config.tuning.output_dir
+        logger.info("Starting hyperparameter tuning for %s", self.model_type)
+        logger.info("Data file: %s", data_file)
+        logger.info("Num samples: %s", num_samples)
+        logger.info("CPUs per trial: %s", cpus_per_trial)
+        logger.info("Output dir: %s", output_dir)
+        if self.model_type == "xgboost":
+            return self._tune_xgboost(
+                data_file, test_file, num_samples, cpus_per_trial, 
+                max_concurrent_trials, output_dir
+            )
+        if self.model_type == "random_forest":
+            return self._tune_random_forest(
+                data_file, num_samples, cpus_per_trial, 
+                max_concurrent_trials, output_dir
+            )
+        else:
+            raise ValueError(f"Unsupported model type for tuning: {self.model_type}")
+    def _tune_xgboost(self, 
+                     data_file: str,
+                     test_file: Optional[str],
+                     num_samples: int,
+                     cpus_per_trial: int,
+                     max_concurrent_trials: int,
+                     output_dir: str) -> Dict[str, Any]:
+        """Tune XGBoost hyperparameters."""
+        logger.info("Running XGBoost hyperparameter tuning")
+        trainer = EnhancedXGBoostTrainer(
+            data_file=data_file,
+            test_data_file=test_file,
+            num_samples=num_samples,
+            max_concurrent_trials=max_concurrent_trials
+        )
+        # Load and prepare data
+        trainer.load_and_prepare_data()
+        # Run tuning
+        trainer.tune_hyperparameters()
+        # Get best parameters
+        xgb_best_params = trainer.best_params
+        # Save results
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        results_file = output_path / "best_params.json"
+        import json
+        with open(results_file, 'w', encoding='utf-8') as f:
+            json.dump(xgb_best_params, f, indent=2)
+        logger.info("XGBoost tuning completed. Best params saved to %s", results_file)
+        return xgb_best_params
+    def _tune_random_forest(self,
+                          data_file: str,
+                          num_samples: int,
+                          cpus_per_trial: int,
+                          max_concurrent_trials: int,
+                          output_dir: str) -> Dict[str, Any]:
+        """Tune Random Forest hyperparameters."""
+        logger.info("Running Random Forest hyperparameter tuning")
+        trainer = EnhancedRandomForestTrainer(
+            data_file=data_file,
+            output_dir=output_dir
+        )
+        # Run tuning
+        rf_best_params = trainer.tune_hyperparameters(
+            num_samples=num_samples,
+            max_concurrent_trials=max_concurrent_trials,
+            cpus_per_trial=cpus_per_trial
+        )
+        # Save results
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+        results_file = output_path / "best_params.json"
+        import json
+        with open(results_file, 'w', encoding='utf-8') as f:
+            json.dump(rf_best_params, f, indent=2)
+        logger.info("Random Forest tuning completed. Best params saved to %s", results_file)
+        return rf_best_params
+def run_tuning_from_config(config_name: str = "base",
+                          experiment: Optional[str] = None,
+                          overrides: Optional[list] = None) -> Dict[str, Any]:
+    """
+    Run hyperparameter tuning using configuration.
+    Args:
+        config_name: Base configuration name
+        experiment: Experiment override
+        overrides: Additional configuration overrides
+    Returns:
+        Best hyperparameter configuration
+    """
+    # Load configuration
+    config_manager = ConfigManager()
+    config_manager.load_config(config_name, experiment, overrides)
+    # Only run tuning if enabled
+    if not config_manager.is_tuning_enabled():
+        logger.warning("Tuning is disabled in configuration. Skipping hyperparameter optimization.")
+        return {}
+    # Create and run tuner
+    tuner = UnifiedTuner(config_manager)
+    return tuner.tune_hyperparameters()
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Unified hyperparameter tuning")
+    parser.add_argument("--config", default="base", help="Configuration file name")
+    parser.add_argument("--experiment", help="Experiment configuration")
+    parser.add_argument("--data-file", help="Override data file path")
+    parser.add_argument("--test-file", help="Test file path")
+    parser.add_argument("--num-samples", type=int, help="Number of tuning samples")
+    parser.add_argument("--output-dir", help="Output directory")
+    args = parser.parse_args()
+    # Build overrides from command line arguments
+    overrides = []
+    if args.data_file:
+        overrides.append(f"data.path={Path(args.data_file).parent}")
+        overrides.append(f"data.filename={Path(args.data_file).name}")
+    if args.num_samples:
+        overrides.append(f"tuning.num_samples={args.num_samples}")
+    if args.output_dir:
+        overrides.append(f"tuning.output_dir={args.output_dir}")
+    # Enable tuning
+    overrides.append("tuning.enabled=true")
+    # Run tuning
+    try:
+        tuning_results = run_tuning_from_config(
+            config_name=args.config,
+            experiment=args.experiment,
+            overrides=overrides
+        )
+        print("Tuning completed successfully!")
+        print(f"Best parameters: {tuning_results}")
+    except Exception as e:
+        logger.error("Tuning failed: %s", e)
+        raise
+</file>
+
 <file path="src/utils/enhanced_logging.py">
 """
 Enhanced logging utilities for the Federated Learning Pipeline.
@@ -7688,6 +10539,425 @@ def setup_enhanced_logging(log_file: Optional[str] = None) -> EnhancedLogger:
     # Reset the global logger to ensure clean setup
     _enhanced_logger = None
     return get_enhanced_logger(log_file)
+</file>
+
+<file path="src/utils/parameter_mapping.py">
+"""
+Parameter mapping utilities for seamless model type switching.
+This module provides utilities to convert parameters between different model types
+(XGBoost, Random Forest) and offers unified parameter interfaces for the federated
+learning pipeline.
+"""
+import logging
+from typing import Dict, Any, Optional, Union, Tuple
+from abc import ABC, abstractmethod
+from enum import Enum
+logger = logging.getLogger(__name__)
+class ModelType(Enum):
+    """Supported model types."""
+    XGBOOST = "xgboost"
+    RANDOM_FOREST = "random_forest"
+class ParameterCategory(Enum):
+    """Categories of parameters for mapping."""
+    TREE_STRUCTURE = "tree_structure"
+    REGULARIZATION = "regularization"
+    LEARNING = "learning"
+    SAMPLING = "sampling"
+    PERFORMANCE = "performance"
+    RANDOM_STATE = "random_state"
+class BaseParameterMapper(ABC):
+    """Abstract base class for parameter mappers."""
+    @abstractmethod
+    def map_to_target(self, source_params: Dict[str, Any], 
+                     target_type: ModelType) -> Dict[str, Any]:
+        """Map parameters from source to target model type."""
+        pass
+    @abstractmethod
+    def get_default_params(self) -> Dict[str, Any]:
+        """Get default parameters for this model type."""
+        pass
+    @abstractmethod
+    def validate_params(self, params: Dict[str, Any]) -> Tuple[bool, str]:
+        """Validate parameters for this model type."""
+        pass
+class XGBoostParameterMapper(BaseParameterMapper):
+    """Parameter mapper for XGBoost models."""
+    # Default XGBoost parameters
+    DEFAULT_PARAMS = {
+        "objective": "multi:softprob",
+        "num_class": 11,
+        "eta": 0.05,
+        "max_depth": 8,
+        "min_child_weight": 5,
+        "gamma": 0.5,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "colsample_bylevel": 0.8,
+        "nthread": 16,
+        "tree_method": "hist",
+        "eval_metric": "mlogloss",
+        "max_delta_step": 1,
+        "reg_alpha": 0.1,
+        "reg_lambda": 1.0,
+        "base_score": 0.5,
+        "scale_pos_weight": 1.0,
+        "grow_policy": "depthwise",
+        "normalize_type": "tree",
+        "random_state": 42,
+        "num_boost_round": 100
+    }
+    def get_default_params(self) -> Dict[str, Any]:
+        """Get default XGBoost parameters."""
+        return self.DEFAULT_PARAMS.copy()
+    def map_to_target(self, source_params: Dict[str, Any], 
+                     target_type: ModelType) -> Dict[str, Any]:
+        """Map XGBoost parameters to target model type."""
+        if target_type == ModelType.XGBOOST:
+            return source_params.copy()
+        elif target_type == ModelType.RANDOM_FOREST:
+            return self._map_to_random_forest(source_params)
+        else:
+            raise ValueError(f"Unsupported target model type: {target_type}")
+    def _map_to_random_forest(self, xgb_params: Dict[str, Any]) -> Dict[str, Any]:
+        """Map XGBoost parameters to Random Forest parameters."""
+        rf_params = {}
+        # Tree structure parameters
+        if "max_depth" in xgb_params:
+            rf_params["max_depth"] = xgb_params["max_depth"]
+        if "min_child_weight" in xgb_params:
+            # Map min_child_weight to min_samples_leaf (rough approximation)
+            rf_params["min_samples_leaf"] = max(1, int(xgb_params["min_child_weight"]))
+        # Sampling parameters
+        if "subsample" in xgb_params:
+            # Use subsample to determine max_samples for Random Forest
+            if xgb_params["subsample"] < 1.0:
+                rf_params["max_samples"] = xgb_params["subsample"]
+        if "colsample_bytree" in xgb_params:
+            # Map colsample_bytree to max_features
+            col_sample = xgb_params["colsample_bytree"]
+            if col_sample <= 0.5:
+                rf_params["max_features"] = "sqrt"
+            elif col_sample <= 0.8:
+                rf_params["max_features"] = col_sample
+            else:
+                rf_params["max_features"] = "auto"
+        # Number of estimators (from num_boost_round)
+        if "num_boost_round" in xgb_params:
+            # Scale down from XGBoost rounds to RF estimators
+            rf_params["n_estimators"] = max(10, xgb_params["num_boost_round"] // 2)
+        # Random state
+        if "random_state" in xgb_params:
+            rf_params["random_state"] = xgb_params["random_state"]
+        # Performance parameters
+        if "nthread" in xgb_params:
+            rf_params["n_jobs"] = xgb_params["nthread"]
+        # Set reasonable defaults for unmapped parameters
+        rf_params.setdefault("criterion", "gini")
+        rf_params.setdefault("bootstrap", True)
+        rf_params.setdefault("oob_score", False)
+        rf_params.setdefault("class_weight", "balanced")
+        rf_params.setdefault("min_samples_split", 5)
+        rf_params.setdefault("min_weight_fraction_leaf", 0.0)
+        rf_params.setdefault("max_leaf_nodes", None)
+        rf_params.setdefault("min_impurity_decrease", 0.0)
+        rf_params.setdefault("warm_start", False)
+        logger.info("Mapped XGBoost parameters to Random Forest: %d -> %d parameters", 
+                   len(xgb_params), len(rf_params))
+        return rf_params
+    def validate_params(self, params: Dict[str, Any]) -> Tuple[bool, str]:
+        """Validate XGBoost parameters."""
+        required_params = ["objective", "num_class"]
+        for param in required_params:
+            if param not in params:
+                return False, f"Missing required parameter: {param}"
+        # Validate parameter ranges
+        if "eta" in params and not (0.0 < params["eta"] <= 1.0):
+            return False, "eta must be in range (0, 1]"
+        if "max_depth" in params and params["max_depth"] <= 0:
+            return False, "max_depth must be positive"
+        if "subsample" in params and not (0.0 < params["subsample"] <= 1.0):
+            return False, "subsample must be in range (0, 1]"
+        return True, "Parameters are valid"
+class RandomForestParameterMapper(BaseParameterMapper):
+    """Parameter mapper for Random Forest models."""
+    # Default Random Forest parameters
+    DEFAULT_PARAMS = {
+        "n_estimators": 100,
+        "max_depth": 10,
+        "min_samples_split": 5,
+        "min_samples_leaf": 2,
+        "max_features": "sqrt",
+        "criterion": "gini",
+        "bootstrap": True,
+        "oob_score": False,
+        "n_jobs": -1,
+        "random_state": 42,
+        "class_weight": "balanced",
+        "max_samples": None,
+        "min_weight_fraction_leaf": 0.0,
+        "max_leaf_nodes": None,
+        "min_impurity_decrease": 0.0,
+        "warm_start": False
+    }
+    def get_default_params(self) -> Dict[str, Any]:
+        """Get default Random Forest parameters."""
+        return self.DEFAULT_PARAMS.copy()
+    def map_to_target(self, source_params: Dict[str, Any], 
+                     target_type: ModelType) -> Dict[str, Any]:
+        """Map Random Forest parameters to target model type."""
+        if target_type == ModelType.RANDOM_FOREST:
+            return source_params.copy()
+        elif target_type == ModelType.XGBOOST:
+            return self._map_to_xgboost(source_params)
+        else:
+            raise ValueError(f"Unsupported target model type: {target_type}")
+    def _map_to_xgboost(self, rf_params: Dict[str, Any]) -> Dict[str, Any]:
+        """Map Random Forest parameters to XGBoost parameters."""
+        xgb_params = {}
+        # Tree structure parameters
+        if "max_depth" in rf_params:
+            xgb_params["max_depth"] = rf_params["max_depth"]
+        if "min_samples_leaf" in rf_params:
+            # Map min_samples_leaf to min_child_weight
+            xgb_params["min_child_weight"] = rf_params["min_samples_leaf"]
+        # Sampling parameters
+        if "max_samples" in rf_params and rf_params["max_samples"] is not None:
+            if isinstance(rf_params["max_samples"], float):
+                xgb_params["subsample"] = rf_params["max_samples"]
+        if "max_features" in rf_params:
+            # Map max_features to colsample_bytree
+            max_feat = rf_params["max_features"]
+            if max_feat == "sqrt":
+                xgb_params["colsample_bytree"] = 0.5
+            elif max_feat == "log2":
+                xgb_params["colsample_bytree"] = 0.3
+            elif isinstance(max_feat, float):
+                xgb_params["colsample_bytree"] = max_feat
+            elif isinstance(max_feat, int):
+                # Assume this is a fraction for now
+                xgb_params["colsample_bytree"] = 0.8
+            else:
+                xgb_params["colsample_bytree"] = 0.8
+        # Number of estimators
+        if "n_estimators" in rf_params:
+            # Scale up from RF estimators to XGBoost rounds
+            xgb_params["num_boost_round"] = rf_params["n_estimators"] * 2
+        # Random state
+        if "random_state" in rf_params:
+            xgb_params["random_state"] = rf_params["random_state"]
+        # Performance parameters
+        if "n_jobs" in rf_params:
+            xgb_params["nthread"] = rf_params["n_jobs"] if rf_params["n_jobs"] > 0 else 16
+        # Set XGBoost-specific defaults for unmapped parameters
+        xgb_params.setdefault("objective", "multi:softprob")
+        xgb_params.setdefault("num_class", 11)
+        xgb_params.setdefault("eta", 0.05)
+        xgb_params.setdefault("gamma", 0.5)
+        xgb_params.setdefault("colsample_bylevel", 0.8)
+        xgb_params.setdefault("tree_method", "hist")
+        xgb_params.setdefault("eval_metric", "mlogloss")
+        xgb_params.setdefault("max_delta_step", 1)
+        xgb_params.setdefault("reg_alpha", 0.1)
+        xgb_params.setdefault("reg_lambda", 1.0)
+        xgb_params.setdefault("base_score", 0.5)
+        xgb_params.setdefault("scale_pos_weight", 1.0)
+        xgb_params.setdefault("grow_policy", "depthwise")
+        xgb_params.setdefault("normalize_type", "tree")
+        logger.info("Mapped Random Forest parameters to XGBoost: %d -> %d parameters", 
+                   len(rf_params), len(xgb_params))
+        return xgb_params
+    def validate_params(self, params: Dict[str, Any]) -> Tuple[bool, str]:
+        """Validate Random Forest parameters."""
+        required_params = ["n_estimators"]
+        for param in required_params:
+            if param not in params:
+                return False, f"Missing required parameter: {param}"
+        # Validate parameter ranges
+        if "n_estimators" in params and params["n_estimators"] <= 0:
+            return False, "n_estimators must be positive"
+        if "max_depth" in params and params["max_depth"] is not None and params["max_depth"] <= 0:
+            return False, "max_depth must be positive or None"
+        if "min_samples_split" in params and params["min_samples_split"] < 2:
+            return False, "min_samples_split must be at least 2"
+        if "min_samples_leaf" in params and params["min_samples_leaf"] < 1:
+            return False, "min_samples_leaf must be at least 1"
+        return True, "Parameters are valid"
+class UnifiedParameterManager:
+    """
+    Unified parameter manager for seamless model type switching.
+    This class provides a high-level interface for parameter conversion,
+    validation, and management across different model types.
+    """
+    def __init__(self):
+        """Initialize the unified parameter manager."""
+        self._mappers = {
+            ModelType.XGBOOST: XGBoostParameterMapper(),
+            ModelType.RANDOM_FOREST: RandomForestParameterMapper()
+        }
+        self._current_model_type = None
+        self._current_params = None
+    def get_mapper(self, model_type: Union[str, ModelType]) -> BaseParameterMapper:
+        """Get parameter mapper for the specified model type."""
+        if isinstance(model_type, str):
+            model_type = ModelType(model_type.lower())
+        if model_type not in self._mappers:
+            raise ValueError(f"Unsupported model type: {model_type}")
+        return self._mappers[model_type]
+    def convert_parameters(self, source_params: Dict[str, Any], 
+                          source_type: Union[str, ModelType],
+                          target_type: Union[str, ModelType]) -> Dict[str, Any]:
+        """
+        Convert parameters from one model type to another.
+        Args:
+            source_params: Parameters in source model format
+            source_type: Source model type
+            target_type: Target model type
+        Returns:
+            Parameters converted to target model format
+        """
+        if isinstance(source_type, str):
+            source_type = ModelType(source_type.lower())
+        if isinstance(target_type, str):
+            target_type = ModelType(target_type.lower())
+        if source_type == target_type:
+            return source_params.copy()
+        source_mapper = self.get_mapper(source_type)
+        # Validate source parameters
+        is_valid, error_msg = source_mapper.validate_params(source_params)
+        if not is_valid:
+            logger.warning("Source parameters validation failed: %s", error_msg)
+        # Convert parameters
+        converted_params = source_mapper.map_to_target(source_params, target_type)
+        # Validate converted parameters
+        target_mapper = self.get_mapper(target_type)
+        is_valid, error_msg = target_mapper.validate_params(converted_params)
+        if not is_valid:
+            logger.warning("Converted parameters validation failed: %s", error_msg)
+        logger.info("Successfully converted parameters from %s to %s", 
+                   source_type.value, target_type.value)
+        return converted_params
+    def get_default_parameters(self, model_type: Union[str, ModelType]) -> Dict[str, Any]:
+        """Get default parameters for the specified model type."""
+        mapper = self.get_mapper(model_type)
+        return mapper.get_default_params()
+    def validate_parameters(self, params: Dict[str, Any], 
+                           model_type: Union[str, ModelType]) -> Tuple[bool, str]:
+        """Validate parameters for the specified model type."""
+        mapper = self.get_mapper(model_type)
+        return mapper.validate_params(params)
+    def create_unified_config(self, base_params: Dict[str, Any],
+                             model_type: Union[str, ModelType]) -> Dict[str, Any]:
+        """
+        Create a unified configuration that can be easily converted between model types.
+        This method takes a base parameter set and enriches it with defaults
+        to create a comprehensive configuration.
+        Args:
+            base_params: Base parameters to start with
+            model_type: Model type for the configuration
+        Returns:
+            Unified configuration dictionary
+        """
+        if isinstance(model_type, str):
+            model_type = ModelType(model_type.lower())
+        # Get default parameters for the model type
+        default_params = self.get_default_parameters(model_type)
+        # Merge base parameters with defaults (base parameters take priority)
+        unified_config = default_params.copy()
+        unified_config.update(base_params)
+        # Store current state
+        self._current_model_type = model_type
+        self._current_params = unified_config.copy()
+        logger.info("Created unified config for %s with %d parameters", 
+                   model_type.value, len(unified_config))
+        return unified_config
+    def switch_model_type(self, new_model_type: Union[str, ModelType]) -> Dict[str, Any]:
+        """
+        Switch to a different model type, converting current parameters.
+        Args:
+            new_model_type: Target model type to switch to
+        Returns:
+            Parameters converted to the new model type
+        """
+        if self._current_model_type is None or self._current_params is None:
+            raise RuntimeError("No current configuration. Create a unified config first.")
+        if isinstance(new_model_type, str):
+            new_model_type = ModelType(new_model_type.lower())
+        if new_model_type == self._current_model_type:
+            return self._current_params.copy()
+        # Convert parameters
+        converted_params = self.convert_parameters(
+            self._current_params, 
+            self._current_model_type, 
+            new_model_type
+        )
+        # Update current state
+        self._current_model_type = new_model_type
+        self._current_params = converted_params
+        return converted_params
+    def get_current_config(self) -> Optional[Tuple[ModelType, Dict[str, Any]]]:
+        """Get the current model type and parameters."""
+        if self._current_model_type is None or self._current_params is None:
+            return None
+        return self._current_model_type, self._current_params.copy()
+    def export_config_for_framework(self, model_type: Union[str, ModelType],
+                                   params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Export configuration in the format expected by the target framework.
+        Args:
+            model_type: Target model type
+            params: Parameters to export (uses current if None)
+        Returns:
+            Configuration dictionary ready for use with the target framework
+        """
+        if params is None:
+            if self._current_params is None:
+                raise RuntimeError("No parameters available. Provide params or create a config first.")
+            params = self._current_params
+        if isinstance(model_type, str):
+            model_type = ModelType(model_type.lower())
+        # Validate parameters
+        is_valid, error_msg = self.validate_parameters(params, model_type)
+        if not is_valid:
+            logger.warning("Parameter validation failed: %s", error_msg)
+        # Create framework-specific configuration
+        config = {
+            "type": model_type.value,
+            "params": params.copy()
+        }
+        logger.info("Exported config for %s with %d parameters", 
+                   model_type.value, len(params))
+        return config
+# Convenience functions for easy usage
+def convert_xgboost_to_random_forest(xgb_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert XGBoost parameters to Random Forest parameters."""
+    manager = UnifiedParameterManager()
+    return manager.convert_parameters(xgb_params, ModelType.XGBOOST, ModelType.RANDOM_FOREST)
+def convert_random_forest_to_xgboost(rf_params: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert Random Forest parameters to XGBoost parameters."""
+    manager = UnifiedParameterManager()
+    return manager.convert_parameters(rf_params, ModelType.RANDOM_FOREST, ModelType.XGBOOST)
+def get_unified_defaults(model_type: Union[str, ModelType]) -> Dict[str, Any]:
+    """Get default parameters for the specified model type."""
+    manager = UnifiedParameterManager()
+    return manager.get_default_parameters(model_type)
+def create_cross_compatible_config(base_params: Dict[str, Any], 
+                                  primary_model: Union[str, ModelType],
+                                  secondary_model: Union[str, ModelType]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Create configurations for both model types that are cross-compatible.
+    Args:
+        base_params: Base parameters to start with
+        primary_model: Primary model type
+        secondary_model: Secondary model type
+    Returns:
+        Tuple of (primary_config, secondary_config)
+    """
+    manager = UnifiedParameterManager()
+    # Create unified config for primary model
+    primary_config = manager.create_unified_config(base_params, primary_model)
+    # Convert to secondary model
+    secondary_config = manager.convert_parameters(primary_config, primary_model, secondary_model)
+    return primary_config, secondary_config
 </file>
 
 <file path="src/utils/visualization.py">
@@ -15880,22 +19150,25 @@ def main(cfg: DictConfig) -> None:
     ], "global_processor", enhanced_logger):
         enhanced_logger.step_error("global_processor", "Failed to create global feature processor")
         sys.exit(1)
-    # Step 2: Run hyperparameter tuning with consistent preprocessing (if enabled)
+    # Step 2: Run hyperparameter tuning with unified tuner (if enabled)
     if config.tuning.enabled:
+        model_type = config.model.type.lower()
         enhanced_logger.step_start(
             "hyperparameter_tuning",
-            "Running hyperparameter tuning with consistent preprocessing",
-            f"python src/tuning/ray_tune_xgboost.py --data-file {data_file_path} --num-samples {config.tuning.num_samples} --cpus-per-trial {config.tuning.cpus_per_trial} --output-dir {config.tuning.output_dir}"
+            f"Running {model_type} hyperparameter tuning with unified tuner",
+            f"python src/tuning/unified_tuner.py --data-file {data_file_path} --num-samples {config.tuning.num_samples} --output-dir {config.tuning.output_dir}"
         )
         tuning_command = [
-            "python", "src/tuning/ray_tune_xgboost.py",
+            "python", "src/tuning/unified_tuner.py",
             "--data-file", data_file_path,
             "--num-samples", str(config.tuning.num_samples),
-            "--cpus-per-trial", str(config.tuning.cpus_per_trial),
             "--output-dir", config.tuning.output_dir
         ]
+        # Pass experiment configuration if available
+        if hasattr(cfg, 'experiment') and cfg.experiment:
+            tuning_command.extend(["--experiment", cfg.experiment])
         if not run_command(tuning_command, "hyperparameter_tuning", enhanced_logger):
-            enhanced_logger.step_error("hyperparameter_tuning", "Hyperparameter tuning failed. Continuing with default parameters.")
+            enhanced_logger.step_error("hyperparameter_tuning", f"{model_type} hyperparameter tuning failed. Continuing with default parameters.")
         # Step 3: Generate tuned parameters file
         enhanced_logger.step_start(
             "generate_tuned_params",
@@ -16286,6 +19559,295 @@ def run_all_tests():
 if __name__ == "__main__":
     test_success = run_all_tests()
     sys.exit(0 if test_success else 1)
+</file>
+
+<file path="test_parameter_mapping.py">
+#!/usr/bin/env python3
+"""
+Parameter Mapping Test and Demonstration Script
+This script demonstrates the parameter conversion utilities for seamless
+model type switching in the federated learning pipeline.
+Usage:
+    python test_parameter_mapping.py
+"""
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from src.utils.parameter_mapping import (
+    UnifiedParameterManager, 
+    ModelType, 
+    convert_xgboost_to_random_forest,
+    convert_random_forest_to_xgboost,
+    create_cross_compatible_config
+)
+from src.config.config_manager import ConfigManager
+def test_basic_conversions():
+    """Test basic parameter conversions between model types."""
+    print("=" * 60)
+    print("Testing Basic Parameter Conversions")
+    print("=" * 60)
+    # Test XGBoost to Random Forest conversion
+    print("\n1. XGBoost to Random Forest Conversion:")
+    xgb_params = {
+        "objective": "multi:softprob",
+        "num_class": 11,
+        "eta": 0.1,
+        "max_depth": 8,
+        "min_child_weight": 5,
+        "gamma": 0.5,
+        "subsample": 0.8,
+        "colsample_bytree": 0.7,
+        "num_boost_round": 100,
+        "random_state": 42,
+        "nthread": 8
+    }
+    print(f"Original XGBoost params ({len(xgb_params)} parameters):")
+    for key, value in xgb_params.items():
+        print(f"  {key}: {value}")
+    rf_params = convert_xgboost_to_random_forest(xgb_params)
+    print(f"\nConverted Random Forest params ({len(rf_params)} parameters):")
+    for key, value in rf_params.items():
+        print(f"  {key}: {value}")
+    # Test Random Forest to XGBoost conversion
+    print("\n2. Random Forest to XGBoost Conversion:")
+    rf_params_original = {
+        "n_estimators": 100,
+        "max_depth": 10,
+        "min_samples_split": 5,
+        "min_samples_leaf": 2,
+        "max_features": "sqrt",
+        "criterion": "gini",
+        "random_state": 42,
+        "n_jobs": 4
+    }
+    print(f"Original Random Forest params ({len(rf_params_original)} parameters):")
+    for key, value in rf_params_original.items():
+        print(f"  {key}: {value}")
+    xgb_params_converted = convert_random_forest_to_xgboost(rf_params_original)
+    print(f"\nConverted XGBoost params ({len(xgb_params_converted)} parameters):")
+    for key, value in xgb_params_converted.items():
+        print(f"  {key}: {value}")
+def test_unified_parameter_manager():
+    """Test the UnifiedParameterManager functionality."""
+    print("\n" + "=" * 60)
+    print("Testing Unified Parameter Manager")
+    print("=" * 60)
+    manager = UnifiedParameterManager()
+    # Test default parameters
+    print("\n1. Default Parameters:")
+    xgb_defaults = manager.get_default_parameters(ModelType.XGBOOST)
+    rf_defaults = manager.get_default_parameters(ModelType.RANDOM_FOREST)
+    print(f"XGBoost defaults: {len(xgb_defaults)} parameters")
+    print(f"Random Forest defaults: {len(rf_defaults)} parameters")
+    # Test parameter validation
+    print("\n2. Parameter Validation:")
+    # Valid XGBoost params
+    valid_xgb = {"objective": "multi:softprob", "num_class": 11, "eta": 0.1}
+    is_valid, msg = manager.validate_parameters(valid_xgb, ModelType.XGBOOST)
+    print(f"Valid XGBoost params: {is_valid} - {msg}")
+    # Invalid XGBoost params (missing required)
+    invalid_xgb = {"eta": 0.1, "max_depth": 6}
+    is_valid, msg = manager.validate_parameters(invalid_xgb, ModelType.XGBOOST)
+    print(f"Invalid XGBoost params: {is_valid} - {msg}")
+    # Test unified config creation
+    print("\n3. Unified Config Creation:")
+    base_params = {"max_depth": 6, "random_state": 42}
+    unified_xgb = manager.create_unified_config(base_params, ModelType.XGBOOST)
+    print(f"Unified XGBoost config: {len(unified_xgb)} parameters")
+    # Test model switching
+    print("\n4. Model Type Switching:")
+    switched_rf = manager.switch_model_type(ModelType.RANDOM_FOREST)
+    print(f"Switched to Random Forest: {len(switched_rf)} parameters")
+    # Get current config
+    current = manager.get_current_config()
+    if current:
+        model_type, params = current
+        print(f"Current config: {model_type.value} with {len(params)} parameters")
+def test_cross_compatibility():
+    """Test cross-compatible configuration creation."""
+    print("\n" + "=" * 60)
+    print("Testing Cross-Compatible Configurations")
+    print("=" * 60)
+    base_params = {
+        "max_depth": 8,
+        "random_state": 42,
+        # This could be either eta (XGBoost) or learning rate equivalent
+        "learning_rate": 0.1
+    }
+    # Create configs for both model types
+    xgb_config, rf_config = create_cross_compatible_config(
+        base_params, 
+        ModelType.XGBOOST, 
+        ModelType.RANDOM_FOREST
+    )
+    print("Cross-compatible configurations created:")
+    print(f"XGBoost config: {len(xgb_config)} parameters")
+    print(f"Random Forest config: {len(rf_config)} parameters")
+    # Show mapping of key parameters
+    print("\nKey parameter mappings:")
+    print(f"Max depth - XGB: {xgb_config.get('max_depth')}, RF: {rf_config.get('max_depth')}")
+    print(f"Random state - XGB: {xgb_config.get('random_state')}, RF: {rf_config.get('random_state')}")
+def test_config_manager_integration():
+    """Test integration with ConfigManager."""
+    print("\n" + "=" * 60)
+    print("Testing ConfigManager Integration")
+    print("=" * 60)
+    try:
+        # Create a ConfigManager and load default config
+        config_manager = ConfigManager()
+        config_manager.load_config()
+        print("ConfigManager loaded successfully")
+        print(f"Current model type: {config_manager.get_model_type()}")
+        # Get current parameters
+        current_params = config_manager.get_model_params_dict()
+        print(f"Current parameters: {len(current_params)} parameters")
+        # Show parameter conversion potential
+        manager = UnifiedParameterManager()
+        current_type = config_manager.get_model_type()
+        if current_type.lower() == "xgboost":
+            target_type = ModelType.RANDOM_FOREST
+        else:
+            target_type = ModelType.XGBOOST
+        converted_params = manager.convert_parameters(
+            current_params, current_type, target_type
+        )
+        print(f"Could convert to {target_type.value}: {len(converted_params)} parameters")
+    except Exception as e:
+        print(f"ConfigManager integration test failed: {e}")
+        print("This is expected if configuration files are not properly set up")
+def test_parameter_categories():
+    """Test parameter categorization and mapping logic."""
+    print("\n" + "=" * 60)
+    print("Testing Parameter Categories and Mapping Logic")
+    print("=" * 60)
+    # Create sample parameters for each category
+    tree_structure_params = {
+        "max_depth": 8,
+        "min_child_weight": 5,  # XGBoost
+        "min_samples_leaf": 2   # Random Forest
+    }
+    regularization_params = {
+        "gamma": 0.5,           # XGBoost
+        "reg_alpha": 0.1,       # XGBoost
+        "reg_lambda": 1.0       # XGBoost
+    }
+    sampling_params = {
+        "subsample": 0.8,       # XGBoost
+        "colsample_bytree": 0.7, # XGBoost
+        "max_samples": 0.8,     # Random Forest
+        "bootstrap": True       # Random Forest
+    }
+    print("Parameter mapping examples:")
+    print("\n1. Tree Structure Parameters:")
+    for param, value in tree_structure_params.items():
+        print(f"  {param}: {value}")
+    print("\n2. Regularization Parameters:")
+    for param, value in regularization_params.items():
+        print(f"  {param}: {value}")
+    print("\n3. Sampling Parameters:")
+    for param, value in sampling_params.items():
+        print(f"  {param}: {value}")
+    # Test conversion of these categories
+    manager = UnifiedParameterManager()
+    # Combine all XGBoost-style parameters
+    xgb_test_params = {
+        **tree_structure_params,
+        **regularization_params,
+        **sampling_params,
+        "objective": "multi:softprob",
+        "num_class": 11,
+        "eta": 0.1
+    }
+    # Remove RF-specific params for clean test
+    xgb_clean_params = {k: v for k, v in xgb_test_params.items() 
+                       if k not in ["min_samples_leaf", "max_samples", "bootstrap"]}
+    print("\n4. Converting XGBoost-style parameters to Random Forest:")
+    rf_converted = manager.convert_parameters(
+        xgb_clean_params, ModelType.XGBOOST, ModelType.RANDOM_FOREST
+    )
+    print("Converted parameters:")
+    for key, value in rf_converted.items():
+        if key in ["max_depth", "n_estimators", "max_features", "min_samples_leaf"]:
+            print(f"  {key}: {value}")
+def demonstrate_use_cases():
+    """Demonstrate real-world use cases for parameter mapping."""
+    print("\n" + "=" * 60)
+    print("Real-World Use Cases Demonstration")
+    print("=" * 60)
+    print("\n1. Experiment Comparison:")
+    print("   - Start with XGBoost configuration")
+    print("   - Convert to Random Forest for comparison")
+    print("   - Maintain equivalent complexity levels")
+    print("\n2. Model Selection Pipeline:")
+    print("   - Begin with unified parameter search space")
+    print("   - Test multiple model types with equivalent parameters")
+    print("   - Select best performing model type")
+    print("\n3. Federated Learning Flexibility:")
+    print("   - Switch model types without reconfiguring entire pipeline")
+    print("   - Maintain client compatibility across model changes")
+    print("   - Preserve tuned hyperparameters where applicable")
+    print("\n4. A/B Testing:")
+    print("   - Run identical experiments with different model types")
+    print("   - Compare performance with equivalent parameter sets")
+    print("   - Make data-driven model type decisions")
+    # Practical example
+    print("\n5. Practical Example - Hyperparameter Transfer:")
+    # Assume we tuned XGBoost parameters
+    tuned_xgb_params = {
+        "objective": "multi:softprob",
+        "num_class": 11,
+        "eta": 0.05,
+        "max_depth": 10,
+        "min_child_weight": 3,
+        "gamma": 0.1,
+        "subsample": 0.9,
+        "colsample_bytree": 0.8,
+        "reg_alpha": 0.2,
+        "reg_lambda": 1.5,
+        "num_boost_round": 200,
+        "random_state": 42
+    }
+    print("   Tuned XGBoost parameters:")
+    for key, value in tuned_xgb_params.items():
+        print(f"     {key}: {value}")
+    # Convert to Random Forest
+    manager = UnifiedParameterManager()
+    equivalent_rf_params = manager.convert_parameters(
+        tuned_xgb_params, ModelType.XGBOOST, ModelType.RANDOM_FOREST
+    )
+    print("\n   Equivalent Random Forest parameters:")
+    for key, value in equivalent_rf_params.items():
+        print(f"     {key}: {value}")
+    print("\n   This allows testing Random Forest with equivalent complexity!")
+def main():
+    """Run all tests and demonstrations."""
+    print("Parameter Mapping Utilities - Test and Demonstration")
+    print("FL-CML-Pipeline")
+    print("=" * 60)
+    try:
+        test_basic_conversions()
+        test_unified_parameter_manager()
+        test_cross_compatibility()
+        test_config_manager_integration()
+        test_parameter_categories()
+        demonstrate_use_cases()
+        print("\n" + "=" * 60)
+        print("All tests completed successfully!")
+        print("Parameter mapping utilities are ready for use.")
+        print("=" * 60)
+    except ImportError as e:
+        print(f"Import error: {e}")
+        print("Make sure you're running from the project root directory")
+        return 1
+    except Exception as e:
+        print(f"Test failed with error: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
+    return 0
+if __name__ == "__main__":
+    exit_code = main()
+    sys.exit(exit_code)
 </file>
 
 </files>

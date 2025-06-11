@@ -87,9 +87,22 @@ def main(cfg: DictConfig) -> None:
             "--output-dir", config.tuning.output_dir
         ]
         
-        # Pass experiment configuration if available
-        if hasattr(cfg, 'experiment') and cfg.experiment:
-            tuning_command.extend(["--experiment", cfg.experiment])
+        # Pass model type explicitly to ensure correct tuning
+        tuning_command.extend(["--model-type", model_type])
+        
+        # Extract experiment name from outputs if available (Random Forest uses experiment name)
+        if hasattr(config.outputs, 'experiment_name') and config.outputs.experiment_name:
+            experiment_name = config.outputs.experiment_name
+            if 'random_forest' in experiment_name.lower():
+                tuning_command.extend(["--experiment", "random_forest"])
+            elif 'xgboost' in experiment_name.lower():
+                tuning_command.extend(["--experiment", "xgboost"])
+        
+        # Also check model type directly to infer experiment
+        if model_type == "random_forest":
+            tuning_command.extend(["--experiment", "random_forest"])
+        elif model_type == "xgboost":
+            tuning_command.extend(["--experiment", "xgboost"])
         
         if not run_command(tuning_command, "hyperparameter_tuning", enhanced_logger):
             enhanced_logger.step_error("hyperparameter_tuning", f"{model_type} hyperparameter tuning failed. Continuing with default parameters.")
