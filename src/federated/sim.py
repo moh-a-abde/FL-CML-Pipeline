@@ -133,7 +133,26 @@ def main():
     
     # Load configuration using ConfigManager
     enhanced_logger.logger.info("Loading configuration for federated simulation...")
-    config = load_config()  # Load base configuration
+    
+    # Try to load the current configuration saved by run.py, fallback to base config
+    try:
+        config_manager = get_config_manager()
+        
+        # Check if there's a saved current config from run.py
+        current_config_path = "outputs/current_config.yaml"
+        if os.path.exists(current_config_path):
+            enhanced_logger.logger.info("Loading current pipeline configuration from: %s", current_config_path)
+            # Load the exact configuration used by run.py
+            from omegaconf import OmegaConf
+            raw_config = OmegaConf.load(current_config_path)
+            config_manager._raw_config = raw_config
+            config = config_manager._convert_to_structured_config(raw_config)
+        else:
+            enhanced_logger.logger.info("No current config found, loading base configuration...")
+            config = load_config()  # Load base configuration
+    except Exception as e:
+        enhanced_logger.logger.warning("Failed to load current config: %s. Using base config.", str(e))
+        config = load_config()  # Fallback to base configuration
     
     enhanced_logger.logger.info("Configuration loaded successfully:")
     enhanced_logger.logger.info("Training method: %s", config.federated.train_method)

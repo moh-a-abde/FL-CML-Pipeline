@@ -14,7 +14,7 @@ from typing import Dict, Any, Tuple, Optional
 from functools import partial
 
 import ray
-from ray import tune
+from ray import tune, train
 from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune.stopper import TrialPlateauStopper
@@ -108,7 +108,7 @@ def train_with_config(config: Dict[str, Any],
         model_info = rf_model.get_model_info()
         
         # Report metrics to Ray Tune
-        tune.report(
+        train.report(
             accuracy=accuracy,
             f1_weighted=f1_weighted,
             f1_macro=f1_macro,
@@ -122,7 +122,7 @@ def train_with_config(config: Dict[str, Any],
     except Exception as e:
         logger.error(f"Training failed with config {config}: {e}")
         # Report failure to Ray Tune
-        tune.report(
+        train.report(
             accuracy=0.0,
             f1_weighted=0.0,
             f1_macro=0.0,
@@ -243,7 +243,7 @@ class EnhancedRandomForestTrainer:
         # Create the trainable function with data
         trainable = partial(train_with_config, train_data=train_data, val_data=val_data)
         
-        # Run the tuning
+        # Run the tuning with updated Ray Tune API
         analysis = tune.run(
             trainable,
             config=RF_PARAM_SPACE,
@@ -251,7 +251,7 @@ class EnhancedRandomForestTrainer:
             scheduler=scheduler,
             stop=stopper,
             progress_reporter=reporter,
-            local_dir=str(self.output_dir),
+            storage_path=str(self.output_dir),
             name="rf_tune",
             resources_per_trial={"cpu": cpus_per_trial},
             max_concurrent_trials=max_concurrent_trials,

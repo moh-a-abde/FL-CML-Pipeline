@@ -49,6 +49,12 @@ def main(cfg: DictConfig) -> None:
     # Create structured config from the Hydra DictConfig
     config = config_manager._convert_to_structured_config(cfg)  # pylint: disable=protected-access
     
+    # Save the current configuration for other pipeline components (like sim.py)
+    os.makedirs("outputs", exist_ok=True)
+    config_manager._raw_config = cfg  # Set the raw config in manager
+    config_manager._config = config  # Set the structured config in manager
+    config_manager.save_config("outputs/current_config.yaml")
+    
     # Start pipeline with enhanced logging
     enhanced_logger.pipeline_start(config)
     

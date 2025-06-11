@@ -1,0 +1,99 @@
+data:
+  path: ./data/received
+  filename: final_dataset.csv
+  train_test_split: 0.8
+  stratified: true
+  temporal_window_size: 1000
+  seed: 42
+model:
+  type: random_forest
+  num_local_rounds: 20
+  params:
+    objective: multi:softprob
+    num_class: 11
+    eta: 0.05
+    max_depth: 10
+    min_child_weight: 5
+    gamma: 0.5
+    subsample: 0.8
+    colsample_bytree: 0.8
+    colsample_bylevel: 0.8
+    nthread: 16
+    tree_method: hist
+    eval_metric:
+    - mlogloss
+    - merror
+    max_delta_step: 1
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    base_score: 0.5
+    scale_pos_weight: 1.0
+    grow_policy: depthwise
+    normalize_type: tree
+    random_state: 42
+    n_estimators: 100
+    min_samples_split: 5
+    min_samples_leaf: 2
+    max_features: sqrt
+    criterion: gini
+    bootstrap: true
+    oob_score: false
+    n_jobs: -1
+    class_weight: balanced
+    max_samples: null
+    min_weight_fraction_leaf: 0.0
+    max_leaf_nodes: null
+    min_impurity_decrease: 0.0
+    warm_start: false
+federated:
+  train_method: bagging
+  pool_size: 5
+  num_rounds: 10
+  num_clients_per_round: 5
+  num_evaluate_clients: 5
+  centralised_eval: true
+  num_partitions: 10
+  partitioner_type: uniform
+  test_fraction: 0.2
+  scaled_lr: false
+  num_cpus_per_client: 2
+  fraction_fit: 0.8
+  fraction_evaluate: 0.5
+tuning:
+  enabled: true
+  num_samples: 2
+  cpus_per_trial: 2
+  max_concurrent_trials: 2
+  output_dir: ./tune_results_rf
+  scheduler:
+    type: ASHA
+    max_t: 200
+    grace_period: 20
+    reduction_factor: 3
+pipeline:
+  steps:
+  - create_global_processor
+  - hyperparameter_tuning
+  - generate_tuned_params
+  - federated_learning
+  global_processor:
+    force_recreate: true
+    output_dir: outputs
+  preprocessing:
+    consistent_across_phases: true
+    global_processor_path: null
+logging:
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  file: ./logs/fl-cml-pipeline.log
+outputs:
+  base_dir: ./outputs
+  create_timestamped_dirs: true
+  save_results_pickle: true
+  save_model: true
+  generate_visualizations: true
+  experiment_name: random_forest_federated
+early_stopping:
+  enabled: true
+  patience: 5
+  min_delta: 0.001
