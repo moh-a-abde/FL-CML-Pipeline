@@ -71,24 +71,28 @@ def main(cfg: DictConfig) -> None:
         enhanced_logger.step_error("global_processor", "Failed to create global feature processor")
         sys.exit(1)
     
-    # Step 2: Run hyperparameter tuning with consistent preprocessing (if enabled)
+    # Step 2: Run hyperparameter tuning with unified tuner (if enabled)
     if config.tuning.enabled:
+        model_type = config.model.type.lower()
         enhanced_logger.step_start(
             "hyperparameter_tuning",
-            "Running hyperparameter tuning with consistent preprocessing",
-            f"python src/tuning/ray_tune_xgboost.py --data-file {data_file_path} --num-samples {config.tuning.num_samples} --cpus-per-trial {config.tuning.cpus_per_trial} --output-dir {config.tuning.output_dir}"
+            f"Running {model_type} hyperparameter tuning with unified tuner",
+            f"python src/tuning/unified_tuner.py --data-file {data_file_path} --num-samples {config.tuning.num_samples} --output-dir {config.tuning.output_dir}"
         )
         
         tuning_command = [
-            "python", "src/tuning/ray_tune_xgboost.py",
+            "python", "src/tuning/unified_tuner.py",
             "--data-file", data_file_path,
             "--num-samples", str(config.tuning.num_samples),
-            "--cpus-per-trial", str(config.tuning.cpus_per_trial),
             "--output-dir", config.tuning.output_dir
         ]
         
+        # Pass experiment configuration if available
+        if hasattr(cfg, 'experiment') and cfg.experiment:
+            tuning_command.extend(["--experiment", cfg.experiment])
+        
         if not run_command(tuning_command, "hyperparameter_tuning", enhanced_logger):
-            enhanced_logger.step_error("hyperparameter_tuning", "Hyperparameter tuning failed. Continuing with default parameters.")
+            enhanced_logger.step_error("hyperparameter_tuning", f"{model_type} hyperparameter tuning failed. Continuing with default parameters.")
         
         # Step 3: Generate tuned parameters file
         enhanced_logger.step_start(

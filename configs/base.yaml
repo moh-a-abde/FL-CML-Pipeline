@@ -14,10 +14,12 @@ data:
   temporal_window_size: 1000
   seed: 42
 
-# Model configuration (XGBoost parameters from BST_PARAMS)
+# Model configuration - supports both XGBoost and Random Forest
 model:
-  type: xgboost
+  type: xgboost  # Options: xgboost, random_forest
   num_local_rounds: 20
+  
+  # XGBoost parameters (used when model.type=xgboost)
   params:
     objective: "multi:softprob"
     num_class: 11

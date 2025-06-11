@@ -1,0 +1,97 @@
+# @package _global_
+# Random Forest experiment configuration
+# This config demonstrates Random Forest model usage in federated learning
+
+defaults:
+  - base
+  - _self_
+
+# Override model configuration for Random Forest
+model:
+  type: "random_forest"
+  params:
+    # Core Random Forest parameters
+    n_estimators: 100
+    max_depth: 10
+    min_samples_split: 5
+    min_samples_leaf: 2
+    max_features: "sqrt"
+    criterion: "gini"
+    bootstrap: true
+    oob_score: false
+    n_jobs: -1
+    random_state: 42
+    class_weight: "balanced"
+    
+    # Advanced parameters for fine-tuning
+    max_samples: null
+    min_weight_fraction_leaf: 0.0
+    max_leaf_nodes: null
+    min_impurity_decrease: 0.0
+    warm_start: false
+
+# Federated learning configuration optimized for Random Forest
+federated:
+  pool_size: 5
+  num_rounds: 10
+  strategy: "bagging"  # Random Forest works well with bagging
+  fraction_fit: 0.8
+  fraction_eval: 0.5
+  min_fit_clients: 3
+  min_eval_clients: 2
+  min_available_clients: 3
+
+# Hyperparameter tuning for Random Forest
+tuning:
+  enabled: false
+  num_samples: 5
+  cpus_per_trial: 2
+  max_concurrent_trials: 2
+  output_dir: "./tune_results_rf"
+  
+  # Ray Tune scheduler optimized for Random Forest
+  scheduler:
+    type: "ASHA"
+    max_t: 200
+    grace_period: 20
+    reduction_factor: 3
+
+# Data configuration
+data:
+  # Use smaller train/validation split for Random Forest experiments
+  train_split: 0.7
+  val_split: 0.2
+  test_split: 0.1
+  
+  # Random Forest can handle larger batch sizes
+  batch_size: 1000
+  
+  # Feature engineering
+  preprocessing:
+    normalize: false  # Random Forest doesn't require normalization
+    handle_missing: "median"
+    feature_selection: false
+
+# Pipeline execution settings
+pipeline:
+  save_model: true
+  save_results: true
+  save_plots: true
+  early_stopping:
+    enabled: true
+    patience: 5
+    metric: "f1_weighted"
+    min_delta: 0.001
+
+# Experiment tracking
+experiment:
+  name: "random_forest_federated"
+  description: "Random Forest model in federated learning setup"
+  tags: ["random_forest", "federated_learning", "network_intrusion"]
+
+# Output configuration
+output:
+  base_dir: "./outputs"
+  save_predictions: true
+  save_feature_importance: true
+  save_model_info: true 

@@ -242,11 +242,11 @@ jobs:
           FINAL_DATASET="data/received/final_dataset.csv"
           # Detect CI environment and adjust sample count accordingly
           if [ "$CI" = "true" ]; then
-            SAMPLES=100  # Increased from 15 to 100 for more comprehensive optimization
-            echo "CI detected: Using $SAMPLES samples for comprehensive optimization"
+            SAMPLES=5  # Reduced from 100 to 5 for faster tuning during development
+            echo "CI detected: Using $SAMPLES samples for quick optimization"
           else
-            SAMPLES=100  # Increased from 50 to 100 for thorough optimization
-            echo "Local run: Using $SAMPLES samples for comprehensive optimization"
+            SAMPLES=5  # Reduced from 100 to 5 for faster tuning during development
+            echo "Local run: Using $SAMPLES samples for quick optimization"
           fi
           # Check if the final dataset exists
           if [ -f "$FINAL_DATASET" ]; then
@@ -2244,7 +2244,7 @@ def main():
     parser = argparse.ArgumentParser(description="XGBoost Hyperparameter Tuning with Ray Tune")
     parser.add_argument("--train-file", type=str, required=True, help="Path to the training data CSV file.")
     parser.add_argument("--test-file", type=str, required=True, help="Path to the testing data CSV file.")
-    parser.add_argument("--num-samples", type=int, default=100, help="Number of hyperparameter samples to try.")
+    parser.add_argument("--num-samples", type=int, default=5, help="Number of hyperparameter samples to try.")
     parser.add_argument("--cpus-per-trial", type=int, default=1, help="Number of CPUs to allocate per trial.")
     parser.add_argument("--gpu-fraction", type=float, default=None, help="Fraction of GPU resources per trial (e.g., 0.5). Default is None (CPU only).")
     parser.add_argument("--output-dir", type=str, default="./tune_results", help="Directory to save Ray Tune results and best parameters.")
@@ -2517,7 +2517,7 @@ federated:
 # Hyperparameter tuning configuration
 tuning:
   enabled: false
-  num_samples: 100
+  num_samples: 5
   cpus_per_trial: 2
   max_concurrent_trials: 4
   output_dir: "./tune_results"
@@ -3504,7 +3504,7 @@ echo "Results saved to: outputs/"
 # with consistent preprocessing to fix disconnection between tuning and FL phases
 # Default values
 DATA_FILE="data/received/final_dataset.csv"
-NUM_SAMPLES=100
+NUM_SAMPLES=5
 CPUS_PER_TRIAL=2
 OUTPUT_DIR="./tune_results"
 TRAIN_FILE=""
@@ -7372,7 +7372,7 @@ def main():
                        help="Path to the training data CSV file")
     parser.add_argument("--test-data-file", type=str, default=None,
                        help="Path to separate test data CSV file (optional)")
-    parser.add_argument("--num-samples", type=int, default=100,
+    parser.add_argument("--num-samples", type=int, default=5,
                        help="Number of hyperparameter configurations to try")
     parser.add_argument("--cpus-per-trial", type=int, default=2,
                        help="Number of CPUs per trial")
