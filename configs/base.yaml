@@ -63,7 +63,7 @@ federated:
 # Hyperparameter tuning configuration
 tuning:
   enabled: false
-  num_samples: 5
+  num_samples: 100
   cpus_per_trial: 2
   max_concurrent_trials: 4
   output_dir: "./tune_results"

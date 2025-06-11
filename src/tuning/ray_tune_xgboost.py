@@ -41,9 +41,6 @@ sys.path.insert(0, project_root)
 # Import local modules
 from src.core.dataset import load_csv_data, transform_dataset_to_dmatrix, create_global_feature_processor, load_global_feature_processor
 
-# Import shared utilities for Phase 3 deduplication
-from src.core.shared_utils import DMatrixFactory, XGBoostParamsBuilder
-
 # Ray setup - reduce verbosity and resource warnings
 ray.init(
     ignore_reinit_error=True,
@@ -101,7 +98,7 @@ class EnhancedXGBoostTrainer:
     """Enhanced XGBoost trainer with improved hyperparameter optimization."""
     
     def __init__(self, data_file: str, test_data_file: str = None, 
-                 num_samples: int = 5, max_concurrent_trials: int = 4,
+                 num_samples: int = 100, max_concurrent_trials: int = 4,
                  use_global_processor: bool = True):
         """
         Initialize the enhanced XGBoost trainer.
@@ -228,19 +225,13 @@ class EnhancedXGBoostTrainer:
         if self.train_features is None:
             self.load_and_prepare_data()
         
-        # Use ray.put() to store large data arrays in Ray object store to avoid actor size warning
-        train_features_ref = ray.put(self.train_features)
-        train_labels_ref = ray.put(self.train_labels)
-        test_features_ref = ray.put(self.test_features)
-        test_labels_ref = ray.put(self.test_labels)
-        
-        # Create partial function with Ray object references instead of raw arrays
+        # Create partial function with raw data arrays (these can be pickled)
         train_func = partial(
             train_with_config,
-            train_features=train_features_ref,
-            train_labels=train_labels_ref,
-            test_features=test_features_ref,
-            test_labels=test_labels_ref
+            train_features=self.train_features,
+            train_labels=self.train_labels,
+            test_features=self.test_features,
+            test_labels=self.test_labels
         )
         
         # Configure ASHA scheduler for early stopping
@@ -301,12 +292,10 @@ class EnhancedXGBoostTrainer:
         if self.best_params is None:
             raise ValueError("No best parameters found. Run tune_hyperparameters() first.")
         
-        # Build final parameters using centralized builder (Phase 3 migration)
-        base_params = XGBoostParamsBuilder.build_params()
-        final_params = base_params.copy()
-        
-        # Apply best hyperparameters from tuning
-        final_params.update({
+        # Prepare final parameters
+        final_params = {
+            'objective': 'multi:softprob',
+            'eval_metric': 'mlogloss',
             'eta': self.best_params['eta'],
             'max_depth': int(self.best_params['max_depth']),
             'min_child_weight': int(self.best_params['min_child_weight']),
@@ -318,7 +307,7 @@ class EnhancedXGBoostTrainer:
             'gamma': self.best_params.get('gamma', 0),
             'seed': 42,
             'verbosity': 1
-        })
+        }
         
         # Determine number of classes
         train_labels = self.train_data.get_label()
@@ -419,64 +408,37 @@ class EnhancedXGBoostTrainer:
             # Shutdown Ray
             ray.shutdown()
 
-def train_with_config(config: Dict[str, Any], train_features, train_labels, 
-                     test_features, test_labels):
+def train_with_config(config: Dict[str, Any], train_features: np.ndarray, train_labels: np.ndarray, 
+                     test_features: np.ndarray, test_labels: np.ndarray):
     """
-    Standalone training function using centralized utilities for DMatrix creation and parameter building.
-    This function recreates DMatrix objects inside each worker using shared utilities.
-    Args can be either numpy arrays or Ray object references.
+    Standalone training function that can be pickled for Ray Tune.
+    This function recreates DMatrix objects inside each worker.
     """
     try:
-        # Get data from Ray object store if references, otherwise use directly
-        if hasattr(train_features, '__ray_object_ref__'):
-            train_features_data = ray.get(train_features)
-            train_labels_data = ray.get(train_labels)
-            test_features_data = ray.get(test_features)
-            test_labels_data = ray.get(test_labels)
-        else:
-            train_features_data = train_features
-            train_labels_data = train_labels
-            test_features_data = test_features
-            test_labels_data = test_labels
+        # Create DMatrix objects inside the worker (avoiding pickling issues)
+        train_dmatrix = xgb.DMatrix(train_features, label=train_labels)
+        test_dmatrix = xgb.DMatrix(test_features, label=test_labels)
         
-        # Create DMatrix objects using centralized factory (Phase 3 migration)
-        train_dmatrix = DMatrixFactory.create_dmatrix(
-            features=train_features_data,
-            labels=train_labels_data,
-            handle_missing=True,
-            validate=True,
-            log_details=False  # Reduce verbosity in Ray Tune workers
-        )
-        test_dmatrix = DMatrixFactory.create_dmatrix(
-            features=test_features_data,
-            labels=test_labels_data,
-            handle_missing=True,
-            validate=True,
-            log_details=False  # Reduce verbosity in Ray Tune workers
-        )
-        
-        # Build base parameters using centralized builder (Phase 3 migration)
-        base_params = XGBoostParamsBuilder.build_params()
-        
-        # Apply hyperparameter overrides from Ray Tune config
-        params = base_params.copy()
-        params.update({
+        # Extract hyperparameters from config
+        params = {
+            'objective': 'multi:softprob',  # Multi-class classification
+            'eval_metric': 'mlogloss',      # Multi-class log loss
             'eta': config['eta'],
             'max_depth': int(config['max_depth']),
             'min_child_weight': int(config['min_child_weight']),
-            'subsample': config.get('subsample', 1.0),
+            'subsample': config.get('subsample', 1.0),  # Added subsample parameter
             'colsample_bytree': config['colsample_bytree'],
             'colsample_bylevel': config.get('colsample_bylevel', 1.0),
             'colsample_bynode': config.get('colsample_bynode', 1.0),
             'reg_alpha': config.get('reg_alpha', 0),
             'reg_lambda': config.get('reg_lambda', 1),
             'gamma': config.get('gamma', 0),
-            'scale_pos_weight': config.get('scale_pos_weight', 1.0),
-            'max_delta_step': config.get('max_delta_step', 0),
-            'grow_policy': config.get('grow_policy', 'depthwise'),
+            'scale_pos_weight': config.get('scale_pos_weight', 1.0),  # Added for class imbalance
+            'max_delta_step': config.get('max_delta_step', 0),  # Added for controlling leaf output
+            'grow_policy': config.get('grow_policy', 'depthwise'),  # Added tree growing policy
             'seed': 42,
             'verbosity': 0  # Reduce XGBoost verbosity
-        })
+        }
         
         # Handle max_leaves parameter only for lossguide policy
         if params['grow_policy'] == 'lossguide':
@@ -485,7 +447,7 @@ def train_with_config(config: Dict[str, Any], train_features, train_labels,
         num_boost_round = int(config['num_boost_round'])
         
         # Determine number of classes for multi-class setup
-        num_classes = len(np.unique(train_labels_data))
+        num_classes = len(np.unique(train_labels))
         params['num_class'] = num_classes
         
         # Early stopping configuration
@@ -516,7 +478,7 @@ def train_with_config(config: Dict[str, Any], train_features, train_labels,
             test_pred = (test_pred_proba > 0.5).astype(int)
         
         # Get true labels
-        test_true = test_labels_data.astype(int)
+        test_true = test_labels.astype(int)
         
         # Calculate metrics
         accuracy = accuracy_score(test_true, test_pred)
@@ -569,7 +531,7 @@ def main():
                        help="Path to the training data CSV file")
     parser.add_argument("--test-data-file", type=str, default=None,
                        help="Path to separate test data CSV file (optional)")
-    parser.add_argument("--num-samples", type=int, default=5,
+    parser.add_argument("--num-samples", type=int, default=100,
                        help="Number of hyperparameter configurations to try")
     parser.add_argument("--cpus-per-trial", type=int, default=2,
                        help="Number of CPUs per trial")

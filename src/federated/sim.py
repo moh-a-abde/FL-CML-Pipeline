@@ -235,16 +235,10 @@ def main():
     # Hyper-parameters for xgboost training
     num_local_round = config.model.num_local_rounds
     
-    # Get model parameters with tuned parameters if available
+    # Get model parameters from ConfigManager
     config_manager = get_config_manager()
     config_manager._config = config  # Set the config in manager
-    
-    # Use XGBoostParamsBuilder to get parameters with tuned ones
-    from src.core.shared_utils import XGBoostParamsBuilder
-    params = XGBoostParamsBuilder.build_params(
-        config_manager=config_manager,
-        use_tuned=True  # Enable loading of tuned parameters
-    )
+    params = config_manager.get_model_params_dict()
 
     # Setup learning rate
     if config.federated.train_method == "bagging" and config.federated.scaled_lr:

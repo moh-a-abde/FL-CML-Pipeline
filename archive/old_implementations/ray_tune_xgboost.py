@@ -132,7 +132,7 @@ def train_xgboost(config, train_df: pd.DataFrame, test_df: pd.DataFrame):
         "accuracy": accuracy
     }
 
-def tune_xgboost(train_file: str, test_file: str, num_samples: int = 5, cpus_per_trial: int = 1, gpu_fraction: float = None, output_dir: str = "./tune_results"):
+def tune_xgboost(train_file: str, test_file: str, num_samples: int = 100, cpus_per_trial: int = 1, gpu_fraction: float = None, output_dir: str = "./tune_results"):
     """
     Run hyperparameter tuning for XGBoost using Ray Tune.
     
