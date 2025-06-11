@@ -243,7 +243,7 @@ class EnhancedRandomForestTrainer:
         # Create the trainable function with data
         trainable = partial(train_with_config, train_data=train_data, val_data=val_data)
         
-        # Run the tuning with updated Ray Tune API
+        # Run the tuning with updated Ray Tune API (storage_path requires absolute path)
         analysis = tune.run(
             trainable,
             config=RF_PARAM_SPACE,
@@ -251,7 +251,7 @@ class EnhancedRandomForestTrainer:
             scheduler=scheduler,
             stop=stopper,
             progress_reporter=reporter,
-            storage_path=str(self.output_dir),
+            storage_path=str(self.output_dir.absolute()),
             name="rf_tune",
             resources_per_trial={"cpu": cpus_per_trial},
             max_concurrent_trials=max_concurrent_trials,
