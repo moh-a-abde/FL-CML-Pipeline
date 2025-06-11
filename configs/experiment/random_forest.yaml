@@ -2,10 +2,6 @@
 # Random Forest experiment configuration
 # This config demonstrates Random Forest model usage in federated learning
 
-defaults:
-  - base
-  - _self_
-
 # Override model configuration for Random Forest
 model:
   type: "random_forest"
