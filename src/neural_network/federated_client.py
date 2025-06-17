@@ -143,28 +143,28 @@ class NeuralNetworkClient(fl.client.Client):
         # Update model parameters
         parameters = ins.parameters
         if parameters.tensors:
-            # Convert parameters to tensors
-            param_tensors = [torch.from_numpy(np.frombuffer(t, dtype=np.float32)) 
-                           for t in parameters.tensors]
+            # Convert parameters to numpy arrays with correct shapes
+            param_dict = {}
+            for i, (name, param) in enumerate(self.model.named_parameters()):
+                param_bytes = parameters.tensors[i]
+                # Deserialize using np.load
+                bytes_io = io.BytesIO(param_bytes)
+                param_np = np.load(bytes_io, allow_pickle=False)
+                # Make array writable and reshape to original shape
+                param_np = np.array(param_np, copy=True)  # Make writable
+                data = param_np.reshape(param.data.shape)
+                param_dict[name] = data
             
             # Update model parameters
-            self.model.set_parameters(dict(zip(self.model.state_dict().keys(), param_tensors)))
+            self.model.set_parameters(param_dict)
         
         # Evaluate model
-        if self.val_features is not None and self.val_labels is not None:
-            metrics = self.trainer.evaluate(
-                self.trainer.prepare_data(self.val_features, self.val_labels, self.batch_size)
-            )
-            num_examples = len(self.val_labels)
-        else:
-            metrics = self.trainer.evaluate(
-                self.trainer.prepare_data(self.train_features, self.train_labels, self.batch_size)
-            )
-            num_examples = len(self.train_labels)
+        loss, accuracy = self.trainer.evaluate()
         
+        # Return evaluation results
         return EvaluateRes(
             status=Status(code=Code.OK, message="OK"),
-            loss=metrics["loss"],
-            num_examples=num_examples,
-            metrics=metrics
+            loss=float(loss),
+            num_examples=len(self.trainer.test_loader.dataset),
+            metrics={"accuracy": float(accuracy)}
         ) 
