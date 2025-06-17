@@ -101,9 +101,7 @@ def main():
     # Define strategy
     strategy = fl.server.strategy.FedAvg(
         fraction_fit=1.0,
-        fraction_eval=1.0,
         min_fit_clients=num_clients,
-        min_eval_clients=num_clients,
         min_available_clients=num_clients,
         eval_fn=None,  # We'll evaluate on each client
         initial_parameters=None,
