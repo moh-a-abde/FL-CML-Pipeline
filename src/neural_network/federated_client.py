@@ -158,13 +158,20 @@ class NeuralNetworkClient(fl.client.Client):
             # Update model parameters
             self.model.set_parameters(param_dict)
         
-        # Evaluate model
-        loss, accuracy = self.trainer.evaluate()
+        # Evaluate model using test data
+        if self.val_features is not None and self.val_labels is not None:
+            eval_loader = self.trainer.prepare_data(self.val_features, self.val_labels, self.batch_size)
+            num_examples = len(self.val_labels)
+        else:
+            eval_loader = self.trainer.prepare_data(self.train_features, self.train_labels, self.batch_size)
+            num_examples = len(self.train_labels)
+        
+        loss, accuracy = self.trainer.evaluate(eval_loader)
         
         # Return evaluation results
         return EvaluateRes(
             status=Status(code=Code.OK, message="OK"),
             loss=float(loss),
-            num_examples=len(self.trainer.test_loader.dataset),
+            num_examples=num_examples,
             metrics={"accuracy": float(accuracy)}
         ) 
