@@ -183,30 +183,31 @@ jobs:
             echo "Warning: No tuned parameters found, will use default parameters"
           fi
       
-      - name: Run XGBoost federated learning pipeline
-        run: |
-          source venv/bin/activate
-          
-          # Create output directories to ensure they exist
-          mkdir -p outputs results tune_results
-          
-          # Run the federated learning with tuned parameters, but disable hyperparameter tuning
-          # since we already optimized the parameters in the previous step
-          echo "Using Ray Tune optimized parameters from previous step..."
-          echo "Disabling hyperparameter tuning in federated learning pipeline to avoid duplication..."
-          
-          # Override the tuning.enabled setting to false since we already have optimized parameters
-          python run.py +experiment=bagging tuning.enabled=false
-          
-          # List what was created for debugging
-          echo "Contents of outputs directory:"
-          ls -la outputs/ || echo "outputs directory is empty or doesn't exist"
-          
-          echo "Contents of results directory:"
-          ls -la results/ || echo "results directory is empty or doesn't exist"
-          
-          echo "Contents of tune_results directory:"
-          ls -la tune_results/ || echo "tune_results directory is empty or doesn't exist"
+      # Commenting out XGBoost federated learning pipeline for now
+      # - name: Run XGBoost federated learning pipeline
+      #   run: |
+      #     source venv/bin/activate
+      #     
+      #     # Create output directories to ensure they exist
+      #     mkdir -p outputs results tune_results
+      #     
+      #     # Run the federated learning with tuned parameters, but disable hyperparameter tuning
+      #     # since we already optimized the parameters in the previous step
+      #     echo "Using Ray Tune optimized parameters from previous step..."
+      #     echo "Disabling hyperparameter tuning in federated learning pipeline to avoid duplication..."
+      #     
+      #     # Override the tuning.enabled setting to false since we already have optimized parameters
+      #     python run.py +experiment=bagging tuning.enabled=false
+      #     
+      #     # List what was created for debugging
+      #     echo "Contents of outputs directory:"
+      #     ls -la outputs/ || echo "outputs directory is empty or doesn't exist"
+      #     
+      #     echo "Contents of results directory:"
+      #     ls -la results/ || echo "results directory is empty or doesn't exist"
+      #     
+      #     echo "Contents of tune_results directory:"
+      #     ls -la tune_results/ || echo "tune_results directory is empty or doesn't exist"
 
       # Neural Network Training Section
       - name: Run Neural Network Training
