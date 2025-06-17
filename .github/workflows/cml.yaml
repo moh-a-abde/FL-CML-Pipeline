@@ -264,33 +264,55 @@ jobs:
           git config --local user.email "abde8473@stthomas.edu"
           git config --local user.name "moh-a-abde"
           
-          # Force add all files in result directories using find to be more robust
-          echo "Force adding all result files..."
+          # Function to check file size and add if under 100MB
+          check_and_add_file() {
+            local file="$1"
+            if [ -f "$file" ]; then
+              # Get file size in MB
+              size_mb=$(du -m "$file" | cut -f1)
+              if [ "$size_mb" -le 100 ]; then
+                git add -f "$file"
+                echo "Added $file (${size_mb}MB)"
+              else
+                echo "Skipping $file (${size_mb}MB) - exceeds 100MB limit"
+              fi
+            fi
+          }
           
-          # Add tune_results directory and all its contents
-          if [ -d "tune_results" ]; then
-            git add -f tune_results/
-            find tune_results -type f -exec git add -f {} \; 2>/dev/null || true
+          # Function to process directory recursively
+          process_directory() {
+            local dir="$1"
+            if [ -d "$dir" ]; then
+              # Process files in current directory
+              for file in "$dir"/*; do
+                if [ -f "$file" ]; then
+                  check_and_add_file "$file"
+                elif [ -d "$file" ]; then
+                  process_directory "$file"
+                fi
+              done
+            fi
+          }
+          
+          # Process each directory
+          for dir in tune_results results outputs; do
+            if [ -d "$dir" ]; then
+              echo "Processing directory: $dir"
+              process_directory "$dir"
+            fi
+          done
+          
+          # Add model performance report if it exists
+          if [ -f "model_performance.md" ]; then
+            git add model_performance.md
           fi
-          
-          # Add results directory and all its contents  
-          if [ -d "results" ]; then
-            git add -f results/
-            find results -type f -exec git add -f {} \; 2>/dev/null || true
-          fi
-          
-          # Add outputs directory and all its contents
-          if [ -d "outputs" ]; then
-            git add -f outputs/
-            find outputs -type f -exec git add -f {} \; 2>/dev/null || true
-          fi
-          
-          # Add model performance report
-          git add model_performance.md 2>/dev/null || true
           
           # Add any other important files that might have been created
-          git add -f *.json 2>/dev/null || true
-          git add -f tuned_params.py 2>/dev/null || true
+          for file in *.json tuned_params.py; do
+            if [ -f "$file" ]; then
+              check_and_add_file "$file"
+            fi
+          done
           
           # Check what files are staged for commit
           echo "Files staged for commit:"
