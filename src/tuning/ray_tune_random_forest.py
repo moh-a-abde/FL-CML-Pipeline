@@ -108,28 +108,28 @@ def train_with_config(config: Dict[str, Any],
         model_info = rf_model.get_model_info()
         
         # Report metrics to Ray Tune
-        train.report(
-            accuracy=accuracy,
-            f1_weighted=f1_weighted,
-            f1_macro=f1_macro,
-            train_accuracy=train_accuracy,
-            train_f1=train_f1,
-            n_estimators=model_info.get('n_estimators', config.get('n_estimators')),
-            oob_score=model_info.get('oob_score'),
-            done=True
-        )
+        train.report({
+            "accuracy": accuracy,
+            "f1_weighted": f1_weighted,
+            "f1_macro": f1_macro,
+            "train_accuracy": train_accuracy,
+            "train_f1": train_f1,
+            "n_estimators": model_info.get('n_estimators', config.get('n_estimators')),
+            "oob_score": model_info.get('oob_score'),
+            "done": True
+        })
         
     except Exception as e:
         logger.error(f"Training failed with config {config}: {e}")
         # Report failure to Ray Tune
-        train.report(
-            accuracy=0.0,
-            f1_weighted=0.0,
-            f1_macro=0.0,
-            train_accuracy=0.0,
-            train_f1=0.0,
-            done=True
-        )
+        train.report({
+            "accuracy": 0.0,
+            "f1_weighted": 0.0,
+            "f1_macro": 0.0,
+            "train_accuracy": 0.0,
+            "train_f1": 0.0,
+            "done": True
+        })
 
 
 class EnhancedRandomForestTrainer:
