@@ -343,8 +343,11 @@ def main():
 
     enhanced_logger.logger.info("🚀 Starting simulation with %d rounds...", config.federated.num_rounds)
     
-    # Start simulation
-    fl.simulation.start_simulation(
+    # Initialize metrics history
+    metrics_history = []
+    
+    # Run simulation
+    history = fl.simulation.start_simulation(
         client_fn=get_client_fn(
             train_data_list,
             valid_data_list,
@@ -360,6 +363,27 @@ def main():
         strategy=strategy,
         client_manager=CyclicClientManager() if config.federated.train_method == "cyclic" else None,
     )
+    
+    # Print metrics for each round
+    enhanced_logger.logger.info("\n📊 Federated Learning Metrics Summary:")
+    enhanced_logger.logger.info("=" * 50)
+    enhanced_logger.logger.info("Round | Accuracy | Precision | Recall | F1 Score")
+    enhanced_logger.logger.info("-" * 50)
+    
+    for round_num, metrics in enumerate(history.metrics_distributed, 1):
+        if metrics:
+            # Get the latest metrics for this round
+            latest_metrics = metrics[-1][1]
+            accuracy = latest_metrics.get("accuracy", 0.0)
+            precision = latest_metrics.get("precision", 0.0)
+            recall = latest_metrics.get("recall", 0.0)
+            f1 = latest_metrics.get("f1", 0.0)
+            
+            enhanced_logger.logger.info(
+                f"{round_num:5d} | {accuracy:.4f} | {precision:.4f} | {recall:.4f} | {f1:.4f}"
+            )
+    
+    enhanced_logger.logger.info("=" * 50)
     
     enhanced_logger.logger.info("✅ Simulation completed successfully!")
 

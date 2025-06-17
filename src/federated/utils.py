@@ -173,15 +173,11 @@ def evaluate_metrics_aggregation(eval_metrics):
         tuple: (loss, aggregated_metrics)
     """
     total_num = sum([num for num, _ in eval_metrics])
-    # Log the raw metrics received from clients
-    log(INFO, "Received metrics from %d clients", len(eval_metrics))
-    for i, (num, metrics) in enumerate(eval_metrics):
-        log(INFO, "Client %d metrics: %s", i+1, metrics.keys())
-        if "mlogloss" in metrics:
-            log(INFO, "Client %d mlogloss: %f", i+1, metrics["mlogloss"])
+    
     # Initialize aggregated metrics dictionary
     metrics_to_aggregate = ['precision', 'recall', 'f1', 'accuracy']
     aggregated_metrics = {}
+    
     # Aggregate weighted metrics
     for metric in metrics_to_aggregate:
         if all(metric in metrics for _, metrics in eval_metrics):
@@ -189,54 +185,27 @@ def evaluate_metrics_aggregation(eval_metrics):
             aggregated_metrics[metric] = weighted_sum / total_num
         else:
             aggregated_metrics[metric] = 0.0
-            log(INFO, "Metric %s not available in all client metrics", metric)
-    # Aggregate loss (using mlogloss)
+    
+    # Aggregate loss (using mlogloss for XGBoost, 1-accuracy for Random Forest)
     if all("mlogloss" in metrics for _, metrics in eval_metrics):
-        client_losses = [metrics["mlogloss"] for _, metrics in eval_metrics]
-        log(INFO, "Individual client losses (mlogloss): %s", client_losses)
         loss = sum([metrics["mlogloss"] * num for num, metrics in eval_metrics]) / total_num
-        log(INFO, "Aggregated loss calculation: sum(mlogloss*num)=%f, total_num=%d, result=%f",
-            sum([metrics["mlogloss"] * num for num, metrics in eval_metrics]), total_num, loss)
     else:
-        loss = 0.0
-        log(INFO, "Mlogloss not available in all client metrics")
-    # aggregated_metrics["loss"] = loss  # REMOVED - Keep as "loss" for compatibility
-    aggregated_metrics["mlogloss"] = loss  # Store as mlogloss
-    # Aggregate confusion matrix
-    aggregated_conf_matrix = None
-    for num, metrics in eval_metrics:
-        if "confusion_matrix" in metrics:
-            conf_matrix = metrics["confusion_matrix"]
-            if aggregated_conf_matrix is None:
-                aggregated_conf_matrix = [[0 for _ in range(len(conf_matrix[0]))] for _ in range(len(conf_matrix))]
-            # Add weighted confusion matrix
-            for i in range(len(conf_matrix)):
-                for j in range(len(conf_matrix[0])):
-                    aggregated_conf_matrix[i][j] += conf_matrix[i][j] * num
-    # Normalize confusion matrix by total examples
-    if aggregated_conf_matrix is not None:
-        for i in range(len(aggregated_conf_matrix)):
-            for j in range(len(aggregated_conf_matrix[0])):
-                aggregated_conf_matrix[i][j] /= total_num
-    aggregated_metrics["confusion_matrix"] = aggregated_conf_matrix
+        loss = 1.0 - aggregated_metrics["accuracy"]  # Use 1-accuracy as loss for Random Forest
+    
     # Log aggregated metrics
-    log(INFO, "Aggregated metrics:")
-    log(INFO, "  Precision (weighted): %f", aggregated_metrics["precision"])
-    log(INFO, "  Recall (weighted): %f", aggregated_metrics["recall"])
-    log(INFO, "  F1 Score (weighted): %f", aggregated_metrics["f1"])
-    log(INFO, "  Accuracy: %f", aggregated_metrics["accuracy"])
-    log(INFO, "  Loss (mlogloss): %f", aggregated_metrics["mlogloss"])
-    if aggregated_conf_matrix is not None:
-        log(INFO, "  Confusion Matrix:\n%s", aggregated_conf_matrix)
+    log(INFO, "\n📊 Round Evaluation Metrics:")
+    log(INFO, "  Accuracy: %.4f", aggregated_metrics["accuracy"])
+    log(INFO, "  Precision (weighted): %.4f", aggregated_metrics["precision"])
+    log(INFO, "  Recall (weighted): %.4f", aggregated_metrics["recall"])
+    log(INFO, "  F1 Score (weighted): %.4f", aggregated_metrics["f1"])
+    log(INFO, "  Loss: %.4f", loss)
     
     # Add metrics to history for early stopping tracking
     add_metrics_to_history(aggregated_metrics)
     
     # Save aggregated results
     save_evaluation_results(aggregated_metrics, "aggregated")
-    if not (isinstance(loss, (int, float)) and isinstance(aggregated_metrics, dict)):
-        log(INFO, "[ERROR] Output of evaluate_metrics_aggregation is not (loss, dict): %s, %s", type(loss), type(aggregated_metrics))
-        raise TypeError("evaluate_metrics_aggregation must return (loss, dict)")
+    
     return loss, aggregated_metrics
 
 def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None, true_labels=None, prediction_types=None):
