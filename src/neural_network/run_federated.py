@@ -8,9 +8,20 @@ from sklearn.preprocessing import StandardScaler
 import logging
 from .model import NeuralNetwork
 from .federated_client import NeuralNetworkClient
+import multiprocessing
+import time
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# Configure flwr logger to not propagate to root logger
+fl_logger = logging.getLogger('flwr')
+fl_logger.propagate = False
+
+# Set up our logger
 logger = logging.getLogger(__name__)
 
 def load_and_preprocess_data(data_path: str, num_clients: int = 3):
@@ -65,6 +76,13 @@ def load_and_preprocess_data(data_path: str, num_clients: int = 3):
     
     return client_data, test_data
 
+def start_client(client):
+    """Start a single client."""
+    fl.client.start_numpy_client(
+        server_address="[::]:8080",
+        client=client
+    )
+
 def main():
     """Run federated learning with neural network."""
     # Load and preprocess data
@@ -106,21 +124,35 @@ def main():
         initial_parameters=None,
     )
     
-    # Start server
-    fl.server.start_server(
-        server_address="[::]:8080",
-        config=fl.server.ServerConfig(num_rounds=10),
-        strategy=strategy
-    )
-    
-    # Start clients
-    for client in clients:
-        fl.client.start_numpy_client(
-            server_address="[::]:8080",
-            client=client
+    # Start server in a separate process
+    server_process = multiprocessing.Process(
+        target=fl.server.start_server,
+        args=(
+            "[::]:8080",
+            fl.server.ServerConfig(num_rounds=10),
+            strategy
         )
+    )
+    server_process.start()
+    
+    # Give the server time to start
+    time.sleep(5)
+    
+    # Start clients in separate processes
+    client_processes = []
+    for client in clients:
+        process = multiprocessing.Process(target=start_client, args=(client,))
+        process.start()
+        client_processes.append(process)
+    
+    # Wait for all processes to complete
+    server_process.join()
+    for process in client_processes:
+        process.join()
     
     logger.info("Federated learning completed")
 
 if __name__ == "__main__":
+    # Set the start method for multiprocessing
+    multiprocessing.set_start_method('spawn')
     main() 
