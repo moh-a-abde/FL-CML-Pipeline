@@ -230,55 +230,6 @@ jobs:
           echo "Contents of neural network results directory:"
           ls -la results/neural_network/ || echo "neural network results directory is empty or doesn't exist"
       
-      - name: Evaluate model performance
-        run: |
-          source venv/bin/activate
-          # Compare model performance with and without tuned parameters
-          echo "## Model Performance Comparison" > model_performance.md
-          echo "" >> model_performance.md
-          
-          # Extract metrics from the results directory for XGBoost
-          if [ -d "results" ]; then
-            echo "### XGBoost Model Results" >> model_performance.md
-            echo "" >> model_performance.md
-            echo "| Metric | Value |" >> model_performance.md
-            echo "| ------ | ----- |" >> model_performance.md
-            
-            # Extract and add key metrics if available
-            for metric_file in $(find results -name "*.txt" | grep -i "metrics\|accuracy\|f1\|precision\|recall"); do
-              metric_name=$(basename "$metric_file" .txt)
-              metric_value=$(cat "$metric_file" | head -n 1)
-              echo "| $metric_name | $metric_value |" >> model_performance.md
-            done
-          fi
-          
-          # Extract metrics for Neural Network
-          if [ -d "results/neural_network" ]; then
-            echo "" >> model_performance.md
-            echo "### Neural Network Model Results" >> model_performance.md
-            echo "" >> model_performance.md
-            echo "| Metric | Value |" >> model_performance.md
-            echo "| ------ | ----- |" >> model_performance.md
-            
-            # Extract and add key metrics if available
-            for metric_file in $(find results/neural_network -name "*.txt" | grep -i "metrics\|accuracy\|f1\|precision\|recall"); do
-              metric_name=$(basename "$metric_file" .txt)
-              metric_value=$(cat "$metric_file" | head -n 1)
-              echo "| $metric_name | $metric_value |" >> model_performance.md
-            done
-          fi
-          
-          # Add Ray Tune optimization results
-          if [ -f "tune_results/best_params.json" ]; then
-            echo "" >> model_performance.md
-            echo "### XGBoost Hyperparameter Optimization Results" >> model_performance.md
-            echo "" >> model_performance.md
-            echo "Best hyperparameters:" >> model_performance.md
-            echo '```json' >> model_performance.md
-            cat tune_results/best_params.json >> model_performance.md
-            echo '```' >> model_performance.md
-          fi
-
       - name: Debug git status before commit
         run: |
           echo "=== Current git status ==="
@@ -341,11 +292,6 @@ jobs:
             fi
           done
           
-          # Add model performance report if it exists
-          if [ -f "model_performance.md" ]; then
-            git add model_performance.md
-          fi
-          
           # Add any other important files that might have been created
           for file in *.json tuned_params.py; do
             if [ -f "$file" ]; then
@@ -359,7 +305,7 @@ jobs:
           
           # Commit all changes (only if there are changes)
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "workflow with Ray Tune optimization and Neural Network training 🚀"
+            git commit -m "workflow with XGBoost and Neural Network training 🚀"
             echo "Changes committed successfully"
           else
             echo "No changes to commit"
