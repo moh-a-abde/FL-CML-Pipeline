@@ -98,13 +98,17 @@ class NeuralNetwork(nn.Module):
     
     def get_parameters(self) -> Dict[str, torch.Tensor]:
         """Get model parameters."""
-        return {name: param.data.clone() for name, param in self.named_parameters()}
+        return {name: param.data.clone().cpu().numpy() for name, param in self.named_parameters()}
     
     def set_parameters(self, parameters: Dict[str, torch.Tensor]):
         """Set model parameters."""
         for name, param in self.named_parameters():
             if name in parameters:
-                param.data.copy_(parameters[name])
+                # Ensure the parameter has the correct shape
+                param_data = torch.from_numpy(parameters[name])
+                if param_data.shape != param.data.shape:
+                    raise ValueError(f"Parameter shape mismatch for {name}: expected {param.data.shape}, got {param_data.shape}")
+                param.data.copy_(param_data)
     
     def save(self, path: str):
         """Save model to disk."""

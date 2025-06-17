@@ -73,11 +73,11 @@ class NeuralNetworkClient(fl.client.Client):
             GetParametersRes: Model parameters
         """
         parameters = self.model.get_parameters()
-        tensors = [torch.tensor(param.cpu().numpy()) for param in parameters.values()]
+        tensors = [param.tobytes() for param in parameters.values()]
         
         return GetParametersRes(
             status=Status(code=Code.OK, message="OK"),
-            parameters=Parameters(tensor_type="", tensors=[t.numpy().tobytes() for t in tensors])
+            parameters=Parameters(tensor_type="", tensors=tensors)
         )
     
     def fit(self, ins: FitIns) -> FitRes:
@@ -93,12 +93,15 @@ class NeuralNetworkClient(fl.client.Client):
         # Update model parameters
         parameters = ins.parameters
         if parameters.tensors:
-            # Convert parameters to tensors
-            param_tensors = [torch.from_numpy(np.frombuffer(t, dtype=np.float32)) 
-                           for t in parameters.tensors]
+            # Convert parameters to numpy arrays
+            param_dict = {}
+            for i, (name, _) in enumerate(self.model.named_parameters()):
+                param_bytes = parameters.tensors[i]
+                param_array = np.frombuffer(param_bytes, dtype=np.float32)
+                param_dict[name] = param_array
             
             # Update model parameters
-            self.model.set_parameters(dict(zip(self.model.state_dict().keys(), param_tensors)))
+            self.model.set_parameters(param_dict)
         
         # Train for one round
         metrics = self.trainer.train_epoch(
