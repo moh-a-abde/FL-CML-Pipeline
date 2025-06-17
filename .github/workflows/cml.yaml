@@ -111,10 +111,10 @@ jobs:
           
           # Detect CI environment and adjust sample count accordingly
           if [ "$CI" = "true" ]; then
-            SAMPLES=5  # Reduced from 100 to 5 for faster tuning during development
+            SAMPLES=2  # Reduced from 100 to 5 for faster tuning during development
             echo "CI detected: Using $SAMPLES samples for quick optimization"
           else
-            SAMPLES=5  # Reduced from 100 to 5 for faster tuning during development
+            SAMPLES=2  # Reduced from 100 to 5 for faster tuning during development
             echo "Local run: Using $SAMPLES samples for quick optimization"
           fi
           
