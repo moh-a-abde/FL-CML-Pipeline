@@ -49,12 +49,6 @@ def main(cfg: DictConfig) -> None:
     # Create structured config from the Hydra DictConfig
     config = config_manager._convert_to_structured_config(cfg)  # pylint: disable=protected-access
     
-    # Save the current configuration for other pipeline components (like sim.py)
-    os.makedirs("outputs", exist_ok=True)
-    config_manager._raw_config = cfg  # Set the raw config in manager
-    config_manager._config = config  # Set the structured config in manager
-    config_manager.save_config("outputs/current_config.yaml")
-    
     # Start pipeline with enhanced logging
     enhanced_logger.pipeline_start(config)
     
@@ -77,41 +71,24 @@ def main(cfg: DictConfig) -> None:
         enhanced_logger.step_error("global_processor", "Failed to create global feature processor")
         sys.exit(1)
     
-    # Step 2: Run hyperparameter tuning with unified tuner (if enabled)
+    # Step 2: Run hyperparameter tuning with consistent preprocessing (if enabled)
     if config.tuning.enabled:
-        model_type = config.model.type.lower()
         enhanced_logger.step_start(
             "hyperparameter_tuning",
-            f"Running {model_type} hyperparameter tuning with unified tuner",
-            f"python src/tuning/unified_tuner.py --data-file {data_file_path} --num-samples {config.tuning.num_samples} --output-dir {config.tuning.output_dir}"
+            "Running hyperparameter tuning with consistent preprocessing",
+            f"python src/tuning/ray_tune_xgboost.py --data-file {data_file_path} --num-samples {config.tuning.num_samples} --cpus-per-trial {config.tuning.cpus_per_trial} --output-dir {config.tuning.output_dir}"
         )
         
         tuning_command = [
-            "python", "src/tuning/unified_tuner.py",
+            "python", "src/tuning/ray_tune_xgboost.py",
             "--data-file", data_file_path,
             "--num-samples", str(config.tuning.num_samples),
+            "--cpus-per-trial", str(config.tuning.cpus_per_trial),
             "--output-dir", config.tuning.output_dir
         ]
         
-        # Pass model type explicitly to ensure correct tuning
-        tuning_command.extend(["--model-type", model_type])
-        
-        # Extract experiment name from outputs if available (Random Forest uses experiment name)
-        if hasattr(config.outputs, 'experiment_name') and config.outputs.experiment_name:
-            experiment_name = config.outputs.experiment_name
-            if 'random_forest' in experiment_name.lower():
-                tuning_command.extend(["--experiment", "random_forest"])
-            elif 'xgboost' in experiment_name.lower():
-                tuning_command.extend(["--experiment", "xgboost"])
-        
-        # Also check model type directly to infer experiment
-        if model_type == "random_forest":
-            tuning_command.extend(["--experiment", "random_forest"])
-        elif model_type == "xgboost":
-            tuning_command.extend(["--experiment", "xgboost"])
-        
         if not run_command(tuning_command, "hyperparameter_tuning", enhanced_logger):
-            enhanced_logger.step_error("hyperparameter_tuning", f"{model_type} hyperparameter tuning failed. Continuing with default parameters.")
+            enhanced_logger.step_error("hyperparameter_tuning", "Hyperparameter tuning failed. Continuing with default parameters.")
         
         # Step 3: Generate tuned parameters file
         enhanced_logger.step_start(

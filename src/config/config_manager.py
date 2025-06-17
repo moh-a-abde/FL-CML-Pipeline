@@ -5,7 +5,7 @@ This module provides a centralized, type-safe configuration management system
 using Hydra for loading YAML configurations with experiment overrides.
 """
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from typing import Dict, Any, List, Optional, Union
 from pathlib import Path
 import logging
@@ -26,7 +26,7 @@ class DataConfig:  # pylint: disable=too-many-instance-attributes
 
 
 @dataclass
-class XGBoostParamsConfig:  # pylint: disable=too-many-instance-attributes
+class ModelParamsConfig:  # pylint: disable=too-many-instance-attributes
     """XGBoost model parameters configuration."""
     objective: str
     num_class: int
@@ -50,32 +50,6 @@ class XGBoostParamsConfig:  # pylint: disable=too-many-instance-attributes
     random_state: int
     # Optional parameters for specific experiments
     num_boost_round: Optional[int] = None
-
-
-@dataclass
-class RandomForestParamsConfig:  # pylint: disable=too-many-instance-attributes
-    """Random Forest model parameters configuration."""
-    n_estimators: int
-    max_depth: Optional[int]
-    min_samples_split: int
-    min_samples_leaf: int
-    max_features: Union[str, int, float]
-    criterion: str
-    bootstrap: bool
-    oob_score: bool
-    n_jobs: int
-    random_state: int
-    class_weight: Optional[Union[str, dict]]
-    # Advanced parameters
-    max_samples: Optional[Union[int, float]] = None
-    min_weight_fraction_leaf: float = 0.0
-    max_leaf_nodes: Optional[int] = None
-    min_impurity_decrease: float = 0.0
-    warm_start: bool = False
-
-
-# Union type for model parameters - supports both XGBoost and Random Forest
-ModelParamsConfig = Union[XGBoostParamsConfig, RandomForestParamsConfig]
 
 
 @dataclass
@@ -279,21 +253,7 @@ class ConfigManager:
             # Convert nested configurations
             data_config = DataConfig(**cfg.data)
             
-            # Handle model parameters based on model type
-            model_type = cfg.model.type.lower()
-            if model_type == "xgboost":
-                # Filter for XGBoost parameters only
-                xgb_param_names = {f.name for f in fields(XGBoostParamsConfig)}
-                xgb_params = {k: v for k, v in cfg.model.params.items() if k in xgb_param_names}
-                model_params = XGBoostParamsConfig(**xgb_params)
-            elif model_type == "random_forest":
-                # Filter for Random Forest parameters only
-                rf_param_names = {f.name for f in fields(RandomForestParamsConfig)}
-                rf_params = {k: v for k, v in cfg.model.params.items() if k in rf_param_names}
-                model_params = RandomForestParamsConfig(**rf_params)
-            else:
-                raise ValueError(f"Unsupported model type: {model_type}")
-            
+            model_params = ModelParamsConfig(**cfg.model.params)
             model_config = ModelConfig(
                 type=cfg.model.type,
                 num_local_rounds=cfg.model.num_local_rounds,
@@ -354,59 +314,34 @@ class ConfigManager:
         return self._raw_config
     
     def get_model_params_dict(self) -> Dict[str, Any]:
-        """Get model parameters as dictionary for the configured model type."""
+        """Get XGBoost model parameters as dictionary."""
         model_params = self.config.model.params
-        model_type = self.config.model.type.lower()
+        params_dict = {
+            'objective': model_params.objective,
+            'num_class': model_params.num_class,
+            'eta': model_params.eta,
+            'max_depth': model_params.max_depth,
+            'min_child_weight': model_params.min_child_weight,
+            'gamma': model_params.gamma,
+            'subsample': model_params.subsample,
+            'colsample_bytree': model_params.colsample_bytree,
+            'colsample_bylevel': model_params.colsample_bylevel,
+            'nthread': model_params.nthread,
+            'tree_method': model_params.tree_method,
+            'eval_metric': 'mlogloss',
+            'max_delta_step': model_params.max_delta_step,
+            'reg_alpha': model_params.reg_alpha,
+            'reg_lambda': model_params.reg_lambda,
+            'base_score': model_params.base_score,
+            'scale_pos_weight': model_params.scale_pos_weight,
+            'grow_policy': model_params.grow_policy,
+            'normalize_type': model_params.normalize_type,
+            'random_state': model_params.random_state
+        }
         
-        if model_type == "xgboost":
-            params_dict = {
-                'objective': model_params.objective,
-                'num_class': model_params.num_class,
-                'eta': model_params.eta,
-                'max_depth': model_params.max_depth,
-                'min_child_weight': model_params.min_child_weight,
-                'gamma': model_params.gamma,
-                'subsample': model_params.subsample,
-                'colsample_bytree': model_params.colsample_bytree,
-                'colsample_bylevel': model_params.colsample_bylevel,
-                'nthread': model_params.nthread,
-                'tree_method': model_params.tree_method,
-                'eval_metric': 'mlogloss',
-                'max_delta_step': model_params.max_delta_step,
-                'reg_alpha': model_params.reg_alpha,
-                'reg_lambda': model_params.reg_lambda,
-                'base_score': model_params.base_score,
-                'scale_pos_weight': model_params.scale_pos_weight,
-                'grow_policy': model_params.grow_policy,
-                'normalize_type': model_params.normalize_type,
-                'random_state': model_params.random_state
-            }
-            
-            # Add optional parameters if present
-            if hasattr(model_params, 'num_boost_round') and model_params.num_boost_round is not None:
-                params_dict['num_boost_round'] = model_params.num_boost_round
-                
-        elif model_type == "random_forest":
-            params_dict = {
-                'n_estimators': model_params.n_estimators,
-                'max_depth': model_params.max_depth,
-                'min_samples_split': model_params.min_samples_split,
-                'min_samples_leaf': model_params.min_samples_leaf,
-                'max_features': model_params.max_features,
-                'criterion': model_params.criterion,
-                'bootstrap': model_params.bootstrap,
-                'oob_score': model_params.oob_score,
-                'n_jobs': model_params.n_jobs,
-                'random_state': model_params.random_state,
-                'class_weight': model_params.class_weight,
-                'max_samples': model_params.max_samples,
-                'min_weight_fraction_leaf': model_params.min_weight_fraction_leaf,
-                'max_leaf_nodes': model_params.max_leaf_nodes,
-                'min_impurity_decrease': model_params.min_impurity_decrease,
-                'warm_start': model_params.warm_start
-            }
-        else:
-            raise ValueError(f"Unsupported model type: {model_type}")
+        # Add optional parameters if present
+        if model_params.num_boost_round is not None:
+            params_dict['num_boost_round'] = model_params.num_boost_round
             
         return params_dict
     
@@ -427,18 +362,6 @@ class ConfigManager:
     def should_create_timestamped_dirs(self) -> bool:
         """Check if timestamped output directories should be created."""
         return self.config.outputs.create_timestamped_dirs
-    
-    def get_model_type(self) -> str:
-        """Get the configured model type."""
-        return self.config.model.type.lower()
-    
-    def is_xgboost_model(self) -> bool:
-        """Check if the configured model is XGBoost."""
-        return self.get_model_type() == "xgboost"
-    
-    def is_random_forest_model(self) -> bool:
-        """Check if the configured model is Random Forest."""
-        return self.get_model_type() == "random_forest"
     
     def update_config_value(self, key_path: str, value: Any) -> None:
         """

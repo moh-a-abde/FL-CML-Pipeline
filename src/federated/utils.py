@@ -1,6 +1,6 @@
 from typing import Dict, List, Optional
 from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix, log_loss, accuracy_score
-from logging import INFO, WARNING, ERROR
+from logging import INFO, WARNING
 import xgboost as xgb
 import pandas as pd
 from flwr.common.logger import log
@@ -23,7 +23,6 @@ from src.utils.visualization import (
     plot_learning_curves
 )
 import warnings
-from sklearn.ensemble import RandomForestClassifier
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -174,11 +173,15 @@ def evaluate_metrics_aggregation(eval_metrics):
         tuple: (loss, aggregated_metrics)
     """
     total_num = sum([num for num, _ in eval_metrics])
-    
+    # Log the raw metrics received from clients
+    log(INFO, "Received metrics from %d clients", len(eval_metrics))
+    for i, (num, metrics) in enumerate(eval_metrics):
+        log(INFO, "Client %d metrics: %s", i+1, metrics.keys())
+        if "mlogloss" in metrics:
+            log(INFO, "Client %d mlogloss: %f", i+1, metrics["mlogloss"])
     # Initialize aggregated metrics dictionary
     metrics_to_aggregate = ['precision', 'recall', 'f1', 'accuracy']
     aggregated_metrics = {}
-    
     # Aggregate weighted metrics
     for metric in metrics_to_aggregate:
         if all(metric in metrics for _, metrics in eval_metrics):
@@ -186,27 +189,54 @@ def evaluate_metrics_aggregation(eval_metrics):
             aggregated_metrics[metric] = weighted_sum / total_num
         else:
             aggregated_metrics[metric] = 0.0
-    
-    # Aggregate loss (using mlogloss for XGBoost, 1-accuracy for Random Forest)
+            log(INFO, "Metric %s not available in all client metrics", metric)
+    # Aggregate loss (using mlogloss)
     if all("mlogloss" in metrics for _, metrics in eval_metrics):
+        client_losses = [metrics["mlogloss"] for _, metrics in eval_metrics]
+        log(INFO, "Individual client losses (mlogloss): %s", client_losses)
         loss = sum([metrics["mlogloss"] * num for num, metrics in eval_metrics]) / total_num
+        log(INFO, "Aggregated loss calculation: sum(mlogloss*num)=%f, total_num=%d, result=%f",
+            sum([metrics["mlogloss"] * num for num, metrics in eval_metrics]), total_num, loss)
     else:
-        loss = 1.0 - aggregated_metrics["accuracy"]  # Use 1-accuracy as loss for Random Forest
-    
+        loss = 0.0
+        log(INFO, "Mlogloss not available in all client metrics")
+    # aggregated_metrics["loss"] = loss  # REMOVED - Keep as "loss" for compatibility
+    aggregated_metrics["mlogloss"] = loss  # Store as mlogloss
+    # Aggregate confusion matrix
+    aggregated_conf_matrix = None
+    for num, metrics in eval_metrics:
+        if "confusion_matrix" in metrics:
+            conf_matrix = metrics["confusion_matrix"]
+            if aggregated_conf_matrix is None:
+                aggregated_conf_matrix = [[0 for _ in range(len(conf_matrix[0]))] for _ in range(len(conf_matrix))]
+            # Add weighted confusion matrix
+            for i in range(len(conf_matrix)):
+                for j in range(len(conf_matrix[0])):
+                    aggregated_conf_matrix[i][j] += conf_matrix[i][j] * num
+    # Normalize confusion matrix by total examples
+    if aggregated_conf_matrix is not None:
+        for i in range(len(aggregated_conf_matrix)):
+            for j in range(len(aggregated_conf_matrix[0])):
+                aggregated_conf_matrix[i][j] /= total_num
+    aggregated_metrics["confusion_matrix"] = aggregated_conf_matrix
     # Log aggregated metrics
-    log(INFO, "\n📊 Round Evaluation Metrics:")
-    log(INFO, "  Accuracy: %.4f", aggregated_metrics["accuracy"])
-    log(INFO, "  Precision (weighted): %.4f", aggregated_metrics["precision"])
-    log(INFO, "  Recall (weighted): %.4f", aggregated_metrics["recall"])
-    log(INFO, "  F1 Score (weighted): %.4f", aggregated_metrics["f1"])
-    log(INFO, "  Loss: %.4f", loss)
+    log(INFO, "Aggregated metrics:")
+    log(INFO, "  Precision (weighted): %f", aggregated_metrics["precision"])
+    log(INFO, "  Recall (weighted): %f", aggregated_metrics["recall"])
+    log(INFO, "  F1 Score (weighted): %f", aggregated_metrics["f1"])
+    log(INFO, "  Accuracy: %f", aggregated_metrics["accuracy"])
+    log(INFO, "  Loss (mlogloss): %f", aggregated_metrics["mlogloss"])
+    if aggregated_conf_matrix is not None:
+        log(INFO, "  Confusion Matrix:\n%s", aggregated_conf_matrix)
     
     # Add metrics to history for early stopping tracking
     add_metrics_to_history(aggregated_metrics)
     
     # Save aggregated results
     save_evaluation_results(aggregated_metrics, "aggregated")
-    
+    if not (isinstance(loss, (int, float)) and isinstance(aggregated_metrics, dict)):
+        log(INFO, "[ERROR] Output of evaluate_metrics_aggregation is not (loss, dict): %s, %s", type(loss), type(aggregated_metrics))
+        raise TypeError("evaluate_metrics_aggregation must return (loss, dict)")
     return loss, aggregated_metrics
 
 def save_predictions_to_csv(data, predictions, round_num: int, output_dir: str = None, true_labels=None, prediction_types=None):
@@ -448,68 +478,42 @@ def predict_with_saved_model(model_path, dmatrix, output_path, config_manager=No
     return predictions
 
 def get_evaluate_fn(test_data, config_manager=None):
-    """Get the evaluation function for the model."""
+    """Return a function for centralised evaluation."""
+
     def evaluate_model(
         server_round: int, parameters: Parameters, config: Dict[str, Scalar]
     ):
-        """Evaluate the model on the test data."""
-        try:
-            # Get model type from config
-            model_type = config.get("model_type", "xgboost")
+        if server_round == 0:
+            return 0, {}
+        else:
+            # Get model parameters from ConfigManager if available
+            if config_manager is not None:
+                model_params = config_manager.get_model_params_dict()
+            else:
+                # Fallback to basic params if no ConfigManager available
+                model_params = {
+                    "objective": "multi:softprob",
+                    "num_class": 11,
+                    "tree_method": "hist"
+                }
             
-            if model_type == "xgboost":
-                # XGBoost evaluation
-                if config_manager is not None:
-                    model_params = config_manager.get_model_params_dict()
-                else:
-                    model_params = {
-                        "objective": "multi:softprob",
-                        "num_class": 11,
-                        "tree_method": "hist"
-                    }
-                
+            bst = xgb.Booster(params=model_params)
+            para_b = None
+            for para in parameters.tensors:
+                para_b = bytearray(para)
+                break  # Take the first parameter tensor
+            
+            if para_b is not None:
+                bst.load_model(para_b)
+            else:
+                # No parameters provided, create a new model with default params
+                log(WARNING, "No model parameters provided, using fresh model")
                 bst = xgb.Booster(params=model_params)
-                para_b = None
-                for para in parameters.tensors:
-                    para_b = bytearray(para)
-                    break  # Take the first parameter tensor
-                
-                if para_b is not None:
-                    bst.load_model(para_b)
-                else:
-                    log(WARNING, "No model parameters provided, using fresh model")
-                    bst = xgb.Booster(params=model_params)
-                
-                # Get predictions
-                y_pred_proba = bst.predict(test_data)
-                
-            else:  # Random Forest
-                # Convert parameters to Random Forest model
-                if config_manager is not None:
-                    model_params = config_manager.get_model_params_dict()
-                else:
-                    model_params = {
-                        "n_estimators": 100,
-                        "max_depth": None,
-                        "min_samples_split": 2,
-                        "min_samples_leaf": 1
-                    }
-                
-                # Create new Random Forest model
-                rf_model = RandomForestClassifier(**model_params)
-                
-                # Convert parameters to model
-                if isinstance(parameters, list):
-                    # Parameters are already in the correct format for Random Forest
-                    rf_model.set_params(**dict(zip(rf_model.get_params().keys(), parameters)))
-                else:
-                    log(WARNING, "Unexpected parameter format for Random Forest")
-                    return 0.0, {}
-                
-                # Get predictions
-                y_pred_proba = rf_model.predict_proba(test_data)
             
-            # For multi-class, we get probabilities for each class
+            # Get predictions
+            y_pred_proba = bst.predict(test_data)
+            
+            # For multi:softprob, we get probabilities for each class
             # Convert to labels by taking argmax if predictions are probabilities
             if isinstance(y_pred_proba, np.ndarray) and len(y_pred_proba.shape) > 1:
                 y_pred_labels = np.argmax(y_pred_proba, axis=1)
@@ -527,27 +531,111 @@ def get_evaluate_fn(test_data, config_manager=None):
             predictions = y_pred_labels  # Use the converted labels for metrics
             pred_proba = y_pred_proba    # The original probabilities for plots that need them
 
+            # Ensure pred_proba has the correct shape for multi-class
+            if len(pred_proba.shape) == 1 or pred_proba.shape[1] == 1:
+                 # If predict gives labels or single class proba, try predict_proba if available
+                 try:
+                     # Note: XGBoost predict() with multi:softmax directly gives labels.
+                     # To get probabilities, the objective might need to be multi:softprob
+                     log(WARNING, "Predict output seems 1D, attempting to handle for multi-class probability plots...")
+                     if model_params.get('objective') == 'multi:softmax':
+                         # Create dummy probabilities centered around the predicted class
+                         num_classes = model_params.get('num_class', 11) # Default to 11 if not set
+                         pred_proba = np.zeros((len(predictions), num_classes))
+                         for i, label in enumerate(predictions):
+                             if 0 <= int(label) < num_classes: # Check bounds
+                                pred_proba[i, int(label)] = 0.9 # Assign high prob to predicted
+                                other_prob = 0.1 / max(1, (num_classes - 1))
+                                for j in range(num_classes):
+                                    if j != int(label):
+                                        pred_proba[i,j] = other_prob
+                             else:
+                                 log(WARNING, f"Prediction label {label} out of bounds [0, {num_classes-1}]")
+                                 # Assign uniform probability as fallback if label is invalid
+                                 pred_proba[i, :] = 1.0 / num_classes
+                         log(WARNING, "Reconstructed dummy probabilities for multi:softmax. Plots may be inaccurate. Consider using 'multi:softprob' objective for better probability estimates.")
+                     else: # Cannot determine probabilities
+                         pred_proba = None
+                 except AttributeError:
+                     log(WARNING, "Could not get probabilities, ROC and PR curves will not be generated.")
+                     pred_proba = None
+                 except Exception as e:
+                     log(WARNING, f"Error processing probabilities: {e}. ROC/PR plots skipped.")
+                     pred_proba = None
+            elif pred_proba.shape[1] != model_params.get('num_class', 11):
+                 log(WARNING, f"Probability shape mismatch ({pred_proba.shape[1]} columns vs {model_params.get('num_class', 11)} classes). Plots may fail.")
+                 # Attempt to proceed, but plots requiring probabilities might error out
+
             # Calculate metrics
+            # Ensure y_test is integer type for log_loss if using one-hot encoding
+            y_test_int = y_true.astype(int)
+            num_classes_actual = model_params.get('num_class', 11)
+
+            if pred_proba is not None and len(pred_proba.shape) > 1 and pred_proba.shape[1] == num_classes_actual:
+                 try:
+                     # Manual clipping to replace deprecated eps parameter
+                     epsilon = 1e-15
+                     pred_proba_clipped = np.clip(pred_proba, epsilon, 1 - epsilon)
+                     loss = log_loss(y_test_int, pred_proba_clipped, labels=range(num_classes_actual))
+                 except ValueError as e:
+                     log(WARNING, f"ValueError during log_loss calculation: {e}. Setting loss to high value.")
+                     loss = 100.0 # Assign a high loss value
+                     log(WARNING, f"y_test unique: {np.unique(y_test_int)}, shape: {y_test_int.shape}")
+                     log(WARNING, f"pred_proba shape: {pred_proba.shape}")
+                     log(WARNING, f"pred_proba sample: {pred_proba[:5]}")
+            else:
+                 log(WARNING, "Calculating log_loss using one-hot encoding due to missing/invalid probabilities.")
+                 try:
+                     predictions_int = np.array(predictions).astype(int)
+                     # Manual clipping to replace deprecated eps parameter
+                     epsilon = 1e-15
+                     one_hot_predictions = np.eye(num_classes_actual)[predictions_int]
+                     one_hot_clipped = np.clip(one_hot_predictions, epsilon, 1 - epsilon)
+                     loss = log_loss(y_test_int, one_hot_clipped, labels=range(num_classes_actual))
+                 except ValueError as e:
+                     log(WARNING, f"ValueError during one-hot log_loss calculation: {e}. Setting loss to high value.")
+                     loss = 100.0 # Assign a high loss value
+                     log(WARNING, f"y_test unique: {np.unique(y_test_int)}, shape: {y_test_int.shape}")
+                     log(WARNING, f"predictions unique: {np.unique(predictions)}, shape: {predictions.shape}")
+
+
             accuracy = accuracy_score(y_true, predictions)
             precision = precision_score(y_true, predictions, average='weighted', zero_division=0)
             recall = recall_score(y_true, predictions, average='weighted', zero_division=0)
             f1 = f1_score(y_true, predictions, average='weighted', zero_division=0)
-            
-            # Calculate loss (log loss for probabilities)
-            try:
-                loss = log_loss(y_true, pred_proba)
-            except Exception as e:
-                log(WARNING, f"Error calculating log loss: {e}")
-                loss = 0.0
+            cm = confusion_matrix(y_true, predictions, labels=range(num_classes_actual)) # Ensure labels match num_classes
 
             log(INFO, f"Centralized eval round {server_round} - Loss: {loss:.4f}, Accuracy: {accuracy:.4f}, F1: {f1:.4f}")
 
+            # --- Generate and Save Plots ---
+            output_dir = config.get("output_dir", "results") # Get output dir from config or default
+            # Instead of creating a separate plots directory, save directly in output_dir
+            log(INFO, f"Saving evaluation plots to: {output_dir}")
+
+            # Update class names to use the global authoritative mapping
+            class_names = get_class_names_list()
+
+            # Plot Confusion Matrix
+            cm_path = os.path.join(output_dir, f"confusion_matrix_round_{server_round}.png")
+            plot_confusion_matrix(cm, class_names[:num_classes_actual], cm_path) # Use actual num_classes
+
+            # Plot Class Distribution
+            dist_path = os.path.join(output_dir, f"class_distribution_round_{server_round}.png")
+            plot_class_distribution(y_test_int, predictions.astype(int), class_names[:num_classes_actual], dist_path)
+
+            # Plot ROC and Precision-Recall Curves (only if probabilities are available and valid)
+            if pred_proba is not None and len(pred_proba.shape) > 1 and pred_proba.shape[1] == num_classes_actual:
+                roc_path = os.path.join(output_dir, f"roc_curves_round_{server_round}.png")
+                plot_roc_curves(y_test_int, pred_proba, class_names[:num_classes_actual], roc_path)
+
+                pr_path = os.path.join(output_dir, f"precision_recall_curves_round_{server_round}.png")
+                plot_precision_recall_curves(y_test_int, pred_proba, class_names[:num_classes_actual], pr_path)
+            else:
+                 log(WARNING, f"Skipping ROC and PR curve generation due to unavailable/invalid probabilities (shape: {pred_proba.shape if pred_proba is not None else 'None'}).")
+            # --- End Plot Generation ---
+
             # Return metrics
             return loss, {"accuracy": accuracy, "precision": precision, "recall": recall, "f1": f1}
-            
-        except Exception as e:
-            log(ERROR, f"Error in evaluation: {str(e)}")
-            return 0.0, {}
 
     return evaluate_model
 

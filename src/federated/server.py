@@ -39,7 +39,6 @@ from src.federated.utils import (
 
 # Import dataset and utility functions
 from src.core.dataset import transform_dataset_to_dmatrix, load_csv_data, FeatureProcessor, create_global_feature_processor, load_global_feature_processor
-from src.federated.strategies.random_forest_strategy import RandomForestBagging, RandomForestFedAvg
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -49,7 +48,6 @@ config = load_config()  # Load base configuration
 
 log(INFO, "Configuration loaded successfully:")
 log(INFO, "Training method: %s", config.federated.train_method)
-log(INFO, "Model type: %s", config.model.type)
 log(INFO, "Pool size: %d", config.federated.pool_size)
 log(INFO, "Number of rounds: %d", config.federated.num_rounds)
 log(INFO, "Clients per round: %d", config.federated.num_clients_per_round)
@@ -57,7 +55,6 @@ log(INFO, "Centralized evaluation: %s", config.federated.centralised_eval)
 
 # Get configuration values for server
 train_method = config.federated.train_method
-model_type = config.model.type.lower()
 pool_size = config.federated.pool_size
 num_rounds = config.federated.num_rounds
 num_clients_per_round = config.federated.num_clients_per_round
@@ -81,7 +78,7 @@ test_csv_path = os.path.join(config.data.path, config.data.filename)
 global_processor_path = create_global_feature_processor(test_csv_path, output_dir)
 global_processor = load_global_feature_processor(global_processor_path)
 
-# Load centralised test set based on model type
+# Load centralised test set
 if centralised_eval:
     log(INFO, "Loading centralised test set...")
     # Use the engineered dataset for testing
@@ -93,24 +90,12 @@ if centralised_eval:
     # Use the global processor for consistent evaluation
     log(INFO, "Using global feature processor for centralized evaluation")
     
-    if model_type == "xgboost":
-        # Transform to DMatrix with the global processor for XGBoost
-        test_dmatrix = transform_dataset_to_dmatrix(
-            test_df, 
-            processor=global_processor,
-            is_training=False
-        )
-        test_data = test_dmatrix
-    elif model_type == "random_forest":
-        # For Random Forest, use numpy arrays directly
-        target_col = 'label' if 'label' in test_df.columns else 'attack_cat'
-        feature_cols = [col for col in test_df.columns if col != target_col]
-        test_data = {
-            'X': test_df[feature_cols].values,
-            'y': test_df[target_col].values
-        }
-    else:
-        raise ValueError(f"Unsupported model type: {model_type}")
+    # Transform to DMatrix with the global processor
+    test_dmatrix = transform_dataset_to_dmatrix(
+        test_df, 
+        processor=global_processor,
+        is_training=False
+    )
 
 # Define a custom config function that includes the output directory
 def custom_eval_config(rnd: int):
@@ -166,83 +151,117 @@ class CustomFedXgbBagging(FedXgbBagging):
             return loss, metrics
         return super().aggregate_evaluate(server_round, results, failures)
 
-# Define strategy based on model type and training method
-log(INFO, "Selecting strategy for model type: %s, training method: %s", model_type, train_method)
-
-if model_type == "xgboost":
-    # XGBoost strategies
-    if train_method == "bagging":
-        # Bagging training for XGBoost
-        strategy = CustomFedXgbBagging(
-            evaluate_function=get_evaluate_fn(test_data) if centralised_eval else None,
-            fraction_fit=(float(num_clients_per_round) / pool_size),
-            min_fit_clients=num_clients_per_round,
-            min_available_clients=pool_size,
-            min_evaluate_clients=num_evaluate_clients if not centralised_eval else 0,
-            fraction_evaluate=1.0 if not centralised_eval else 0.0,
-            on_evaluate_config_fn=custom_eval_config,
-            on_fit_config_fn=fit_config,
-            evaluate_metrics_aggregation_fn=(
-                evaluate_metrics_aggregation if not centralised_eval else None
-            ),
-        )
-        
-        # Add a monkey patch to log the loss value before it's returned
-        original_aggregate_evaluate = strategy.aggregate_evaluate
-        
-        def patched_aggregate_evaluate(server_round, eval_results, failures):
-            log(INFO, "Aggregating evaluation results for round %s", server_round)
-            # Call the original function
-            aggregated_result = original_aggregate_evaluate(server_round, eval_results, failures)
-            log(INFO, "[DEBUG] aggregate_evaluate received aggregated_result type: %s, value: %s", type(aggregated_result), aggregated_result)
-            # Expect (loss, metrics_dict)
-            if isinstance(aggregated_result, tuple) and len(aggregated_result) == 2:
-                loss, metrics = aggregated_result
-                log(INFO, "Aggregated loss for round %s: %s", server_round, loss)
-                if isinstance(metrics, dict):
-                    log(INFO, "Metrics for round %s: %s", server_round, metrics.keys())
-                else:
-                    log(INFO, "[ERROR] Metrics for round %s is not a dictionary: %s", server_round, type(metrics))
-                    raise TypeError("Metrics returned from aggregation must be a dictionary.")
-                return loss, metrics
-            log(INFO, "[ERROR] Unexpected format from aggregate_evaluate: %s", type(aggregated_result))
-            raise TypeError("aggregate_evaluate must return (loss, dict)")
-        
-        strategy.aggregate_evaluate = patched_aggregate_evaluate
-    else:
-        # Cyclic training for XGBoost
-        strategy = FedXgbCyclic(
-            fraction_fit=1.0,
-            min_available_clients=pool_size,
-            fraction_evaluate=1.0,
-            evaluate_metrics_aggregation_fn=evaluate_metrics_aggregation,
-            on_evaluate_config_fn=custom_eval_config,
-            on_fit_config_fn=fit_config,
-        )
-
-elif model_type == "random_forest":
-    # Random Forest strategies
-    if train_method == "bagging":
-        # Bagging training for Random Forest
-        strategy = RandomForestBagging(
-            fraction_fit=(float(num_clients_per_round) / pool_size),
-            min_fit_clients=num_clients_per_round,
-            min_available_clients=pool_size,
-            min_evaluate_clients=num_evaluate_clients if not centralised_eval else 0,
-            fraction_evaluate=1.0 if not centralised_eval else 0.0,
-        )
-    else:
-        # FedAvg training for Random Forest
-        strategy = RandomForestFedAvg(
-            fraction_fit=(float(num_clients_per_round) / pool_size),
-            min_fit_clients=num_clients_per_round,
-            min_available_clients=pool_size,
-            min_evaluate_clients=num_evaluate_clients if not centralised_eval else 0,
-            fraction_evaluate=1.0 if not centralised_eval else 0.0,
-        )
-        
+# Define strategy
+if train_method == "bagging":
+    # Bagging training
+    strategy = CustomFedXgbBagging(
+        evaluate_function=get_evaluate_fn(test_dmatrix) if centralised_eval else None,
+        fraction_fit=(float(num_clients_per_round) / pool_size),
+        min_fit_clients=num_clients_per_round,
+        min_available_clients=pool_size,
+        min_evaluate_clients=num_evaluate_clients if not centralised_eval else 0,
+        fraction_evaluate=1.0 if not centralised_eval else 0.0,
+        on_evaluate_config_fn=custom_eval_config,
+        on_fit_config_fn=fit_config,
+        evaluate_metrics_aggregation_fn=(
+            evaluate_metrics_aggregation if not centralised_eval else None
+        ),
+    )
+    
+    # Add a monkey patch to log the loss value before it's returned
+    original_aggregate_evaluate = strategy.aggregate_evaluate
+    
+    def patched_aggregate_evaluate(server_round, eval_results, failures):
+        log(INFO, "Aggregating evaluation results for round %s", server_round)
+        # Call the original function
+        aggregated_result = original_aggregate_evaluate(server_round, eval_results, failures)
+        log(INFO, "[DEBUG] aggregate_evaluate received aggregated_result type: %s, value: %s", type(aggregated_result), aggregated_result)
+        # Expect (loss, metrics_dict)
+        if isinstance(aggregated_result, tuple) and len(aggregated_result) == 2:
+            loss, metrics = aggregated_result
+            log(INFO, "Aggregated loss for round %s: %s", server_round, loss)
+            if isinstance(metrics, dict):
+                log(INFO, "Metrics for round %s: %s", server_round, metrics.keys())
+            else:
+                log(INFO, "[ERROR] Metrics for round %s is not a dictionary: %s", server_round, type(metrics))
+                raise TypeError("Metrics returned from aggregation must be a dictionary.")
+            return loss, metrics
+        log(INFO, "[ERROR] Unexpected format from aggregate_evaluate: %s", type(aggregated_result))
+        raise TypeError("aggregate_evaluate must return (loss, dict)")
+    
+    strategy.aggregate_evaluate = patched_aggregate_evaluate
 else:
-    raise ValueError(f"Unsupported model type: {model_type}")
+    # Cyclic training
+    strategy = FedXgbCyclic(
+        fraction_fit=1.0,
+        min_available_clients=pool_size,
+        fraction_evaluate=1.0,
+        evaluate_metrics_aggregation_fn=evaluate_metrics_aggregation,
+        on_evaluate_config_fn=custom_eval_config,
+        on_fit_config_fn=fit_config,
+    )
+    
+    # Add a monkey patch to handle the new return format from evaluate_metrics_aggregation
+    original_aggregate_evaluate_cyclic = strategy.aggregate_evaluate
+    
+    def patched_aggregate_evaluate_cyclic(server_round, eval_results, failures):
+        log(INFO, "Aggregating evaluation results for round %s (cyclic)", server_round)
+        
+        # Call the original function
+        aggregated_result = original_aggregate_evaluate_cyclic(server_round, eval_results, failures)
+        
+        # Check the format of the result
+        if isinstance(aggregated_result, tuple) and len(aggregated_result) == 2:
+            # The result is already in the correct format (loss, metrics)
+            loss, metrics = aggregated_result
+            
+            log(INFO, "Aggregated loss for round %s: %s", server_round, loss)
+            
+            # Check if metrics is a dictionary before trying to access keys
+            if isinstance(metrics, dict):
+                log(INFO, "Metrics for round %s: %s", server_round, metrics.keys())
+            else:
+                log(INFO, "Metrics for round %s is not a dictionary: %s", server_round, type(metrics))
+                
+                # If metrics is not a dictionary, create a new dictionary
+                if metrics is None:
+                    metrics = {}
+                elif not isinstance(metrics, dict):
+                    # Try to convert to dictionary if possible
+                    try:
+                        metrics = dict(metrics)
+                    except (TypeError, ValueError):
+                        # If conversion fails, create a new dictionary with the original metrics as a value
+                        metrics = {"original_metrics": metrics}
+                
+                log(INFO, "Created new metrics dictionary: %s", metrics)
+            
+            # Return the result in the correct format
+            return loss, metrics
+        
+        # The result is not in the expected format
+        log(INFO, "Unexpected format from original_aggregate_evaluate_cyclic: %s", type(aggregated_result))
+        
+        # Try to extract loss and metrics
+        if isinstance(aggregated_result, (int, float)):
+            # Only loss was returned
+            loss = aggregated_result
+            metrics = {}
+        elif isinstance(aggregated_result, dict):
+            # Only metrics were returned
+            loss = aggregated_result.get("loss", 0.0)
+            metrics = aggregated_result
+        else:
+            # Unknown format, use defaults
+            loss = 0.0
+            metrics = {}
+        
+        log(INFO, "Extracted loss: %s, metrics: %s", loss, metrics)
+        
+        # Return in the correct format
+        return loss, metrics
+    
+    strategy.aggregate_evaluate = patched_aggregate_evaluate_cyclic
 
 # Start Flower server
 history = fl.server.start_server(
