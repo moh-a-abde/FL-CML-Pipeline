@@ -409,17 +409,31 @@ class XgbClient(fl.client.Client):
                 target_names=target_names_filtered, 
                 zero_division=0
             )
-            log(INFO, f"Classification Report:\n{class_report}")
+            log(INFO, "Classification Report:\n%s", class_report)
         except Exception as e:
-            log(WARNING, f"Error generating classification report: {str(e)}")
+            log(WARNING, "Error generating classification report: %s", str(e))
         
-        # Log evaluation metrics
-        log(INFO, f"Precision (weighted): {precision:.4f}")
-        log(INFO, f"Recall (weighted): {recall:.4f}")
-        log(INFO, f"F1 Score (weighted): {f1:.4f}")
-        log(INFO, f"Accuracy: {accuracy:.4f}")
-        log(INFO, f"Multi-class Log Loss: {mlogloss:.4f}")
-        log(INFO, f"Confusion Matrix shape: {conf_matrix.shape}")
+        # Log detailed evaluation metrics
+        log(INFO, "Evaluation Metrics:")
+        log(INFO, "  Precision (weighted): %.6f", precision)
+        log(INFO, "  Recall (weighted): %.6f", recall)
+        log(INFO, "  F1 Score (weighted): %.6f", f1)
+        log(INFO, "  Accuracy: %.6f", accuracy)
+        log(INFO, "  Multi-class Log Loss: %.6f", mlogloss)
+        log(INFO, "  Confusion Matrix shape: %s", conf_matrix.shape)
+        
+        # Log per-class metrics
+        log(INFO, "Per-class Metrics:")
+        for i in range(len(conf_matrix)):
+            class_precision = precision_score(y_true == i, y_pred_labels == i, zero_division=0)
+            class_recall = recall_score(y_true == i, y_pred_labels == i, zero_division=0)
+            class_f1 = f1_score(y_true == i, y_pred_labels == i, zero_division=0)
+            class_support = np.sum(y_true == i)
+            log(INFO, "  Class %d:", i)
+            log(INFO, "    Precision: %.6f", class_precision)
+            log(INFO, "    Recall: %.6f", class_recall)
+            log(INFO, "    F1 Score: %.6f", class_f1)
+            log(INFO, "    Support: %d", class_support)
 
         # Save predictions for this round
         global_round = int(ins.config["global_round"])
@@ -438,7 +452,17 @@ class XgbClient(fl.client.Client):
             "recall": float(recall),
             "f1": float(f1),
             "accuracy": float(accuracy),
-            "mlogloss": float(mlogloss)
+            "mlogloss": float(mlogloss),
+            "confusion_matrix": conf_matrix.tolist(),
+            "per_class_metrics": {
+                str(i): {
+                    "precision": float(precision_score(y_true == i, y_pred_labels == i, zero_division=0)),
+                    "recall": float(recall_score(y_true == i, y_pred_labels == i, zero_division=0)),
+                    "f1": float(f1_score(y_true == i, y_pred_labels == i, zero_division=0)),
+                    "support": int(np.sum(y_true == i))
+                }
+                for i in range(len(conf_matrix))
+            }
         }
         
         return EvaluateRes(
