@@ -73,11 +73,19 @@ class NeuralNetworkClient(fl.client.Client):
             GetParametersRes: Model parameters
         """
         parameters = self.model.get_parameters()
-        tensors = [param.tobytes() for param in parameters.values()]
+        tensors = []
+        shapes = []
+        for param in parameters.values():
+            tensors.append(param.tobytes())
+            shapes.append(param.shape)
         
         return GetParametersRes(
             status=Status(code=Code.OK, message="OK"),
-            parameters=Parameters(tensor_type="", tensors=tensors)
+            parameters=Parameters(
+                tensor_type="",
+                tensors=tensors,
+                tensor_shapes=shapes  # Add shapes to the parameters
+            )
         )
     
     def fit(self, ins: FitIns) -> FitRes:
@@ -93,11 +101,12 @@ class NeuralNetworkClient(fl.client.Client):
         # Update model parameters
         parameters = ins.parameters
         if parameters.tensors:
-            # Convert parameters to numpy arrays
+            # Convert parameters to numpy arrays with correct shapes
             param_dict = {}
             for i, (name, _) in enumerate(self.model.named_parameters()):
                 param_bytes = parameters.tensors[i]
-                param_array = np.frombuffer(param_bytes, dtype=np.float32)
+                param_shape = parameters.tensor_shapes[i]  # Get the shape
+                param_array = np.frombuffer(param_bytes, dtype=np.float32).reshape(param_shape)
                 param_dict[name] = param_array
             
             # Update model parameters

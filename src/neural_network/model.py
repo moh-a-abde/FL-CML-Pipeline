@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, List, Optional, Tuple
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -96,19 +97,19 @@ class NeuralNetwork(nn.Module):
         x = self.layers[-1](x)
         return x
     
-    def get_parameters(self) -> Dict[str, torch.Tensor]:
+    def get_parameters(self) -> Dict[str, np.ndarray]:
         """Get model parameters."""
         return {name: param.data.clone().cpu().numpy() for name, param in self.named_parameters()}
     
-    def set_parameters(self, parameters: Dict[str, torch.Tensor]):
+    def set_parameters(self, parameters: Dict[str, np.ndarray]):
         """Set model parameters."""
         for name, param in self.named_parameters():
             if name in parameters:
-                # Ensure the parameter has the correct shape
-                param_data = torch.from_numpy(parameters[name])
+                # Make the numpy array writable and ensure correct shape
+                param_data = np.array(parameters[name], copy=True)
                 if param_data.shape != param.data.shape:
                     raise ValueError(f"Parameter shape mismatch for {name}: expected {param.data.shape}, got {param_data.shape}")
-                param.data.copy_(param_data)
+                param.data.copy_(torch.from_numpy(param_data))
     
     def save(self, path: str):
         """Save model to disk."""
