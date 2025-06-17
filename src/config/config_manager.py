@@ -37,6 +37,7 @@ class ModelParamsConfig:  # pylint: disable=too-many-instance-attributes
     subsample: float
     colsample_bytree: float
     colsample_bylevel: float
+    colsample_bynode: float
     nthread: int
     tree_method: str
     eval_metric: List[str]
@@ -46,6 +47,7 @@ class ModelParamsConfig:  # pylint: disable=too-many-instance-attributes
     base_score: float
     scale_pos_weight: float
     grow_policy: str
+    max_leaves: int
     normalize_type: str
     random_state: int
     # Optional parameters for specific experiments
@@ -326,6 +328,7 @@ class ConfigManager:
             'subsample': model_params.subsample,
             'colsample_bytree': model_params.colsample_bytree,
             'colsample_bylevel': model_params.colsample_bylevel,
+            'colsample_bynode': model_params.colsample_bynode,
             'nthread': model_params.nthread,
             'tree_method': model_params.tree_method,
             'eval_metric': 'mlogloss',
@@ -335,6 +338,7 @@ class ConfigManager:
             'base_score': model_params.base_score,
             'scale_pos_weight': model_params.scale_pos_weight,
             'grow_policy': model_params.grow_policy,
+            'max_leaves': model_params.max_leaves,
             'normalize_type': model_params.normalize_type,
             'random_state': model_params.random_state
         }

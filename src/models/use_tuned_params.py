@@ -54,6 +54,7 @@ def get_default_model_params():
             "subsample": 0.8,
             "colsample_bytree": 0.8,
             "colsample_bylevel": 0.8,
+            "colsample_bynode": 0.8,
             "nthread": 16,
             "tree_method": "hist",
             "eval_metric": "mlogloss",
@@ -63,6 +64,7 @@ def get_default_model_params():
             "base_score": 0.5,
             "scale_pos_weight": 1.0,
             "grow_policy": "depthwise",
+            "max_leaves": 0,
             "normalize_type": "tree",
             "random_state": 42
         }
