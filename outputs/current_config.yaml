@@ -6,7 +6,7 @@ data:
   temporal_window_size: 1000
   seed: 42
 model:
-  type: random_forest
+  type: xgboost
   num_local_rounds: 20
   params:
     objective: multi:softprob
