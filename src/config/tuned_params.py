@@ -1,7 +1,7 @@
 # This file is generated automatically by use_tuned_params.py
 # It contains optimized XGBoost parameters found by Ray Tune
 
-NUM_LOCAL_ROUND = 15  # Reduced from 82 for faster federated learning
+NUM_LOCAL_ROUND = 702  # Updated from Ray Tune
 
 TUNED_PARAMS = {
     'objective': 'multi:softprob',
@@ -11,12 +11,19 @@ TUNED_PARAMS = {
     'random_state': 42,
     'nthread': 16,
     
-    'max_depth': 6,  # Reduced from 8 for faster training
+    'eta': 0.020810960704017334,
+    'max_depth': 18,
     'min_child_weight': 5,
-    'eta': 0.1,  # Increased from 0.05 for faster convergence
-    'subsample': 0.8,
-    'colsample_bytree': 0.8,
-    'reg_alpha': 0.1,
-    'reg_lambda': 1.0,
-    'num_boost_round': 15,  # Reduced from 82 for faster federated learning
+    'gamma': 0.9251758546112311,
+    'subsample': 0.9756753850290512,
+    'colsample_bytree': 0.38159969563216367,
+    'colsample_bylevel': 0.9005982104516306,
+    'colsample_bynode': 0.6725376242659837,
+    'reg_alpha': 2.2769018964159371e-10,
+    'reg_lambda': 2.643013384540637e-07,
+    'scale_pos_weight': 0.7776869643957478,
+    'max_delta_step': 5,
+    'grow_policy': 'lossguide',
+    'max_leaves': 3065,
+    'num_boost_round': 702
 }
