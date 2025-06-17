@@ -7,7 +7,7 @@ permissions:
      actions: write
 jobs:
   run:
-    runs-on: ubuntu-22.04  # Using a more stable Ubuntu version
+    runs-on: ubuntu-latest
     # optionally use a convenient Ubuntu LTS + DVC + CML image
     #container: ghcr.io/iterative/cml:0-dvc2-base1
     steps:
@@ -27,12 +27,8 @@ jobs:
           node-version: '20'
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.9'  # Using Python 3.9 as a more stable version
+          python-version: '3.8'
           cache: 'pip'
-        continue-on-error: true
-        timeout-minutes: 5
-        retry-on-error: true
-        max-attempts: 3
       - uses: iterative/setup-cml@v1
       
       # Cache conda/mamba environments
