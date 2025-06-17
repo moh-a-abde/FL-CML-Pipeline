@@ -74,18 +74,15 @@ class NeuralNetworkClient(fl.client.Client):
         """
         parameters = self.model.get_parameters()
         tensors = []
-        shapes = []
         for param in parameters.values():
-            tensors.append(param.tobytes())
-            shapes.append(param.shape)
+            # Store shape information in the tensor bytes
+            shape_bytes = np.array(param.shape, dtype=np.int64).tobytes()
+            data_bytes = param.tobytes()
+            tensors.append(shape_bytes + data_bytes)
         
         return GetParametersRes(
             status=Status(code=Code.OK, message="OK"),
-            parameters=Parameters(
-                tensor_type="",
-                tensors=tensors,
-                tensor_shapes=shapes  # Add shapes to the parameters
-            )
+            parameters=Parameters(tensor_type="", tensors=tensors)
         )
     
     def fit(self, ins: FitIns) -> FitRes:
@@ -105,9 +102,12 @@ class NeuralNetworkClient(fl.client.Client):
             param_dict = {}
             for i, (name, _) in enumerate(self.model.named_parameters()):
                 param_bytes = parameters.tensors[i]
-                param_shape = parameters.tensor_shapes[i]  # Get the shape
-                param_array = np.frombuffer(param_bytes, dtype=np.float32).reshape(param_shape)
-                param_dict[name] = param_array
+                # Extract shape information from the first 8 bytes
+                shape_size = np.frombuffer(param_bytes[:8], dtype=np.int64)[0]
+                shape = tuple(np.frombuffer(param_bytes[8:8+shape_size*8], dtype=np.int64))
+                # Extract data after shape information
+                data = np.frombuffer(param_bytes[8+shape_size*8:], dtype=np.float32).reshape(shape)
+                param_dict[name] = data
             
             # Update model parameters
             self.model.set_parameters(param_dict)
