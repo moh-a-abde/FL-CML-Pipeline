@@ -235,16 +235,44 @@ class RandomForestFedAvg(fl.server.strategy.FedAvg):
 
 class RandomForestBagging(RandomForestFedAvg):
     """
-    Bagging strategy for Random Forest federated learning.
+    Bagging strategy for Random Forest models in federated learning.
     
     This strategy implements a bagging approach where each client trains
-    independent Random Forest models and the server aggregates predictions.
+    a Random Forest model independently, and the models are combined
+    through weighted averaging of their predictions.
     """
     
-    def __init__(self, **kwargs):
-        """Initialize Random Forest Bagging strategy."""
-        super().__init__(**kwargs)
+    def __init__(self, 
+                 fraction_fit: float = 1.0,
+                 fraction_evaluate: float = 1.0,
+                 min_fit_clients: int = 2,
+                 min_evaluate_clients: int = 2,
+                 min_available_clients: int = 2,
+                 evaluate_fn=None):
+        """
+        Initialize Random Forest Bagging strategy.
+        
+        Args:
+            fraction_fit: Fraction of clients to sample for training
+            fraction_evaluate: Fraction of clients to sample for evaluation
+            min_fit_clients: Minimum number of clients for training
+            min_evaluate_clients: Minimum number of clients for evaluation
+            min_available_clients: Minimum number of available clients
+            evaluate_fn: Optional function for centralized evaluation
+        """
+        super().__init__(
+            fraction_fit=fraction_fit,
+            fraction_evaluate=fraction_evaluate,
+            min_fit_clients=min_fit_clients,
+            min_evaluate_clients=min_evaluate_clients,
+            min_available_clients=min_available_clients
+        )
+        self.evaluate_fn = evaluate_fn
         logger.info("Initialized RandomForestBagging strategy")
+        logger.info("Fraction fit: %s, Fraction evaluate: %s", fraction_fit, fraction_evaluate)
+        logger.info("Min fit clients: %d, Min evaluate clients: %d", min_fit_clients, min_evaluate_clients)
+        if evaluate_fn:
+            logger.info("Using centralized evaluation function")
     
     def aggregate_fit(
         self,
