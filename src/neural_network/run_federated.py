@@ -78,9 +78,17 @@ def load_and_preprocess_data(data_path: str, num_clients: int = 3):
 
 def start_client(client):
     """Start a single client."""
-    fl.client.start_numpy_client(
+    fl.client.start_client(
         server_address="[::]:8080",
-        client=client
+        client=client.to_client()
+    )
+
+def start_server(strategy):
+    """Start the Flower server."""
+    fl.server.start_server(
+        server_address="[::]:8080",
+        config=fl.server.ServerConfig(num_rounds=10),
+        strategy=strategy
     )
 
 def main():
@@ -126,12 +134,8 @@ def main():
     
     # Start server in a separate process
     server_process = multiprocessing.Process(
-        target=fl.server.start_server,
-        args=(
-            "[::]:8080",
-            fl.server.ServerConfig(num_rounds=10),
-            strategy
-        )
+        target=start_server,
+        args=(strategy,)
     )
     server_process.start()
     
