@@ -16,6 +16,7 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple
 from .model import NeuralNetwork
 from .trainer import NeuralNetworkTrainer
+import io
 
 class NeuralNetworkClient(fl.client.Client):
     """
@@ -75,9 +76,11 @@ class NeuralNetworkClient(fl.client.Client):
         parameters = self.model.get_parameters()
         tensors = []
         for param in parameters.values():
-            # Convert to numpy array and flatten
+            # Convert to numpy array and serialize using np.save
             param_np = param.reshape(-1)
-            tensors.append(param_np.tobytes())
+            bytes_io = io.BytesIO()
+            np.save(bytes_io, param_np, allow_pickle=False)
+            tensors.append(bytes_io.getvalue())
         
         return GetParametersRes(
             status=Status(code=Code.OK, message="OK"),
@@ -101,10 +104,11 @@ class NeuralNetworkClient(fl.client.Client):
             param_dict = {}
             for i, (name, param) in enumerate(self.model.named_parameters()):
                 param_bytes = parameters.tensors[i]
-                # Get the original shape
-                original_shape = param.data.shape
-                # Convert bytes to numpy array and reshape
-                data = np.frombuffer(param_bytes, dtype=np.float32).reshape(original_shape)
+                # Deserialize using np.load
+                bytes_io = io.BytesIO(param_bytes)
+                param_np = np.load(bytes_io, allow_pickle=False)
+                # Reshape to original shape
+                data = param_np.reshape(param.data.shape)
                 param_dict[name] = data
             
             # Update model parameters
