@@ -304,7 +304,7 @@ def main():
                     config.federated.num_evaluate_clients if not config.federated.centralised_eval else 0
                 ),
                 fraction_evaluate=1.0 if not config.federated.centralised_eval else 0.0,
-                evaluate_fn=get_evaluate_fn(test_data_prepared) if config.federated.centralised_eval else None
+                evaluate_fn=get_evaluate_fn(test_data_prepared, config_manager) if config.federated.centralised_eval else None
             )
         else:
             # FedAvg for Random Forest
@@ -316,7 +316,7 @@ def main():
                     config.federated.num_evaluate_clients if not config.federated.centralised_eval else 0
                 ),
                 fraction_evaluate=1.0 if not config.federated.centralised_eval else 0.0,
-                evaluate_fn=get_evaluate_fn(test_data_prepared) if config.federated.centralised_eval else None
+                evaluate_fn=get_evaluate_fn(test_data_prepared, config_manager) if config.federated.centralised_eval else None
             )
     
     else:
