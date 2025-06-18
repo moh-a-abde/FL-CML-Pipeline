@@ -8,6 +8,7 @@ from sklearn.preprocessing import StandardScaler
 import logging
 from .model import NeuralNetwork
 from .federated_client import NeuralNetworkClient
+from .evaluation import save_evaluation_results, plot_training_history
 import multiprocessing
 import time
 
@@ -55,7 +56,7 @@ def load_and_preprocess_data(data_path: str, num_clients: int = 3):
     # Split training data among clients
     client_data = []
     for i in range(num_clients):
-        # Create non-IID split by sorting labels and splitting
+        # Create non-overlapping splits
         indices = np.argsort(y_train)
         client_indices = indices[i::num_clients]
         
@@ -155,6 +156,33 @@ def main():
         process.join()
     
     logger.info("Federated learning completed")
+    
+    # Evaluate final model on test data
+    X_test, y_test = test_data
+    final_model = clients[0].model  # Use the first client's model as the final model
+    final_model.eval()
+    
+    # Make predictions
+    with torch.no_grad():
+        X_test_tensor = torch.FloatTensor(X_test)
+        outputs = final_model(X_test_tensor)
+        predictions = torch.argmax(outputs, dim=1).numpy()
+    
+    # Get evaluation metrics
+    eval_loader = clients[0].trainer.prepare_data(X_test, y_test)
+    metrics = clients[0].trainer.evaluate(eval_loader)
+    
+    # Save evaluation results and create visualizations
+    save_evaluation_results(
+        metrics=metrics,
+        predictions=predictions,
+        true_labels=y_test,
+        output_dir="outputs/neural_network"
+    )
+    
+    # Save the final model
+    final_model.save("outputs/neural_network/final_model.pt")
+    logger.info("Final model saved to outputs/neural_network/final_model.pt")
 
 if __name__ == "__main__":
     # Set the start method for multiprocessing
