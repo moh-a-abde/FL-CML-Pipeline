@@ -293,6 +293,17 @@ jobs:
             fi
           done
           
+          # Add neural network specific files
+          if [ -f "outputs/neural_network/final_model.pt" ]; then
+            check_and_add_file "outputs/neural_network/final_model.pt"
+          fi
+          if [ -f "results/neural_network/final_evaluation.json" ]; then
+            check_and_add_file "results/neural_network/final_evaluation.json"
+          fi
+          if [ -f "results/neural_network/training_history.json" ]; then
+            check_and_add_file "results/neural_network/training_history.json"
+          fi
+          
           # Add any other important files that might have been created
           for file in *.json tuned_params.py; do
             if [ -f "$file" ]; then
