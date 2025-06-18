@@ -166,12 +166,13 @@ class NeuralNetworkClient(fl.client.Client):
             eval_loader = self.trainer.prepare_data(self.train_features, self.train_labels, self.batch_size)
             num_examples = len(self.train_labels)
         
-        loss, accuracy = self.trainer.evaluate(eval_loader)
+        # Get evaluation metrics
+        metrics = self.trainer.evaluate(eval_loader)
         
         # Return evaluation results
         return EvaluateRes(
             status=Status(code=Code.OK, message="OK"),
-            loss=float(loss),
+            loss=float(metrics['loss']),
             num_examples=num_examples,
-            metrics={"accuracy": float(accuracy)}
+            metrics=metrics
         ) 
