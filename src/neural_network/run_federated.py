@@ -88,7 +88,7 @@ def start_server(strategy):
     """Start the Flower server."""
     fl.server.start_server(
         server_address="[::]:8080",
-        config=fl.server.ServerConfig(num_rounds=50),
+        config=fl.server.ServerConfig(num_rounds=200),
         strategy=strategy
     )
 
