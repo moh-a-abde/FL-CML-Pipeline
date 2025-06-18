@@ -9,12 +9,12 @@ logger = logging.getLogger(__name__)
 
 class NeuralNetwork(nn.Module):
     """
-    A flexible neural network model for classification tasks.
+    A flexible neural network model for classification tasks with residual connections and batch normalization.
     """
     def __init__(
         self,
         input_size: int,
-        hidden_sizes: List[int] = [256, 128, 64],
+        hidden_sizes: List[int] = [512, 256, 128, 64, 32],
         num_classes: int = 11,
         dropout_rate: float = 0.3,
         activation: str = 'relu'
@@ -42,15 +42,22 @@ class NeuralNetwork(nn.Module):
         
         # Build layers
         self.layers = nn.ModuleList()
+        self.batchnorms = nn.ModuleList()
+        self.residual_indices = []  # Store pairs of (from, to) for residuals
         
         # Input layer
         self.layers.append(nn.Linear(input_size, hidden_sizes[0]))
+        self.batchnorms.append(nn.BatchNorm1d(hidden_sizes[0]))
         
         # Hidden layers
         for i in range(len(hidden_sizes) - 1):
             self.layers.append(nn.Linear(hidden_sizes[i], hidden_sizes[i + 1]))
+            self.batchnorms.append(nn.BatchNorm1d(hidden_sizes[i + 1]))
+            # Add residual connection if dimensions match (every two layers)
+            if i >= 1 and hidden_sizes[i - 1] == hidden_sizes[i + 1]:
+                self.residual_indices.append((i - 1, i + 1))
         
-        # Output layer
+        # Output layer (no batchnorm or activation)
         self.layers.append(nn.Linear(hidden_sizes[-1], num_classes))
         
         # Dropout layer
@@ -81,19 +88,21 @@ class NeuralNetwork(nn.Module):
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass through the network.
-        
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, input_size)
-            
-        Returns:
-            torch.Tensor: Output tensor of shape (batch_size, num_classes)
+        Forward pass through the network with batch normalization, dropout, and residual connections.
         """
+        residuals = {}
         for i, layer in enumerate(self.layers[:-1]):
-            x = self.activation_fn(layer(x))
+            x_in = x
+            x = layer(x)
+            x = self.batchnorms[i](x)
+            x = self.activation_fn(x)
             x = self.dropout(x)
-        
-        # Output layer (no activation, will be handled by loss function)
+            # Store for possible residual connection
+            residuals[i] = x
+            # Apply residual connection if defined for this layer
+            for from_idx, to_idx in self.residual_indices:
+                if to_idx == i and x.shape == residuals[from_idx].shape:
+                    x = x + residuals[from_idx]
         x = self.layers[-1](x)
         return x
     
