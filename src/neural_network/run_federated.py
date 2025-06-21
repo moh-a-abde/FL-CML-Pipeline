@@ -168,6 +168,12 @@ def start_server(strategy):
 
 def main():
     """Run federated learning with neural network."""
+    # Configuration for Issue 3 Problem 1 Solution: Deeper Architecture
+    ARCHITECTURE_STRATEGY = 'adaptive'  # Options: 'adaptive', 'deep', 'balanced', 'bottleneck', 'wide'
+    NUM_CLASSES = 11
+    DROPOUT_RATE = 0.4  # Increased from 0.3 for better regularization
+    ACTIVATION = 'leaky_relu'  # Better than 'relu' for deep networks
+    
     # Load and preprocess data
     data_path = "data/received/final_dataset.csv"
     num_clients = 3
@@ -179,13 +185,14 @@ def main():
     # Initialize clients
     clients = []
     for i, data in enumerate(client_data):
-        # Create model
+        # Create model using optimized architecture for cyber-attack classification
         input_size = client_data[0]['train'][0].shape[1]
-        model = NeuralNetwork(
+        model = NeuralNetwork.for_cyber_attack_classification(
             input_size=input_size,
-            hidden_sizes=[256, 128, 64],
-            num_classes=11,  # Update based on your number of classes
-            dropout_rate=0.3
+            num_classes=NUM_CLASSES,
+            architecture_strategy=ARCHITECTURE_STRATEGY,
+            dropout_rate=DROPOUT_RATE,
+            activation=ACTIVATION
         )
         
         # Create client
