@@ -56,11 +56,13 @@ class NeuralNetworkClient(fl.client.Client):
         self.cid = cid
         self.batch_size = batch_size
         
-        # Initialize trainer
+        # Initialize trainer with Focal Loss for better performance
         self.trainer = NeuralNetworkTrainer(
             model=model,
             learning_rate=learning_rate,
-            weight_decay=weight_decay
+            weight_decay=weight_decay,
+            loss_type='focal',  # Use Focal Loss for improved performance
+            auto_loss_params=True  # Automatically determine optimal parameters
         )
         
     def get_parameters(self, ins: GetParametersIns) -> GetParametersRes:

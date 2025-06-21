@@ -200,6 +200,18 @@ class NeuralNetworkTrainer:
         Returns:
             Dict[str, float]: Training metrics
         """
+        # Ensure loss function is initialized
+        if not self._loss_initialized:
+            # For federated learning compatibility, use default CrossEntropy if no labels are provided
+            # We'll extract labels from the train_loader for initialization
+            all_labels = []
+            for batch in train_loader:
+                _, labels = batch
+                all_labels.extend(labels.cpu().numpy())
+            
+            self._initialize_loss_function(np.array(all_labels))
+            logger.info(f"Loss function auto-initialized in train_epoch with {len(all_labels)} samples")
+        
         self.model.train()
         total_loss = 0
         all_preds = []
@@ -251,6 +263,17 @@ class NeuralNetworkTrainer:
         Returns:
             Dict[str, float]: Evaluation metrics
         """
+        # Ensure loss function is initialized
+        if not self._loss_initialized:
+            # For federated learning compatibility, extract labels from eval_loader for initialization
+            all_labels = []
+            for batch in eval_loader:
+                _, labels = batch
+                all_labels.extend(labels.cpu().numpy())
+            
+            self._initialize_loss_function(np.array(all_labels))
+            logger.info(f"Loss function auto-initialized in evaluate with {len(all_labels)} samples")
+        
         self.model.eval()
         total_loss = 0
         all_preds = []
