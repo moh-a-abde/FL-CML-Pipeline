@@ -3,7 +3,7 @@ import flwr as fl
 import torch
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
 from sklearn.preprocessing import StandardScaler
 import logging
 from .model import NeuralNetwork
@@ -24,6 +24,97 @@ fl_logger.propagate = False
 
 # Set up our logger
 logger = logging.getLogger(__name__)
+
+def create_stratified_client_data(X_train, y_train, num_clients=3, random_state=42):
+    """
+    Create stratified client data ensuring balanced class distribution.
+    Each client gets representative samples from all classes.
+    
+    Args:
+        X_train: Training features (numpy array or pandas DataFrame)
+        y_train: Training labels (numpy array or pandas Series)  
+        num_clients: Number of clients to create data for
+        random_state: Random seed for reproducibility
+        
+    Returns:
+        List of client data dictionaries with 'train' and 'val' keys
+    """
+    logger.info(f"Creating stratified data for {num_clients} clients...")
+    
+    # Convert to numpy arrays if needed
+    if hasattr(X_train, 'values'):
+        X_train_np = X_train.values if hasattr(X_train, 'values') else X_train
+    else:
+        X_train_np = X_train
+        
+    if hasattr(y_train, 'values'):
+        y_train_np = y_train.values if hasattr(y_train, 'values') else y_train
+    else:
+        y_train_np = y_train
+    
+    # Log initial class distribution
+    unique_classes, class_counts = np.unique(y_train_np, return_counts=True)
+    logger.info(f"Original class distribution: {dict(zip(unique_classes, class_counts))}")
+    
+    client_data = []
+    remaining_X, remaining_y = X_train_np.copy(), y_train_np.copy()
+    
+    # Calculate client sizes (slightly different sizes for realism)
+    total_samples = len(X_train_np)
+    base_size = total_samples // num_clients
+    client_sizes = [base_size] * (num_clients - 1) + [total_samples - base_size * (num_clients - 1)]
+    
+    logger.info(f"Client sizes: {client_sizes}")
+    
+    for i, client_size in enumerate(client_sizes[:-1]):
+        test_size = client_size / len(remaining_X)
+        splitter = StratifiedShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state + i)
+        
+        for train_idx, client_idx in splitter.split(remaining_X, remaining_y):
+            client_X = remaining_X[client_idx]
+            client_y = remaining_y[client_idx]
+            
+            # Update remaining data
+            remaining_X = remaining_X[train_idx]
+            remaining_y = remaining_y[train_idx]
+            
+            # Split client data into train and validation
+            client_X_train, client_X_val, client_y_train, client_y_val = train_test_split(
+                client_X, client_y, test_size=0.2, random_state=random_state + i, stratify=client_y
+            )
+            
+            client_data.append({
+                'train': (client_X_train, client_y_train),
+                'val': (client_X_val, client_y_val)
+            })
+            
+            # Log client's class distribution
+            unique_client, counts_client = np.unique(client_y, return_counts=True)
+            logger.info(f"Client {i} class distribution: {dict(zip(unique_client, counts_client))}")
+            break
+    
+    # Last client gets remaining data
+    client_X_train, client_X_val, client_y_train, client_y_val = train_test_split(
+        remaining_X, remaining_y, test_size=0.2, random_state=random_state + num_clients - 1, stratify=remaining_y
+    )
+    
+    client_data.append({
+        'train': (client_X_train, client_y_train),
+        'val': (client_X_val, client_y_val)
+    })
+    
+    # Log last client's class distribution
+    unique_client, counts_client = np.unique(remaining_y, return_counts=True)
+    logger.info(f"Client {num_clients-1} class distribution: {dict(zip(unique_client, counts_client))}")
+    
+    # Verify total data distribution
+    total_train_samples = sum(len(client['train'][1]) for client in client_data)
+    total_val_samples = sum(len(client['val'][1]) for client in client_data)
+    logger.info(f"Total training samples distributed: {total_train_samples}")
+    logger.info(f"Total validation samples distributed: {total_val_samples}")
+    logger.info(f"Original total samples: {len(y_train_np)}")
+    
+    return client_data
 
 def load_and_preprocess_data(data_path: str, num_clients: int = 3):
     """
@@ -53,25 +144,8 @@ def load_and_preprocess_data(data_path: str, num_clients: int = 3):
     X_train = scaler.fit_transform(X_train)
     X_test = scaler.transform(X_test)
     
-    # Split training data among clients
-    client_data = []
-    for i in range(num_clients):
-        # Create non-overlapping splits
-        indices = np.argsort(y_train)
-        client_indices = indices[i::num_clients]
-        
-        client_X = X_train[client_indices]
-        client_y = y_train.iloc[client_indices]
-        
-        # Split into train and validation
-        client_X_train, client_X_val, client_y_train, client_y_val = train_test_split(
-            client_X, client_y, test_size=0.2, random_state=42
-        )
-        
-        client_data.append({
-            'train': (client_X_train, client_y_train),
-            'val': (client_X_val, client_y_val)
-        })
+    # Split training data among clients using stratified distribution
+    client_data = create_stratified_client_data(X_train, y_train, num_clients)
     
     test_data = (X_test, y_test)
     
