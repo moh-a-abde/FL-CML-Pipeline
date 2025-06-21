@@ -9,6 +9,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from tqdm import tqdm
 import logging
 from .model import NeuralNetwork
+from .losses import FocalLoss, LabelSmoothingCrossEntropy, get_recommended_focal_params, analyze_class_distribution
 
 logger = logging.getLogger(__name__)
 
@@ -21,20 +22,36 @@ class NeuralNetworkTrainer:
         model: NeuralNetwork,
         learning_rate: float = 0.001,
         weight_decay: float = 1e-5,
-        device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
+        device: str = 'cuda' if torch.cuda.is_available() else 'cpu',
+        loss_type: str = 'focal',
+        focal_gamma: Optional[float] = None,
+        focal_alpha: Optional[Union[torch.Tensor, float]] = None,
+        auto_loss_params: bool = True,
+        label_smoothing: float = 0.0
     ):
         """
-        Initialize the trainer.
+        Initialize the trainer with enhanced loss function support.
         
         Args:
             model (NeuralNetwork): The neural network model
             learning_rate (float): Learning rate for optimization
             weight_decay (float): Weight decay for regularization
             device (str): Device to use for training ('cuda' or 'cpu')
+            loss_type (str): Type of loss function ('focal', 'crossentropy', 'label_smoothing')
+            focal_gamma (float, optional): Gamma parameter for Focal Loss. If None and auto_loss_params=True,
+                                         will be determined automatically based on data
+            focal_alpha (torch.Tensor or float, optional): Alpha parameter for Focal Loss class weighting
+            auto_loss_params (bool): Whether to automatically determine loss parameters from data
+            label_smoothing (float): Label smoothing parameter (0.0 = no smoothing)
         """
         self.model = model
         self.device = device
         self.model.to(device)
+        self.loss_type = loss_type
+        self.focal_gamma = focal_gamma
+        self.focal_alpha = focal_alpha
+        self.auto_loss_params = auto_loss_params
+        self.label_smoothing = label_smoothing
         
         # Initialize optimizer
         self.optimizer = optim.Adam(
@@ -43,8 +60,97 @@ class NeuralNetworkTrainer:
             weight_decay=weight_decay
         )
         
-        # Initialize loss function
-        self.criterion = nn.CrossEntropyLoss()
+        # Loss function will be initialized in _initialize_loss_function()
+        # after we have access to training data
+        self.criterion = None
+        self._loss_initialized = False
+    
+    def _initialize_loss_function(self, train_labels: Union[np.ndarray, pd.Series]) -> None:
+        """
+        Initialize the loss function based on training data characteristics.
+        
+        Args:
+            train_labels: Training labels for analyzing class distribution
+        """
+        if self._loss_initialized:
+            return
+            
+        logger.info(f"Initializing loss function: {self.loss_type}")
+        
+        # Convert labels to numpy if needed
+        if isinstance(train_labels, pd.Series):
+            labels_array = train_labels.values
+        else:
+            labels_array = train_labels
+        
+        # Analyze class distribution
+        class_analysis = analyze_class_distribution(labels_array)
+        logger.info(f"Class distribution analysis: {class_analysis}")
+        
+        if self.loss_type == 'focal':
+            # Get recommended parameters if auto mode is enabled
+            if self.auto_loss_params:
+                recommendations = get_recommended_focal_params(labels_array)
+                gamma = self.focal_gamma if self.focal_gamma is not None else recommendations['gamma']
+                alpha = self.focal_alpha if self.focal_alpha is not None else recommendations['alpha']
+                
+                logger.info(f"Auto-selected Focal Loss parameters: gamma={gamma}, alpha shape={alpha.shape}")
+                logger.info(f"Reasoning: {recommendations['reasoning']}")
+            else:
+                gamma = self.focal_gamma if self.focal_gamma is not None else 2.0
+                alpha = self.focal_alpha
+                
+                logger.info(f"Manual Focal Loss parameters: gamma={gamma}, alpha={alpha}")
+            
+            self.criterion = FocalLoss(
+                alpha=alpha,
+                gamma=gamma,
+                reduction='mean',
+                device=self.device
+            )
+            
+        elif self.loss_type == 'label_smoothing':
+            self.criterion = LabelSmoothingCrossEntropy(
+                epsilon=self.label_smoothing,
+                reduction='mean'
+            )
+            logger.info(f"Label Smoothing Cross Entropy initialized with epsilon={self.label_smoothing}")
+            
+        elif self.loss_type == 'crossentropy':
+            self.criterion = nn.CrossEntropyLoss()
+            logger.info("Standard Cross Entropy Loss initialized")
+            
+        else:
+            raise ValueError(f"Unknown loss type: {self.loss_type}")
+        
+        self._loss_initialized = True
+    
+    def get_loss_info(self) -> Dict[str, any]:
+        """
+        Get information about the current loss function configuration.
+        
+        Returns:
+            Dict containing loss function information
+        """
+        info = {
+            'loss_type': self.loss_type,
+            'loss_initialized': self._loss_initialized,
+            'criterion_class': self.criterion.__class__.__name__ if self.criterion else None
+        }
+        
+        if self.loss_type == 'focal' and isinstance(self.criterion, FocalLoss):
+            info.update({
+                'gamma': self.criterion.gamma,
+                'alpha': self.criterion.alpha.tolist() if self.criterion.alpha is not None else None,
+                'reduction': self.criterion.reduction
+            })
+        elif self.loss_type == 'label_smoothing' and isinstance(self.criterion, LabelSmoothingCrossEntropy):
+            info.update({
+                'epsilon': self.criterion.epsilon,
+                'reduction': self.criterion.reduction
+            })
+        
+        return info
         
     def prepare_data(
         self,
@@ -186,7 +292,7 @@ class NeuralNetworkTrainer:
         early_stopping_patience: int = 10
     ) -> Dict[str, List[float]]:
         """
-        Train the model.
+        Train the model with enhanced loss function support.
         
         Args:
             train_features: Training features
@@ -200,6 +306,9 @@ class NeuralNetworkTrainer:
         Returns:
             Dict[str, List[float]]: Training history
         """
+        # Initialize loss function based on training data
+        self._initialize_loss_function(train_labels)
+        
         # Prepare data
         train_loader = self.prepare_data(train_features, train_labels, batch_size)
         val_loader = None
